@@ -1,0 +1,16 @@
+{
+  "name": "@canvas/e2e",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint tests playwright.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

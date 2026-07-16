@@ -211,7 +211,7 @@ export function TaskListView({ listId }: { listId: string }) {
                     style={{ backgroundColor: status?.color }}
                     aria-hidden
                   />
-                  {status?.name ?? "—"}
+                  {status?.name ?? "—"}{" "}
                   <span className="text-muted-foreground">({row.subRows.length})</span>
                 </div>
               );

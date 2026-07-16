@@ -109,7 +109,7 @@ function StatusColumn({
   });
 
   return (
-    <div className="w-64 shrink-0 space-y-2">
+    <div className="w-64 shrink-0 space-y-2" data-testid={`status-column-${status.name}`}>
       <div className="group flex items-center gap-2">
         <span
           className="h-2 w-2 shrink-0 rounded-full"
