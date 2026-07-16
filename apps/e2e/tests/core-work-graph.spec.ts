@@ -1,45 +1,15 @@
 import { expect, test } from "@playwright/test";
-
-function uniqueEmail() {
-  return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-}
+import { createSpaceAndList, createWorkspaceAndOpen, signUp } from "./helpers";
 
 test("sign up, build a workspace hierarchy, and manage tasks across board + list views", async ({
   page,
 }) => {
-  const email = uniqueEmail();
-
-  // --- M0.2: sign up ---
-  await page.goto("/signup");
-  await page.locator("#name").fill("E2E Tester");
-  await page.locator("#email").fill(email);
-  await page.locator("#password").fill("e2e-test-password");
-  await page.getByRole("button", { name: "Sign up" }).click();
-  await expect(page.getByText(email)).toBeVisible();
-
-  // --- M0.2: create + open a workspace ---
-  await page.getByRole("link", { name: "New workspace" }).click();
-  await page.getByLabel("Workspace name").fill("E2E Workspace");
-  await page.getByRole("button", { name: "Create workspace" }).click();
-  await page.getByRole("link", { name: "Open" }).click();
-  await expect(page.getByText("E2E Workspace")).toBeVisible();
+  // --- M0.2: sign up, create + open a workspace ---
+  await signUp(page);
+  await createWorkspaceAndOpen(page, "E2E Workspace");
 
   // --- M1.1: create a space, then a list directly under it ---
-  await page.getByRole("button", { name: "New space" }).click();
-  await page.getByPlaceholder("Space name").fill("Engineering");
-  await page.keyboard.press("Enter");
-  const spaceRow = page.locator("div.group", { hasText: "Engineering" }).first();
-  await expect(spaceRow).toBeVisible();
-
-  await spaceRow.hover();
-  await spaceRow.getByRole("button", { name: "New list" }).click();
-  await page.getByPlaceholder("List name").fill("Sprint Board");
-  await page.keyboard.press("Enter");
-
-  const listLink = page.getByRole("link", { name: "# Sprint Board" });
-  await expect(listLink).toBeVisible();
-  await listLink.click();
-  await expect(page.getByRole("heading", { name: "# Sprint Board" })).toBeVisible();
+  await createSpaceAndList(page, "Engineering", "Sprint Board");
 
   // --- M1.2: default statuses were seeded, add a task via the board view ---
   await page.getByRole("button", { name: "Board", exact: true }).click();

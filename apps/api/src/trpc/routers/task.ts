@@ -11,6 +11,7 @@ import { logActivity } from "../../lib/activity";
 import { requireList, requireSpace } from "../../lib/hierarchy";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { buildTaskUpdateFields } from "../../lib/task-update";
 import { protectedProcedure, router } from "../trpc";
 
 async function requireTask(taskId: string) {
@@ -106,18 +107,23 @@ export const taskRouter = router({
     await assertCan(ctx.user, workspaceId, "task:update");
 
     let statusId: string | undefined;
-    let orderKey: string | undefined;
     if (input.statusId !== undefined && input.statusId !== task.statusId) {
       const status = await requireStatusInList(input.statusId, task.listId);
       statusId = status.id;
-      orderKey = nextOrderKey(await lastTaskOrderKey(task.listId, status.id));
     }
+
+    // An explicit orderKey (e.g. from a board drag-and-drop drop) wins; a
+    // bare status change with no position given appends to the column's end.
+    const orderKey =
+      input.orderKey ??
+      (statusId !== undefined
+        ? nextOrderKey(await lastTaskOrderKey(task.listId, statusId))
+        : undefined);
 
     const [updated] = await db
       .update(schema.tasks)
       .set({
-        ...(input.title !== undefined ? { title: input.title } : {}),
-        ...(statusId !== undefined ? { statusId, orderKey } : {}),
+        ...buildTaskUpdateFields({ title: input.title, statusId, orderKey }),
         updatedAt: new Date(),
       })
       .where(eq(schema.tasks.id, input.taskId))

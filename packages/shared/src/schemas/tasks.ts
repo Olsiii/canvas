@@ -36,6 +36,10 @@ export const updateTaskSchema = z.object({
   taskId: z.string().uuid(),
   title: z.string().trim().min(1).max(500).optional(),
   statusId: z.string().uuid().optional(),
+  // Explicit position (e.g. from a board drag-and-drop drop). When omitted
+  // and statusId changes, the server appends the task to the end of the
+  // new status column instead.
+  orderKey: z.string().min(1).optional(),
 });
 
 export const deleteTaskSchema = z.object({

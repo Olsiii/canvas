@@ -1,9 +1,10 @@
 import { trpc } from "@/lib/trpc";
 
 /**
- * Optimistically patches the cached task list on title/status edits, rolling
- * back on error. Used by both the board and list views so inline edits feel
- * instant even with thousands of tasks in a list.
+ * Optimistically patches the cached task list on title/status/order edits,
+ * rolling back on error. Used by the board and list views (inline edits,
+ * status dropdowns) and the board's drag-and-drop so both feel instant even
+ * with thousands of tasks in a list.
  */
 export function useOptimisticTaskUpdate(listId: string) {
   const utils = trpc.useUtils();
@@ -20,6 +21,7 @@ export function useOptimisticTaskUpdate(listId: string) {
                 ...task,
                 ...(input.title !== undefined ? { title: input.title } : {}),
                 ...(input.statusId !== undefined ? { statusId: input.statusId } : {}),
+                ...(input.orderKey !== undefined ? { orderKey: input.orderKey } : {}),
               }
             : task,
         ),

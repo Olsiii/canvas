@@ -4,8 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCorners,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { inferRouterOutputs } from "@trpc/server";
-import { useState } from "react";
+import { generateKeyBetween } from "fractional-indexing";
+import { useMemo, useState } from "react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Status = RouterOutputs["status"]["list"][number];
@@ -18,7 +32,9 @@ export function TaskBoard({ listId }: { listId: string }) {
   const statuses = trpc.status.list.useQuery({ listId });
   const tasks = trpc.task.list.useQuery({ listId });
   const [addingStatus, setAddingStatus] = useState(false);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
 
+  const update = useOptimisticTaskUpdate(listId);
   const invalidateStatuses = () => utils.status.list.invalidate({ listId });
   const invalidateTasks = () => utils.task.list.invalidate({ listId });
 
@@ -29,52 +45,115 @@ export function TaskBoard({ listId }: { listId: string }) {
     },
   });
 
+  const statusList = useMemo(() => statuses.data ?? [], [statuses.data]);
+  const taskList = useMemo(() => tasks.data ?? [], [tasks.data]);
+
+  const tasksByStatus = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const s of statusList) map.set(s.id, []);
+    for (const t of taskList) map.get(t.statusId)?.push(t);
+    for (const list of map.values()) {
+      list.sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : 0));
+    }
+    return map;
+  }, [statusList, taskList]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveTask(taskList.find((t) => t.id === event.active.id) ?? null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const draggedTask = taskList.find((t) => t.id === active.id);
+    if (!draggedTask) return;
+
+    const overTask = taskList.find((t) => t.id === over.id);
+    const targetStatusId = overTask ? overTask.statusId : String(over.id);
+    const targetTasks = tasksByStatus.get(targetStatusId);
+    if (!targetTasks) return; // dropped somewhere that isn't a status column
+
+    const withoutDragged = targetTasks.filter((t) => t.id !== draggedTask.id);
+    let overIndex = overTask
+      ? withoutDragged.findIndex((t) => t.id === overTask.id)
+      : withoutDragged.length;
+    if (overIndex === -1) overIndex = withoutDragged.length;
+
+    const prev = withoutDragged[overIndex - 1];
+    const next = withoutDragged[overIndex];
+    const orderKey = generateKeyBetween(prev?.orderKey ?? null, next?.orderKey ?? null);
+
+    if (targetStatusId === draggedTask.statusId && orderKey === draggedTask.orderKey) return;
+
+    update.mutate({
+      taskId: draggedTask.id,
+      orderKey,
+      ...(targetStatusId !== draggedTask.statusId ? { statusId: targetStatusId } : {}),
+    });
+  }
+
   if (statuses.isLoading || tasks.isLoading) {
     return <p className="text-muted-foreground text-sm">Loading…</p>;
   }
 
-  const statusList = statuses.data ?? [];
-  const taskList = tasks.data ?? [];
-
   return (
-    <div className="flex items-start gap-4 overflow-x-auto p-6">
-      {statusList.map((status) => (
-        <StatusColumn
-          key={status.id}
-          listId={listId}
-          status={status}
-          statuses={statusList}
-          tasks={taskList.filter((t) => t.statusId === status.id)}
-          onTasksChanged={invalidateTasks}
-          onStatusesChanged={invalidateStatuses}
-        />
-      ))}
-
-      <div className="w-64 shrink-0">
-        {addingStatus ? (
-          <NewStatusForm
-            isPending={createStatus.isPending}
-            onCancel={() => setAddingStatus(false)}
-            onSubmit={(name, kind) =>
-              createStatus.mutate({
-                listId,
-                name,
-                kind,
-                color: STATUS_PALETTE[statusList.length % STATUS_PALETTE.length] ?? "#94a3b8",
-              })
-            }
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="flex items-start gap-4 overflow-x-auto p-6">
+        {statusList.map((status) => (
+          <StatusColumn
+            key={status.id}
+            listId={listId}
+            status={status}
+            statuses={statusList}
+            tasks={tasksByStatus.get(status.id) ?? []}
+            onTasksChanged={invalidateTasks}
+            onStatusesChanged={invalidateStatuses}
           />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddingStatus(true)}
-            className="text-muted-foreground hover:text-foreground text-sm"
-          >
-            + Add status
-          </button>
-        )}
+        ))}
+
+        <div className="w-64 shrink-0">
+          {addingStatus ? (
+            <NewStatusForm
+              isPending={createStatus.isPending}
+              onCancel={() => setAddingStatus(false)}
+              onSubmit={(name, kind) =>
+                createStatus.mutate({
+                  listId,
+                  name,
+                  kind,
+                  color: STATUS_PALETTE[statusList.length % STATUS_PALETTE.length] ?? "#94a3b8",
+                })
+              }
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingStatus(true)}
+              className="text-muted-foreground hover:text-foreground text-sm"
+            >
+              + Add status
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+
+      <DragOverlay>
+        {activeTask ? (
+          <div className="border-border bg-background w-64 rounded-md border p-2 text-sm shadow-lg">
+            {activeTask.title}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
 
@@ -96,6 +175,7 @@ function StatusColumn({
   const [addingTask, setAddingTask] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { setNodeRef, isOver } = useDroppable({ id: status.id });
 
   const createTask = trpc.task.create.useMutation({
     onSuccess: () => {
@@ -109,7 +189,10 @@ function StatusColumn({
   });
 
   return (
-    <div className="w-64 shrink-0 space-y-2" data-testid={`status-column-${status.name}`}>
+    <div
+      className={`w-64 shrink-0 space-y-2 rounded-md p-1 ${isOver ? "bg-muted/50" : ""}`}
+      data-testid={`status-column-${status.name}`}
+    >
       <div className="group flex items-center gap-2">
         <span
           className="h-2 w-2 shrink-0 rounded-full"
@@ -154,17 +237,19 @@ function StatusColumn({
         </div>
       )}
 
-      <div className="space-y-1">
-        {tasks.map((task) => (
-          <TaskRow
-            key={task.id}
-            listId={listId}
-            statuses={statuses}
-            task={task}
-            onChanged={onTasksChanged}
-          />
-        ))}
-      </div>
+      <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+        <div ref={setNodeRef} className="min-h-8 space-y-1">
+          {tasks.map((task) => (
+            <TaskRow
+              key={task.id}
+              listId={listId}
+              statuses={statuses}
+              task={task}
+              onChanged={onTasksChanged}
+            />
+          ))}
+        </div>
+      </SortableContext>
 
       {addingTask ? (
         <NewTaskForm
@@ -201,9 +286,33 @@ function TaskRow({
   const update = useOptimisticTaskUpdate(listId);
   const del = trpc.task.delete.useMutation({ onSuccess: onChanged });
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
   return (
-    <div className="group border-border rounded-md border p-2">
-      <div className="flex items-start gap-2">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="group border-border bg-background rounded-md border p-2"
+      data-testid={`task-card-${task.title}`}
+    >
+      <div className="flex items-start gap-1">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+          className="text-muted-foreground touch-none cursor-grab px-0.5 active:cursor-grabbing"
+        >
+          ⠿
+        </button>
         <span className="flex-1 text-sm">{task.title}</span>
         <button
           type="button"
