@@ -1,0 +1,20 @@
+import { z } from "zod";
+import { emailSchema } from "./auth";
+import { MEMBERSHIP_ROLES } from "../roles";
+
+export const createWorkspaceSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
+
+export const inviteMemberSchema = z.object({
+  workspaceId: z.string().uuid(),
+  email: emailSchema,
+  role: z.enum(MEMBERSHIP_ROLES).exclude(["owner"]),
+});
+
+export const acceptInviteSchema = z.object({
+  inviteId: z.string().uuid(),
+});
+
+export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
+export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

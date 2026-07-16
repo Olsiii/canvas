@@ -2,6 +2,7 @@ pnpm-lock.yaml
 dist
 .turbo
 node_modules
+packages/db/drizzle
 
 # spec docs — source of truth, not ours to reformat
 PRD.md

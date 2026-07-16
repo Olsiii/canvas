@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.38.3",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "uuidv7": "^1.0.2"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",

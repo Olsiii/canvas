@@ -1,24 +1,131 @@
+import { RequireAuth } from "@/components/require-auth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useSession } from "@/hooks/use-session";
 import { trpc } from "@/lib/trpc";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { rootRoute } from "./__root";
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: HomePage,
+  component: () => (
+    <RequireAuth>
+      <Dashboard />
+    </RequireAuth>
+  ),
 });
 
-function HomePage() {
-  const health = trpc.health.useQuery();
+function Dashboard() {
+  const { user } = useSession();
+  const navigate = useNavigate();
+  const utils = trpc.useUtils();
+  const workspaces = trpc.workspace.listMine.useQuery();
+
+  const logOut = trpc.auth.logOut.useMutation({
+    onSuccess: async () => {
+      await utils.auth.me.invalidate();
+      navigate({ to: "/login" });
+    },
+  });
 
   return (
-    <main className="flex min-h-svh flex-col items-center justify-center gap-4">
-      <h1 className="text-2xl font-semibold">Canvas</h1>
-      <p className="text-muted-foreground text-sm">
-        api status: {health.isLoading ? "checking…" : health.data?.ok ? "connected" : "unreachable"}
-      </p>
-      <Button onClick={() => health.refetch()}>Recheck</Button>
+    <main className="mx-auto flex min-h-svh max-w-lg flex-col gap-6 px-4 py-16">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Canvas</h1>
+          <p className="text-muted-foreground text-sm">{user?.email}</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => logOut.mutate()}>
+          Log out
+        </Button>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium">Your workspaces</h2>
+          <Link to="/workspaces/new" className="text-sm underline">
+            New workspace
+          </Link>
+        </div>
+
+        {workspaces.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
+        {workspaces.data?.length === 0 && (
+          <p className="text-muted-foreground text-sm">
+            You're not in a workspace yet — create one to get started.
+          </p>
+        )}
+
+        <ul className="divide-border divide-y rounded-md border">
+          {workspaces.data?.map(({ workspace, role }) => (
+            <li key={workspace.id}>
+              <WorkspaceRow workspaceId={workspace.id} name={workspace.name} role={role} />
+            </li>
+          ))}
+        </ul>
+      </div>
     </main>
+  );
+}
+
+function WorkspaceRow({
+  workspaceId,
+  name,
+  role,
+}: {
+  workspaceId: string;
+  name: string;
+  role: string;
+}) {
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const canInvite = role === "owner" || role === "admin";
+
+  const invite = trpc.workspace.invite.useMutation({
+    onSuccess: (data) => {
+      setInviteLink(`${window.location.origin}/invite/${data.id}`);
+      setInviteEmail("");
+    },
+    onError: (err) => setInviteError(err.message),
+  });
+
+  return (
+    <div className="space-y-2 p-3">
+      <div className="flex items-center justify-between">
+        <span className="font-medium">{name}</span>
+        <span className="text-muted-foreground text-xs uppercase">{role}</span>
+      </div>
+
+      {canInvite && (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setInviteError(null);
+            setInviteLink(null);
+            invite.mutate({ workspaceId, email: inviteEmail, role: "member" });
+          }}
+        >
+          <Input
+            type="email"
+            placeholder="teammate@example.com"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            required
+          />
+          <Button type="submit" size="sm" disabled={invite.isPending}>
+            Invite
+          </Button>
+        </form>
+      )}
+      {inviteError && <p className="text-xs text-red-500">{inviteError}</p>}
+      {inviteLink && (
+        <p className="text-muted-foreground break-all text-xs">
+          Invite link: <span className="text-foreground">{inviteLink}</span>
+        </p>
+      )}
+    </div>
   );
 }
