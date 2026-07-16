@@ -1,4 +1,5 @@
 import { TaskBoard } from "@/components/task-board";
+import { TaskDetailPanel } from "@/components/task-detail-panel";
 import { TaskListView } from "@/components/task-list-view";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
@@ -15,6 +16,7 @@ function ListPage() {
   const { workspaceId, listId } = listRoute.useParams();
   const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
   const [view, setView] = useState<"list" | "board">("list");
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
   const list = tree.data?.lists.find((l) => l.id === listId);
   const space = list ? tree.data?.spaces.find((s) => s.id === list.spaceId) : undefined;
@@ -64,7 +66,19 @@ function ListPage() {
           </button>
         </div>
       </div>
-      {view === "list" ? <TaskListView listId={listId} /> : <TaskBoard listId={listId} />}
+      {view === "list" ? (
+        <TaskListView listId={listId} onOpenTask={setOpenTaskId} />
+      ) : (
+        <TaskBoard listId={listId} onOpenTask={setOpenTaskId} />
+      )}
+
+      {openTaskId && (
+        <TaskDetailPanel
+          taskId={openTaskId}
+          workspaceId={workspaceId}
+          onClose={() => setOpenTaskId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TASK_PRIORITIES } from "../priority";
 import { STATUS_KINDS } from "../statuses";
 
 export const listStatusesSchema = z.object({
@@ -40,10 +41,29 @@ export const updateTaskSchema = z.object({
   // and statusId changes, the server appends the task to the end of the
   // new status column instead.
   orderKey: z.string().min(1).optional(),
+  // TipTap document JSON — never an HTML string. null clears the description.
+  descriptionJson: z.unknown().nullable().optional(),
+  priority: z.enum(TASK_PRIORITIES).nullable().optional(),
+  startDate: z.string().date().nullable().optional(),
+  dueDate: z.string().date().nullable().optional(),
 });
 
 export const deleteTaskSchema = z.object({
   taskId: z.string().uuid(),
+});
+
+export const getTaskSchema = z.object({
+  taskId: z.string().uuid(),
+});
+
+export const assignTaskSchema = z.object({
+  taskId: z.string().uuid(),
+  userId: z.string().uuid(),
+});
+
+export const unassignTaskSchema = z.object({
+  taskId: z.string().uuid(),
+  userId: z.string().uuid(),
 });
 
 export type CreateStatusInput = z.infer<typeof createStatusSchema>;

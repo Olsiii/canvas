@@ -26,4 +26,27 @@ describe("buildTaskUpdateFields", () => {
   it("returns an empty object when nothing changed", () => {
     expect(buildTaskUpdateFields({})).toEqual({});
   });
+
+  it("distinguishes null (clear the field) from undefined (leave it alone)", () => {
+    expect(buildTaskUpdateFields({ priority: null, dueDate: undefined })).toEqual({
+      priority: null,
+    });
+    expect(buildTaskUpdateFields({ dueDate: null })).toEqual({ dueDate: null });
+  });
+
+  it("applies descriptionJson, priority, and dates independently of other fields", () => {
+    expect(
+      buildTaskUpdateFields({
+        descriptionJson: { type: "doc", content: [] },
+        priority: "urgent",
+        startDate: "2026-01-01",
+        dueDate: "2026-01-15",
+      }),
+    ).toEqual({
+      descriptionJson: { type: "doc", content: [] },
+      priority: "urgent",
+      startDate: "2026-01-01",
+      dueDate: "2026-01-15",
+    });
+  });
 });

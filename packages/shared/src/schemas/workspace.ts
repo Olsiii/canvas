@@ -16,5 +16,9 @@ export const acceptInviteSchema = z.object({
   inviteId: z.string().uuid(),
 });
 
+export const listMembersSchema = z.object({
+  workspaceId: z.string().uuid(),
+});
+
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

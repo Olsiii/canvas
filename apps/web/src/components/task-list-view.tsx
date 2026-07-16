@@ -26,7 +26,13 @@ const COLUMNS = "grid-cols-[1fr_160px_140px]";
 
 const columnHelper = createColumnHelper<Task>();
 
-export function TaskListView({ listId }: { listId: string }) {
+export function TaskListView({
+  listId,
+  onOpenTask,
+}: {
+  listId: string;
+  onOpenTask: (taskId: string) => void;
+}) {
   const statuses = trpc.status.list.useQuery({ listId });
   const tasks = trpc.task.list.useQuery({ listId });
 
@@ -64,7 +70,9 @@ export function TaskListView({ listId }: { listId: string }) {
     () => [
       columnHelper.accessor("title", {
         header: "Title",
-        cell: (info) => <EditableTitle listId={listId} task={info.row.original} />,
+        cell: (info) => (
+          <EditableTitle listId={listId} task={info.row.original} onOpenTask={onOpenTask} />
+        ),
       }),
       columnHelper.accessor("statusId", {
         header: "Status",
@@ -79,7 +87,7 @@ export function TaskListView({ listId }: { listId: string }) {
         cell: (info) => new Date(info.getValue()).toLocaleDateString(),
       }),
     ],
-    [listId, statusList, statusOrder],
+    [listId, statusList, statusOrder, onOpenTask],
   );
 
   const table = useReactTable({
@@ -241,24 +249,43 @@ export function TaskListView({ listId }: { listId: string }) {
   );
 }
 
-function EditableTitle({ listId, task }: { listId: string; task: Task }) {
+function EditableTitle({
+  listId,
+  task,
+  onOpenTask,
+}: {
+  listId: string;
+  task: Task;
+  onOpenTask: (taskId: string) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(task.title);
   const update = useOptimisticTaskUpdate(listId);
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          setValue(task.title);
-          setEditing(true);
-        }}
-        className="hover:bg-muted w-full truncate rounded px-1 text-left"
-        title="Click to edit"
-      >
-        {task.title}
-      </button>
+      <div className="group flex w-full items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            setValue(task.title);
+            setEditing(true);
+          }}
+          className="hover:bg-muted flex-1 truncate rounded px-1 text-left"
+          title="Click to edit"
+        >
+          {task.title}
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenTask(task.id)}
+          aria-label="Open task details"
+          title="Open task details"
+          className="text-muted-foreground hover:text-foreground hidden shrink-0 text-xs group-hover:inline"
+        >
+          ⤢
+        </button>
+      </div>
     );
   }
 

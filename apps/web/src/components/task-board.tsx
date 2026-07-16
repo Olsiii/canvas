@@ -27,7 +27,13 @@ type Task = RouterOutputs["task"]["list"][number];
 
 const STATUS_PALETTE = ["#94a3b8", "#3b82f6", "#a855f7", "#f59e0b", "#22c55e", "#ef4444"];
 
-export function TaskBoard({ listId }: { listId: string }) {
+export function TaskBoard({
+  listId,
+  onOpenTask,
+}: {
+  listId: string;
+  onOpenTask: (taskId: string) => void;
+}) {
   const utils = trpc.useUtils();
   const statuses = trpc.status.list.useQuery({ listId });
   const tasks = trpc.task.list.useQuery({ listId });
@@ -117,6 +123,7 @@ export function TaskBoard({ listId }: { listId: string }) {
             tasks={tasksByStatus.get(status.id) ?? []}
             onTasksChanged={invalidateTasks}
             onStatusesChanged={invalidateStatuses}
+            onOpenTask={onOpenTask}
           />
         ))}
 
@@ -164,6 +171,7 @@ function StatusColumn({
   tasks,
   onTasksChanged,
   onStatusesChanged,
+  onOpenTask,
 }: {
   listId: string;
   status: Status;
@@ -171,6 +179,7 @@ function StatusColumn({
   tasks: Task[];
   onTasksChanged: () => void;
   onStatusesChanged: () => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   const [addingTask, setAddingTask] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -246,6 +255,7 @@ function StatusColumn({
               statuses={statuses}
               task={task}
               onChanged={onTasksChanged}
+              onOpenTask={onOpenTask}
             />
           ))}
         </div>
@@ -275,11 +285,13 @@ function TaskRow({
   task,
   statuses,
   onChanged,
+  onOpenTask,
 }: {
   listId: string;
   task: Task;
   statuses: Status[];
   onChanged: () => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -313,7 +325,13 @@ function TaskRow({
         >
           ⠿
         </button>
-        <span className="flex-1 text-sm">{task.title}</span>
+        <button
+          type="button"
+          onClick={() => onOpenTask(task.id)}
+          className="flex-1 truncate text-left text-sm"
+        >
+          {task.title}
+        </button>
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}

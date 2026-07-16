@@ -1,9 +1,15 @@
 import { db, schema } from "@canvas/db";
-import { acceptInviteSchema, createWorkspaceSchema, inviteMemberSchema } from "@canvas/shared";
+import {
+  acceptInviteSchema,
+  createWorkspaceSchema,
+  inviteMemberSchema,
+  listMembersSchema,
+} from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { can } from "../../auth/can";
 import { getMembershipRole } from "../../lib/membership";
+import { assertCan } from "../../lib/permissions";
 import { protectedProcedure, publicProcedure, router } from "../trpc";
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
@@ -26,6 +32,22 @@ export const workspaceRouter = router({
       .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.memberships.workspaceId))
       .where(eq(schema.memberships.userId, ctx.user.id));
     return rows;
+  }),
+
+  members: protectedProcedure.input(listMembersSchema).query(async ({ ctx, input }) => {
+    await assertCan(ctx.user, input.workspaceId, "hierarchy:view");
+
+    return db
+      .select({
+        userId: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+        avatarUrl: schema.users.avatarUrl,
+        role: schema.memberships.role,
+      })
+      .from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+      .where(eq(schema.memberships.workspaceId, input.workspaceId));
   }),
 
   create: protectedProcedure.input(createWorkspaceSchema).mutation(async ({ ctx, input }) => {
