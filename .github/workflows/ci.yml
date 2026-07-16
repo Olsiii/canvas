@@ -90,7 +90,7 @@ jobs:
 
       - run: pnpm db:migrate
 
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm --filter @canvas/e2e exec playwright install --with-deps chromium
 
       - run: pnpm --filter @canvas/e2e test:e2e
 
