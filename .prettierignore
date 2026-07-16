@@ -1,0 +1,11 @@
+pnpm-lock.yaml
+dist
+.turbo
+node_modules
+
+# spec docs — source of truth, not ours to reformat
+PRD.md
+ARCHITECTURE.md
+DATA_MODEL.md
+ROADMAP.md
+CLAUDE.md

@@ -1,0 +1,14 @@
+node_modules
+dist
+.turbo
+*.tsbuildinfo
+.env
+.env.local
+*.log
+.DS_Store
+coverage
+.vite
+.next
+playwright-report
+test-results
+minio-data
