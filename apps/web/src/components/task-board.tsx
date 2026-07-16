@@ -2,6 +2,7 @@ import type { AppRouter } from "@canvas/api";
 import { STATUS_KINDS } from "@canvas/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
@@ -155,7 +156,13 @@ function StatusColumn({
 
       <div className="space-y-1">
         {tasks.map((task) => (
-          <TaskRow key={task.id} statuses={statuses} task={task} onChanged={onTasksChanged} />
+          <TaskRow
+            key={task.id}
+            listId={listId}
+            statuses={statuses}
+            task={task}
+            onChanged={onTasksChanged}
+          />
         ))}
       </div>
 
@@ -179,17 +186,19 @@ function StatusColumn({
 }
 
 function TaskRow({
+  listId,
   task,
   statuses,
   onChanged,
 }: {
+  listId: string;
   task: Task;
   statuses: Status[];
   onChanged: () => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const update = trpc.task.update.useMutation({ onSuccess: onChanged });
+  const update = useOptimisticTaskUpdate(listId);
   const del = trpc.task.delete.useMutation({ onSuccess: onChanged });
 
   return (

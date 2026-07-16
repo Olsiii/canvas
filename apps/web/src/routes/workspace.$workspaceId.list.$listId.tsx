@@ -1,6 +1,8 @@
 import { TaskBoard } from "@/components/task-board";
+import { TaskListView } from "@/components/task-list-view";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
 export const listRoute = createRoute({
@@ -12,6 +14,7 @@ export const listRoute = createRoute({
 function ListPage() {
   const { workspaceId, listId } = listRoute.useParams();
   const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
+  const [view, setView] = useState<"list" | "board">("list");
 
   const list = tree.data?.lists.find((l) => l.id === listId);
   const space = list ? tree.data?.spaces.find((s) => s.id === list.spaceId) : undefined;
@@ -31,14 +34,37 @@ function ListPage() {
 
   return (
     <div>
-      <div className="px-6 pt-6">
-        <p className="text-muted-foreground text-xs">
-          {space?.name}
-          {folder ? ` / ${folder.name}` : ""}
-        </p>
-        <h1 className="text-lg font-semibold"># {list.name}</h1>
+      <div className="flex items-end justify-between px-6 pt-6">
+        <div>
+          <p className="text-muted-foreground text-xs">
+            {space?.name}
+            {folder ? ` / ${folder.name}` : ""}
+          </p>
+          <h1 className="text-lg font-semibold"># {list.name}</h1>
+        </div>
+        <div className="flex gap-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={
+              view === "list" ? "font-medium" : "text-muted-foreground hover:text-foreground"
+            }
+          >
+            List
+          </button>
+          <span className="text-muted-foreground">·</span>
+          <button
+            type="button"
+            onClick={() => setView("board")}
+            className={
+              view === "board" ? "font-medium" : "text-muted-foreground hover:text-foreground"
+            }
+          >
+            Board
+          </button>
+        </div>
       </div>
-      <TaskBoard listId={listId} />
+      {view === "list" ? <TaskListView listId={listId} /> : <TaskBoard listId={listId} />}
     </div>
   );
 }
