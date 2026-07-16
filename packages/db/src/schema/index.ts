@@ -2,3 +2,4 @@
 export * from "./auth";
 export * from "./workspaces";
 export * from "./hierarchy";
+export * from "./tasks";

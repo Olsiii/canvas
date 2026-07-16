@@ -41,4 +41,17 @@ describe("can", () => {
     expect(can(user, "hierarchy:delete", { type: "workspace", role: "member" })).toBe(false);
     expect(can(user, "hierarchy:delete", { type: "workspace", role: "admin" })).toBe(true);
   });
+
+  it("only allows admins+ to delete statuses, but members can create/update them", () => {
+    expect(can(user, "status:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "status:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "status:delete", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "status:delete", { type: "workspace", role: "admin" })).toBe(true);
+  });
+
+  it("allows members to fully manage tasks, including delete", () => {
+    expect(can(user, "task:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "task:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "task:delete", { type: "workspace", role: "member" })).toBe(true);
+  });
 });

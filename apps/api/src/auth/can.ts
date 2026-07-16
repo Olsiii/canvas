@@ -8,7 +8,15 @@ export type WorkspaceAction =
   | "hierarchy:view"
   | "hierarchy:create"
   | "hierarchy:update"
-  | "hierarchy:delete";
+  | "hierarchy:delete"
+  | "status:view"
+  | "status:create"
+  | "status:update"
+  | "status:delete"
+  | "task:view"
+  | "task:create"
+  | "task:update"
+  | "task:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -18,6 +26,14 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "hierarchy:create": "member",
   "hierarchy:update": "member",
   "hierarchy:delete": "admin",
+  "status:view": "guest",
+  "status:create": "member",
+  "status:update": "member",
+  "status:delete": "admin",
+  "task:view": "guest",
+  "task:create": "member",
+  "task:update": "member",
+  "task:delete": "member",
 };
 
 export interface WorkspaceResource {

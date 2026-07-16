@@ -1,3 +1,4 @@
+import { TaskBoard } from "@/components/task-board";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
@@ -29,15 +30,15 @@ function ListPage() {
   }
 
   return (
-    <div className="p-6">
-      <p className="text-muted-foreground text-xs">
-        {space?.name}
-        {folder ? ` / ${folder.name}` : ""}
-      </p>
-      <h1 className="text-lg font-semibold"># {list.name}</h1>
-      <p className="text-muted-foreground mt-4 text-sm">
-        Tasks land here in M1.2 — this list is ready and waiting.
-      </p>
+    <div>
+      <div className="px-6 pt-6">
+        <p className="text-muted-foreground text-xs">
+          {space?.name}
+          {folder ? ` / ${folder.name}` : ""}
+        </p>
+        <h1 className="text-lg font-semibold"># {list.name}</h1>
+      </div>
+      <TaskBoard listId={listId} />
     </div>
   );
 }

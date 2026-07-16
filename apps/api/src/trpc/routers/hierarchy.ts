@@ -1,5 +1,4 @@
 import { db, schema } from "@canvas/db";
-import type { SessionUser } from "../../auth/session";
 import {
   createFolderSchema,
   createListSchema,
@@ -8,31 +7,18 @@ import {
   deleteListSchema,
   deleteSpaceSchema,
   listSpacesSchema,
+  STATUS_KINDS,
   updateFolderSchema,
   updateListSchema,
   updateSpaceSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import { can, type WorkspaceAction } from "../../auth/can";
-import { getMembershipRole } from "../../lib/membership";
+import { logActivity } from "../../lib/activity";
+import { requireList, requireSpace } from "../../lib/hierarchy";
 import { nextOrderKey } from "../../lib/order";
+import { assertCan } from "../../lib/permissions";
 import { protectedProcedure, router } from "../trpc";
-
-async function assertCan(user: SessionUser, workspaceId: string, action: WorkspaceAction) {
-  const role = await getMembershipRole(workspaceId, user.id);
-  if (!can(user, action, { type: "workspace", role })) {
-    throw new TRPCError({ code: "FORBIDDEN" });
-  }
-}
-
-async function requireSpace(spaceId: string) {
-  const space = await db.query.spaces.findFirst({
-    where: and(eq(schema.spaces.id, spaceId), isNull(schema.spaces.deletedAt)),
-  });
-  if (!space) throw new TRPCError({ code: "NOT_FOUND" });
-  return space;
-}
 
 async function requireFolder(folderId: string) {
   const folder = await db.query.folders.findFirst({
@@ -40,14 +26,6 @@ async function requireFolder(folderId: string) {
   });
   if (!folder) throw new TRPCError({ code: "NOT_FOUND" });
   return folder;
-}
-
-async function requireList(listId: string) {
-  const list = await db.query.lists.findFirst({
-    where: and(eq(schema.lists.id, listId), isNull(schema.lists.deletedAt)),
-  });
-  if (!list) throw new TRPCError({ code: "NOT_FOUND" });
-  return list;
 }
 
 async function lastSpaceOrderKey(workspaceId: string): Promise<string | null> {
@@ -80,15 +58,11 @@ async function lastListOrderKey(spaceId: string): Promise<string | null> {
   return last?.orderKey ?? null;
 }
 
-async function logActivity(
-  workspaceId: string,
-  actorId: string,
-  entityType: string,
-  entityId: string,
-  verb: string,
-) {
-  await db.insert(schema.activity).values({ workspaceId, actorId, entityType, entityId, verb });
-}
+const DEFAULT_STATUSES: { name: string; color: string; kind: (typeof STATUS_KINDS)[number] }[] = [
+  { name: "To Do", color: "#94a3b8", kind: "open" },
+  { name: "In Progress", color: "#3b82f6", kind: "active" },
+  { name: "Done", color: "#22c55e", kind: "done" },
+];
 
 export const hierarchyRouter = router({
   tree: protectedProcedure.input(listSpacesSchema).query(async ({ ctx, input }) => {
@@ -264,16 +238,28 @@ export const hierarchyRouter = router({
 
       const lastKey = await lastListOrderKey(input.spaceId);
 
-      const [list] = await db
-        .insert(schema.lists)
-        .values({
-          spaceId: input.spaceId,
-          folderId: input.folderId ?? null,
-          name: input.name,
-          orderKey: nextOrderKey(lastKey),
-        })
-        .returning();
-      if (!list) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const list = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(schema.lists)
+          .values({
+            spaceId: input.spaceId,
+            folderId: input.folderId ?? null,
+            name: input.name,
+            orderKey: nextOrderKey(lastKey),
+          })
+          .returning();
+        if (!inserted) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+        let statusOrderKey: string | null = null;
+        for (const status of DEFAULT_STATUSES) {
+          statusOrderKey = nextOrderKey(statusOrderKey);
+          await tx
+            .insert(schema.statuses)
+            .values({ listId: inserted.id, ...status, orderKey: statusOrderKey });
+        }
+
+        return inserted;
+      });
 
       await logActivity(space.workspaceId, ctx.user.id, "list", list.id, "list.created");
       return list;
