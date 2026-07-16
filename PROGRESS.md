@@ -70,3 +70,20 @@ Built:
   - Logged out, logged in as Bob via `/login?redirect=/invite/{id}` → redirected back to the invite page → "Accept & join" → Bob is `member`.
   - Verified in Postgres directly: 3 memberships (1 owner, 2 members), 2 invites both `accepted_at` set, 3 `activity` rows (`workspace.created`, 2× `invite.created`, 2× `invite.accepted` — 5 total, matches every mutation).
 - Found and fixed a real bug during this verification: the signup page's email field used `useState(invite.data?.email ?? "")`, which only reads `invite.data` once at mount (before the query resolves) — the invite email never actually prefilled. Fixed by deriving `email` from `invite.data?.email ?? emailInput` instead of syncing via state.
+
+### M0.3 — CI: typecheck, lint, vitest, Drizzle migration check — done (2026-07-16)
+
+Built:
+
+- `.github/workflows/ci.yml`: single `ci` job on `push` (main) and `pull_request`, running `actions/checkout`, `pnpm/action-setup` (version resolved from the `packageManager` field, not pinned separately in the workflow), `actions/setup-node` (Node 20, pnpm cache), then `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test` — followed by a two-part Drizzle migration check against a `postgres:16` service container: (1) schema-drift check — re-run `db:generate` and `git diff --exit-code` the `packages/db/drizzle` folder, so a schema edit without a matching migration file fails CI; (2) apply check — `pnpm db:migrate` against the fresh service-container Postgres, so a migration that doesn't actually apply cleanly fails CI too.
+
+### Decisions
+
+- **No separate `db:migrate:check` script** — reused the existing `db:generate`/`db:migrate` scripts directly in the workflow rather than adding new `packages/db` scripts, since CI is the only caller of this exact sequence (drift check via `git diff`, then a real apply). Simplest option consistent with not inventing scope beyond what M0.3 asks for.
+- **Single job, not split by task.** Phase 0 has three small packages and one Postgres-backed check; splitting typecheck/lint/test/migration into parallel jobs would add matrix/service-container duplication for no real speedup at this repo size. Revisit if CI time becomes a problem later.
+- **No Turborepo remote cache configured** — CI runs a cold `turbo run` every time (no `TURBO_TOKEN`/`TURBO_TEAM`). Fine at current size; add remote caching if CI time grows noticeably in later phases.
+
+### Verified
+
+- No GitHub remote is configured for this repo yet, so the workflow itself has not run on GitHub Actions. Verified every step locally instead, in the same order the workflow runs it: `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm test` all pass (`pnpm check` green); `pnpm db:generate` against the current schema confirms "No schema changes, nothing to migrate" with a clean `git status` (the drift check would pass); brought up a fresh `postgres:16` container via `docker compose up -d postgres`, ran `pnpm db:migrate` against it, confirmed "migrations applied successfully!", then tore the container down.
+- Phase 0 accept criteria (ROADMAP.md): "sign up → create workspace → invite user → both log in" was verified end-to-end in M0.2. "CI green" is satisfied in the sense that the CI workflow exists and every step it runs has been verified locally to pass — it will go green on GitHub the first time this repo is pushed to a GitHub remote, since none exists yet.
