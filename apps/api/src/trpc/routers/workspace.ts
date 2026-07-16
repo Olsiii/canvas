@@ -3,6 +3,7 @@ import { acceptInviteSchema, createWorkspaceSchema, inviteMemberSchema } from "@
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { can } from "../../auth/can";
+import { getMembershipRole } from "../../lib/membership";
 import { protectedProcedure, publicProcedure, router } from "../trpc";
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
@@ -15,16 +16,6 @@ function slugify(name: string) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "") || "workspace"
   );
-}
-
-async function getMembershipRole(workspaceId: string, userId: string) {
-  const membership = await db.query.memberships.findFirst({
-    where: and(
-      eq(schema.memberships.workspaceId, workspaceId),
-      eq(schema.memberships.userId, userId),
-    ),
-  });
-  return membership?.role ?? null;
 }
 
 export const workspaceRouter = router({

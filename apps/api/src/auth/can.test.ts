@@ -25,4 +25,20 @@ describe("can", () => {
     expect(can(user, "workspace:delete", { type: "workspace", role: "admin" })).toBe(false);
     expect(can(user, "workspace:delete", { type: "workspace", role: "owner" })).toBe(true);
   });
+
+  it("allows any member (including guests) to view the hierarchy", () => {
+    expect(can(user, "hierarchy:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "hierarchy:view", { type: "workspace", role: "owner" })).toBe(true);
+    expect(can(user, "hierarchy:view", { type: "workspace", role: null })).toBe(false);
+  });
+
+  it("denies guests from creating spaces/folders/lists, allows members+", () => {
+    expect(can(user, "hierarchy:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "hierarchy:create", { type: "workspace", role: "member" })).toBe(true);
+  });
+
+  it("only allows admins+ to delete spaces/folders/lists", () => {
+    expect(can(user, "hierarchy:delete", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "hierarchy:delete", { type: "workspace", role: "admin" })).toBe(true);
+  });
 });

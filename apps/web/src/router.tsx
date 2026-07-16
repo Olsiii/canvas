@@ -4,6 +4,9 @@ import { indexRoute } from "./routes/index";
 import { inviteRoute } from "./routes/invite.$inviteId";
 import { loginRoute } from "./routes/login";
 import { signupRoute } from "./routes/signup";
+import { workspaceShellRoute } from "./routes/workspace.$workspaceId";
+import { workspaceHomeRoute } from "./routes/workspace.$workspaceId.index";
+import { listRoute } from "./routes/workspace.$workspaceId.list.$listId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -12,6 +15,7 @@ const routeTree = rootRoute.addChildren([
   signupRoute,
   newWorkspaceRoute,
   inviteRoute,
+  workspaceShellRoute.addChildren([workspaceHomeRoute, listRoute]),
 ]);
 
 export const router = createRouter({ routeTree });

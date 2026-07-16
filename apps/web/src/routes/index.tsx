@@ -95,7 +95,12 @@ function WorkspaceRow({
     <div className="space-y-2 p-3">
       <div className="flex items-center justify-between">
         <span className="font-medium">{name}</span>
-        <span className="text-muted-foreground text-xs uppercase">{role}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground text-xs uppercase">{role}</span>
+          <Link to="/w/$workspaceId" params={{ workspaceId }} className="text-sm underline">
+            Open
+          </Link>
+        </div>
       </div>
 
       {canInvite && (
