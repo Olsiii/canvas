@@ -9,7 +9,14 @@ import { appRouter } from "./trpc/router";
 
 export type { AppRouter } from "./trpc/router";
 
-const app = Fastify({ logger: true });
+// tRPC's fastify adapter batches every query fired in one render pass into
+// a single GET whose route param is the comma-joined list of procedure
+// names (e.g. "checklist.list,tag.list,customField.values.listForTask,...").
+// Fastify's router default (100 chars) is sized for normal route params,
+// not this — the task detail panel alone now fires 8+ queries on mount,
+// so a 100-char cap here surfaces as an opaque 414 with no server-side
+// error log (the request never reaches the tRPC handler at all).
+const app = Fastify({ logger: true, maxParamLength: 5000 });
 
 await app.register(cors, { origin: env.WEB_URL, credentials: true });
 await app.register(cookie);

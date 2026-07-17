@@ -2,7 +2,9 @@ import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES } from "@canvas/shared";
 import { ActivitySection } from "@/components/activity-section";
 import { CommentsSection } from "@/components/comments-section";
+import { CustomFieldsSection } from "@/components/custom-fields-section";
 import { Field, Section } from "@/components/detail-field";
+import { TagsSection } from "@/components/tags-section";
 import { Input } from "@/components/ui/input";
 import { useOptimisticChecklistItemUpdate } from "@/hooks/use-checklist-mutations";
 import { trpc } from "@/lib/trpc";
@@ -203,6 +205,15 @@ export function TaskDetailPanel({
             )}
 
             <ChecklistsSection taskId={taskId} />
+
+            <TagsSection
+              taskId={taskId}
+              workspaceId={workspaceId}
+              tags={task.data.tags}
+              onChanged={invalidate}
+            />
+
+            <CustomFieldsSection taskId={taskId} workspaceId={workspaceId} listId={task.data.listId} />
 
             <CommentsSection taskId={taskId} workspaceId={workspaceId} />
 

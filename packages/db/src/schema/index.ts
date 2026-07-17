@@ -5,3 +5,5 @@ export * from "./hierarchy";
 export * from "./tasks";
 export * from "./checklists";
 export * from "./comments";
+export * from "./tags";
+export * from "./custom-fields";

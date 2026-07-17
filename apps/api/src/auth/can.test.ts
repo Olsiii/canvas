@@ -60,4 +60,22 @@ describe("can", () => {
     expect(can(user, "comment:create", { type: "workspace", role: "guest" })).toBe(true);
     expect(can(user, "comment:create", { type: "workspace", role: null })).toBe(false);
   });
+
+  it("only allows admins+ to delete tags, but members can create them", () => {
+    expect(can(user, "tag:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "tag:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "tag:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "tag:delete", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "tag:delete", { type: "workspace", role: "admin" })).toBe(true);
+  });
+
+  it("only allows admins+ to delete custom field defs, but members can create/update them and set values", () => {
+    expect(can(user, "customFieldDef:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "customFieldDef:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "customFieldDef:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "customFieldDef:delete", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "customFieldDef:delete", { type: "workspace", role: "admin" })).toBe(true);
+    expect(can(user, "customFieldValue:update", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "customFieldValue:update", { type: "workspace", role: "guest" })).toBe(false);
+  });
 });

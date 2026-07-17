@@ -43,6 +43,13 @@
       "when": 1784290993692,
       "tag": "0005_talented_cyclops",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784294355768,
+      "tag": "0006_nervous_boom_boom",
+      "breakpoints": true
     }
   ]
 }

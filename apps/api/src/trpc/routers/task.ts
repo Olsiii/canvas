@@ -1,10 +1,12 @@
 import { db, schema } from "@canvas/db";
 import {
+  addTaskTagSchema,
   assignTaskSchema,
   createTaskSchema,
   deleteTaskSchema,
   getTaskSchema,
   listTasksSchema,
+  removeTaskTagSchema,
   unassignTaskSchema,
   updateTaskSchema,
 } from "@canvas/shared";
@@ -78,6 +80,23 @@ async function getAssignees(taskId: string) {
     .where(eq(schema.taskAssignees.taskId, taskId));
 }
 
+async function requireTagInWorkspace(tagId: string, workspaceId: string) {
+  const tag = await db.query.tags.findFirst({ where: eq(schema.tags.id, tagId) });
+  if (!tag || tag.workspaceId !== workspaceId) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Tag does not belong to this workspace" });
+  }
+  return tag;
+}
+
+async function getTags(taskId: string) {
+  return db
+    .select({ id: schema.tags.id, name: schema.tags.name, color: schema.tags.color })
+    .from(schema.taskTags)
+    .innerJoin(schema.tags, eq(schema.tags.id, schema.taskTags.tagId))
+    .where(eq(schema.taskTags.taskId, taskId))
+    .orderBy(asc(schema.tags.name));
+}
+
 async function getSubtasks(taskId: string) {
   return db
     .select({
@@ -116,8 +135,9 @@ export const taskRouter = router({
     await assertCan(ctx.user, workspaceId, "task:view");
 
     const assignees = await getAssignees(task.id);
+    const tags = await getTags(task.id);
     const subtasks = task.parentTaskId ? [] : await getSubtasks(task.id);
-    return { ...task, assignees, subtasks };
+    return { ...task, assignees, tags, subtasks };
   }),
 
   create: protectedProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {
@@ -247,6 +267,36 @@ export const taskRouter = router({
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.unassigned");
       return getAssignees(task.id);
+    }),
+  }),
+
+  tags: router({
+    add: protectedProcedure.input(addTaskTagSchema).mutation(async ({ ctx, input }) => {
+      const task = await requireTask(input.taskId);
+      const workspaceId = await workspaceIdForList(task.listId);
+      await assertCan(ctx.user, workspaceId, "task:update");
+      await requireTagInWorkspace(input.tagId, workspaceId);
+
+      await db
+        .insert(schema.taskTags)
+        .values({ taskId: task.id, tagId: input.tagId })
+        .onConflictDoNothing();
+
+      await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.tagged");
+      return getTags(task.id);
+    }),
+
+    remove: protectedProcedure.input(removeTaskTagSchema).mutation(async ({ ctx, input }) => {
+      const task = await requireTask(input.taskId);
+      const workspaceId = await workspaceIdForList(task.listId);
+      await assertCan(ctx.user, workspaceId, "task:update");
+
+      await db
+        .delete(schema.taskTags)
+        .where(and(eq(schema.taskTags.taskId, task.id), eq(schema.taskTags.tagId, input.tagId)));
+
+      await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.untagged");
+      return getTags(task.id);
     }),
   }),
 });

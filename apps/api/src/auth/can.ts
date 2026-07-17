@@ -18,7 +18,15 @@ export type WorkspaceAction =
   | "task:update"
   | "task:delete"
   | "comment:view"
-  | "comment:create";
+  | "comment:create"
+  | "tag:view"
+  | "tag:create"
+  | "tag:delete"
+  | "customFieldDef:view"
+  | "customFieldDef:create"
+  | "customFieldDef:update"
+  | "customFieldDef:delete"
+  | "customFieldValue:update";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -41,6 +49,17 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // guest participates in a task they can already see, not a change to the
   // task itself.
   "comment:create": "guest",
+  "tag:view": "guest",
+  "tag:create": "member",
+  // Deleting a tag removes it from every task that has it — same
+  // destructiveness tier as hierarchy:delete/status:delete.
+  "tag:delete": "admin",
+  "customFieldDef:view": "guest",
+  "customFieldDef:create": "member",
+  "customFieldDef:update": "member",
+  "customFieldDef:delete": "admin",
+  // Setting a task's own field value is a task edit, same tier as task:update.
+  "customFieldValue:update": "member",
 };
 
 export interface WorkspaceResource {
