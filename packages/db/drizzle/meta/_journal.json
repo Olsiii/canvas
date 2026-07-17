@@ -29,6 +29,13 @@
       "when": 1784210907921,
       "tag": "0003_last_lord_tyger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784274778666,
+      "tag": "0004_slimy_abomination",
+      "breakpoints": true
     }
   ]
 }

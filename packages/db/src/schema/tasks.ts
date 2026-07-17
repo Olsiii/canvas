@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   date,
   jsonb,
   pgEnum,
@@ -39,6 +40,12 @@ export const tasks = pgTable("tasks", {
   listId: uuid("list_id")
     .notNull()
     .references(() => lists.id, { onDelete: "cascade" }),
+  // Subtasks: null for a top-level task. Nesting is capped at depth 2 (a
+  // subtask may not itself have subtasks) — enforced in the API layer, not
+  // the schema. See PROGRESS.md (M1.6 decisions).
+  parentTaskId: uuid("parent_task_id").references((): AnyPgColumn => tasks.id, {
+    onDelete: "cascade",
+  }),
   title: text("title").notNull(),
   descriptionJson: jsonb("description_json").$type<unknown>(),
   statusId: uuid("status_id")

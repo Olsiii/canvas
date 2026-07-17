@@ -31,6 +31,9 @@ export const createTaskSchema = z.object({
   listId: z.string().uuid(),
   statusId: z.string().uuid().optional(),
   title: z.string().trim().min(1).max(500),
+  // A subtask's parent. Nesting is capped at depth 2 (a subtask cannot
+  // itself have subtasks) — enforced server-side, not by this schema.
+  parentTaskId: z.string().uuid().optional(),
 });
 
 export const updateTaskSchema = z.object({

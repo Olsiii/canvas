@@ -77,6 +77,7 @@ function ListPage() {
           taskId={openTaskId}
           workspaceId={workspaceId}
           onClose={() => setOpenTaskId(null)}
+          onOpenTask={setOpenTaskId}
         />
       )}
     </div>

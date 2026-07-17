@@ -1,6 +1,7 @@
 import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES } from "@canvas/shared";
 import { Input } from "@/components/ui/input";
+import { useOptimisticChecklistItemUpdate } from "@/hooks/use-checklist-mutations";
 import { trpc } from "@/lib/trpc";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -22,10 +23,12 @@ export function TaskDetailPanel({
   taskId,
   workspaceId,
   onClose,
+  onOpenTask,
 }: {
   taskId: string;
   workspaceId: string;
   onClose: () => void;
+  onOpenTask?: (taskId: string) => void;
 }) {
   const utils = trpc.useUtils();
   const task = trpc.task.get.useQuery({ taskId });
@@ -184,6 +187,19 @@ export function TaskDetailPanel({
                 onSave={(json) => update.mutate({ taskId, descriptionJson: json })}
               />
             </Field>
+
+            {!task.data.parentTaskId && (
+              <SubtasksSection
+                taskId={taskId}
+                listId={task.data.listId}
+                subtasks={task.data.subtasks}
+                statuses={statuses.data ?? []}
+                onChanged={invalidate}
+                onOpenTask={onOpenTask}
+              />
+            )}
+
+            <ChecklistsSection taskId={taskId} />
           </div>
         )}
       </div>
@@ -197,6 +213,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="text-muted-foreground text-xs font-medium">{label}</span>
       {children}
     </label>
+  );
+}
+
+// Like Field, but a <div> instead of a <label> — for sections containing a
+// list of independently-interactive elements (buttons, checkboxes) rather
+// than a single form control. A <label> wrapping multiple controls gets its
+// text folded into each control's accessible name, which is wrong here.
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="block space-y-1">
+      <span className="text-muted-foreground text-xs font-medium">{label}</span>
+      {children}
+    </div>
   );
 }
 
@@ -237,5 +266,205 @@ function DescriptionEditor({
     <div className="border-border rounded-md border p-2">
       <EditorContent editor={editor} />
     </div>
+  );
+}
+
+type Subtask = RouterOutputs["task"]["get"]["subtasks"][number];
+
+function SubtasksSection({
+  taskId,
+  listId,
+  subtasks,
+  statuses,
+  onChanged,
+  onOpenTask,
+}: {
+  taskId: string;
+  listId: string;
+  subtasks: Subtask[];
+  statuses: Status[];
+  onChanged: () => void;
+  onOpenTask?: (taskId: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const create = trpc.task.create.useMutation({
+    onSuccess: () => {
+      onChanged();
+      setTitle("");
+    },
+  });
+  const del = trpc.task.delete.useMutation({ onSuccess: onChanged });
+
+  const statusName = (statusId: string) => statuses.find((s) => s.id === statusId)?.name ?? "";
+
+  return (
+    <Section label={`Subtasks${subtasks.length ? ` (${subtasks.length})` : ""}`}>
+      <div className="space-y-1">
+        {subtasks.map((s) => (
+          <div
+            key={s.id}
+            className="group border-border flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
+          >
+            {onOpenTask ? (
+              <button
+                type="button"
+                onClick={() => onOpenTask(s.id)}
+                className="flex-1 truncate text-left hover:underline"
+              >
+                {s.title}
+              </button>
+            ) : (
+              <span className="flex-1 truncate">{s.title}</span>
+            )}
+            <span className="text-muted-foreground shrink-0 text-xs">{statusName(s.statusId)}</span>
+            <button
+              type="button"
+              aria-label={`Delete subtask ${s.title}`}
+              onClick={() => del.mutate({ taskId: s.id })}
+              className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title.trim()) create.mutate({ listId, parentTaskId: taskId, title: title.trim() });
+          }}
+        >
+          <Input
+            value={title}
+            placeholder="+ Add subtask"
+            aria-label="New subtask"
+            onChange={(e) => setTitle(e.target.value)}
+            className="h-7 text-xs"
+          />
+        </form>
+      </div>
+    </Section>
+  );
+}
+
+function ChecklistsSection({ taskId }: { taskId: string }) {
+  const utils = trpc.useUtils();
+  const checklists = trpc.checklist.list.useQuery({ taskId });
+  const invalidate = () => utils.checklist.list.invalidate({ taskId });
+
+  const [name, setName] = useState("");
+  const createChecklist = trpc.checklist.create.useMutation({
+    onSuccess: () => {
+      invalidate();
+      setName("");
+    },
+  });
+  const deleteChecklist = trpc.checklist.delete.useMutation({ onSuccess: invalidate });
+  const createItem = trpc.checklist.items.create.useMutation({ onSuccess: invalidate });
+  const updateItem = useOptimisticChecklistItemUpdate(taskId);
+  const deleteItem = trpc.checklist.items.delete.useMutation({ onSuccess: invalidate });
+
+  return (
+    <Section label="Checklists">
+      <div className="space-y-4">
+        {(checklists.data ?? []).map((checklist) => {
+          const doneCount = checklist.items.filter((i) => i.done).length;
+          return (
+            <div key={checklist.id} className="space-y-1">
+              <div className="group flex items-center gap-2">
+                <span className="text-sm font-medium">{checklist.name}</span>
+                <span className="text-muted-foreground text-xs">
+                  {doneCount}/{checklist.items.length}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Delete checklist ${checklist.name}`}
+                  onClick={() => deleteChecklist.mutate({ checklistId: checklist.id })}
+                  className="text-muted-foreground hover:text-foreground ml-auto hidden text-xs group-hover:inline"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-1">
+                {checklist.items.map((item) => (
+                  <div key={item.id} className="group flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      aria-label={item.text}
+                      onChange={(e) =>
+                        updateItem.mutate({ itemId: item.id, done: e.target.checked })
+                      }
+                    />
+                    <span className={item.done ? "text-muted-foreground line-through" : ""}>
+                      {item.text}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Delete item ${item.text}`}
+                      onClick={() => deleteItem.mutate({ itemId: item.id })}
+                      className="text-muted-foreground hover:text-foreground ml-auto hidden group-hover:inline"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <NewChecklistItemForm
+                isPending={createItem.isPending}
+                onSubmit={(text) => createItem.mutate({ checklistId: checklist.id, text })}
+              />
+            </div>
+          );
+        })}
+
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim()) createChecklist.mutate({ taskId, name: name.trim() });
+          }}
+        >
+          <Input
+            value={name}
+            placeholder="+ Add checklist"
+            aria-label="New checklist name"
+            onChange={(e) => setName(e.target.value)}
+            className="h-7 text-xs"
+          />
+        </form>
+      </div>
+    </Section>
+  );
+}
+
+function NewChecklistItemForm({
+  isPending,
+  onSubmit,
+}: {
+  isPending: boolean;
+  onSubmit: (text: string) => void;
+}) {
+  const [text, setText] = useState("");
+  return (
+    <form
+      className="flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (text.trim()) {
+          onSubmit(text.trim());
+          setText("");
+        }
+      }}
+    >
+      <Input
+        value={text}
+        placeholder="+ Add item"
+        aria-label="New checklist item text"
+        disabled={isPending}
+        onChange={(e) => setText(e.target.value)}
+        className="h-7 text-xs"
+      />
+    </form>
   );
 }

@@ -1,4 +1,5 @@
 import { authRouter } from "./routers/auth";
+import { checklistRouter } from "./routers/checklist";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { statusRouter } from "./routers/status";
 import { taskRouter } from "./routers/task";
@@ -12,6 +13,7 @@ export const appRouter = router({
   hierarchy: hierarchyRouter,
   status: statusRouter,
   task: taskRouter,
+  checklist: checklistRouter,
 });
 
 export type AppRouter = typeof appRouter;

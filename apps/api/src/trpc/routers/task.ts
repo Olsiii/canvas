@@ -11,19 +11,12 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
-import { requireList, requireSpace } from "../../lib/hierarchy";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { validateSubtaskParent } from "../../lib/subtask";
 import { buildTaskUpdateFields } from "../../lib/task-update";
+import { requireTask, workspaceIdForList } from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
-
-async function requireTask(taskId: string) {
-  const task = await db.query.tasks.findFirst({
-    where: and(eq(schema.tasks.id, taskId), isNull(schema.tasks.deletedAt)),
-  });
-  if (!task) throw new TRPCError({ code: "NOT_FOUND" });
-  return task;
-}
 
 async function requireStatusInList(statusId: string, listId: string) {
   const status = await db.query.statuses.findFirst({ where: eq(schema.statuses.id, statusId) });
@@ -60,12 +53,6 @@ async function lastTaskOrderKey(listId: string, statusId: string): Promise<strin
   return last?.orderKey ?? null;
 }
 
-async function workspaceIdForList(listId: string) {
-  const list = await requireList(listId);
-  const space = await requireSpace(list.spaceId);
-  return space.workspaceId;
-}
-
 async function requireWorkspaceMember(workspaceId: string, userId: string) {
   const membership = await db.query.memberships.findFirst({
     where: and(
@@ -91,15 +78,35 @@ async function getAssignees(taskId: string) {
     .where(eq(schema.taskAssignees.taskId, taskId));
 }
 
+async function getSubtasks(taskId: string) {
+  return db
+    .select({
+      id: schema.tasks.id,
+      title: schema.tasks.title,
+      statusId: schema.tasks.statusId,
+    })
+    .from(schema.tasks)
+    .where(and(eq(schema.tasks.parentTaskId, taskId), isNull(schema.tasks.deletedAt)))
+    .orderBy(asc(schema.tasks.orderKey));
+}
+
 export const taskRouter = router({
   list: protectedProcedure.input(listTasksSchema).query(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
     await assertCan(ctx.user, workspaceId, "task:view");
 
+    // Subtasks are reached via their parent's detail panel, not shown as
+    // their own top-level card/row here — otherwise they'd appear twice.
     return db
       .select()
       .from(schema.tasks)
-      .where(and(eq(schema.tasks.listId, input.listId), isNull(schema.tasks.deletedAt)))
+      .where(
+        and(
+          eq(schema.tasks.listId, input.listId),
+          isNull(schema.tasks.deletedAt),
+          isNull(schema.tasks.parentTaskId),
+        ),
+      )
       .orderBy(asc(schema.tasks.orderKey));
   }),
 
@@ -109,12 +116,21 @@ export const taskRouter = router({
     await assertCan(ctx.user, workspaceId, "task:view");
 
     const assignees = await getAssignees(task.id);
-    return { ...task, assignees };
+    const subtasks = task.parentTaskId ? [] : await getSubtasks(task.id);
+    return { ...task, assignees, subtasks };
   }),
 
   create: protectedProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
     await assertCan(ctx.user, workspaceId, "task:create");
+
+    let parentTaskId: string | undefined;
+    if (input.parentTaskId) {
+      const parent = await requireTask(input.parentTaskId);
+      const error = validateSubtaskParent(parent, input.listId);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error });
+      parentTaskId = parent.id;
+    }
 
     const status = input.statusId
       ? await requireStatusInList(input.statusId, input.listId)
@@ -126,6 +142,7 @@ export const taskRouter = router({
       .insert(schema.tasks)
       .values({
         listId: input.listId,
+        parentTaskId,
         title: input.title,
         statusId: status.id,
         orderKey: nextOrderKey(lastKey),
@@ -184,10 +201,15 @@ export const taskRouter = router({
     const workspaceId = await workspaceIdForList(task.listId);
     await assertCan(ctx.user, workspaceId, "task:delete");
 
+    const deletedAt = new Date();
+    await db.update(schema.tasks).set({ deletedAt }).where(eq(schema.tasks.id, task.id));
+    // Cascade the soft delete to subtasks — a deleted parent's subtasks
+    // would otherwise become permanently unreachable (excluded from
+    // task.list, but their parent's detail panel can no longer be opened).
     await db
       .update(schema.tasks)
-      .set({ deletedAt: new Date() })
-      .where(eq(schema.tasks.id, task.id));
+      .set({ deletedAt })
+      .where(and(eq(schema.tasks.parentTaskId, task.id), isNull(schema.tasks.deletedAt)));
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.deleted");
     return { id: task.id };
