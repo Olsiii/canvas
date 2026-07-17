@@ -1,6 +1,9 @@
+import { activityRouter } from "./routers/activity";
 import { authRouter } from "./routers/auth";
 import { checklistRouter } from "./routers/checklist";
+import { commentRouter } from "./routers/comment";
 import { hierarchyRouter } from "./routers/hierarchy";
+import { notificationRouter } from "./routers/notification";
 import { statusRouter } from "./routers/status";
 import { taskRouter } from "./routers/task";
 import { workspaceRouter } from "./routers/workspace";
@@ -14,6 +17,9 @@ export const appRouter = router({
   status: statusRouter,
   task: taskRouter,
   checklist: checklistRouter,
+  comment: commentRouter,
+  notification: notificationRouter,
+  activity: activityRouter,
 });
 
 export type AppRouter = typeof appRouter;

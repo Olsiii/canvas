@@ -16,7 +16,9 @@ export type WorkspaceAction =
   | "task:view"
   | "task:create"
   | "task:update"
-  | "task:delete";
+  | "task:delete"
+  | "comment:view"
+  | "comment:create";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -34,6 +36,11 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "task:create": "member",
   "task:update": "member",
   "task:delete": "member",
+  "comment:view": "guest",
+  // Deliberately guest-level, unlike task:create: commenting is how a
+  // guest participates in a task they can already see, not a change to the
+  // task itself.
+  "comment:create": "guest",
 };
 
 export interface WorkspaceResource {

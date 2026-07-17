@@ -36,6 +36,13 @@
       "when": 1784274778666,
       "tag": "0004_slimy_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784290993692,
+      "tag": "0005_talented_cyclops",
+      "breakpoints": true
     }
   ]
 }

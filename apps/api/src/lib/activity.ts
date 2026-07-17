@@ -6,6 +6,12 @@ export async function logActivity(
   entityType: string,
   entityId: string,
   verb: string,
+  payloadJson?: unknown,
 ) {
-  await db.insert(schema.activity).values({ workspaceId, actorId, entityType, entityId, verb });
+  const [row] = await db
+    .insert(schema.activity)
+    .values({ workspaceId, actorId, entityType, entityId, verb, payloadJson })
+    .returning();
+  if (!row) throw new Error("Failed to insert activity row");
+  return row;
 }

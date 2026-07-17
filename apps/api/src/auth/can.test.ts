@@ -54,4 +54,10 @@ describe("can", () => {
     expect(can(user, "task:create", { type: "workspace", role: "member" })).toBe(true);
     expect(can(user, "task:delete", { type: "workspace", role: "member" })).toBe(true);
   });
+
+  it("allows guests to view and post comments, unlike creating tasks", () => {
+    expect(can(user, "comment:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "comment:create", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "comment:create", { type: "workspace", role: null })).toBe(false);
+  });
 });

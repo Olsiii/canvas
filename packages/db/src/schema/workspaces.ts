@@ -65,3 +65,17 @@ export const activity = pgTable("activity", {
   payloadJson: jsonb("payload_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => uuidv7()),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  activityId: uuid("activity_id")
+    .notNull()
+    .references(() => activity.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

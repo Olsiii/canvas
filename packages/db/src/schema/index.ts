@@ -4,3 +4,4 @@ export * from "./workspaces";
 export * from "./hierarchy";
 export * from "./tasks";
 export * from "./checklists";
+export * from "./comments";

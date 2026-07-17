@@ -1,5 +1,8 @@
 import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES } from "@canvas/shared";
+import { ActivitySection } from "@/components/activity-section";
+import { CommentsSection } from "@/components/comments-section";
+import { Field, Section } from "@/components/detail-field";
 import { Input } from "@/components/ui/input";
 import { useOptimisticChecklistItemUpdate } from "@/hooks/use-checklist-mutations";
 import { trpc } from "@/lib/trpc";
@@ -200,31 +203,13 @@ export function TaskDetailPanel({
             )}
 
             <ChecklistsSection taskId={taskId} />
+
+            <CommentsSection taskId={taskId} workspaceId={workspaceId} />
+
+            <ActivitySection taskId={taskId} />
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-muted-foreground text-xs font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-// Like Field, but a <div> instead of a <label> — for sections containing a
-// list of independently-interactive elements (buttons, checkboxes) rather
-// than a single form control. A <label> wrapping multiple controls gets its
-// text folded into each control's accessible name, which is wrong here.
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="block space-y-1">
-      <span className="text-muted-foreground text-xs font-medium">{label}</span>
-      {children}
     </div>
   );
 }

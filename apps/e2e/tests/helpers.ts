@@ -4,8 +4,7 @@ export function uniqueEmail(prefix = "e2e") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
-export async function signUp(page: Page, name = "E2E Tester") {
-  const email = uniqueEmail();
+export async function signUp(page: Page, name = "E2E Tester", email = uniqueEmail()) {
   await page.goto("/signup");
   await page.locator("#name").fill(name);
   await page.locator("#email").fill(email);
@@ -21,6 +20,17 @@ export async function createWorkspaceAndOpen(page: Page, name: string) {
   await page.getByRole("button", { name: "Create workspace" }).click();
   await page.getByRole("link", { name: "Open" }).click();
   await expect(page.getByText(name)).toBeVisible();
+}
+
+/** Invites an email to the workspace shown on the dashboard and returns the invite link. */
+export async function inviteAndGetLink(page: Page, email: string) {
+  await page.getByPlaceholder("teammate@example.com").fill(email);
+  await page.getByRole("button", { name: "Invite" }).click();
+  const link = page.locator("p", { hasText: "Invite link:" }).locator("span");
+  await expect(link).toBeVisible();
+  const href = await link.textContent();
+  if (!href) throw new Error("Invite link was empty");
+  return href;
 }
 
 /** Creates a space, then a list directly under it, and navigates into the list. */

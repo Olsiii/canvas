@@ -3,20 +3,38 @@ import { TaskDetailPanel } from "@/components/task-detail-panel";
 import { TaskListView } from "@/components/task-list-view";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
+
+// `openTask` lets a notification link straight to a task's detail panel
+// (see NotificationsBell) without the list route needing to know anything
+// about notifications itself.
+const searchSchema = z.object({
+  openTask: z.string().uuid().optional(),
+});
 
 export const listRoute = createRoute({
   getParentRoute: () => workspaceShellRoute,
   path: "/l/$listId",
+  validateSearch: searchSchema,
   component: ListPage,
 });
 
 function ListPage() {
   const { workspaceId, listId } = listRoute.useParams();
+  const { openTask } = listRoute.useSearch();
   const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
   const [view, setView] = useState<"list" | "board">("list");
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(openTask ?? null);
+
+  // A notification click navigates here via client-side routing, which
+  // doesn't remount this component when the user is already on this same
+  // list (only the search param changes) — so the initial-state seed above
+  // isn't enough on its own; this re-applies it whenever openTask changes.
+  useEffect(() => {
+    if (openTask) setOpenTaskId(openTask);
+  }, [openTask]);
 
   const list = tree.data?.lists.find((l) => l.id === listId);
   const space = list ? tree.data?.spaces.find((s) => s.id === list.spaceId) : undefined;
