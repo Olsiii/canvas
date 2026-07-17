@@ -4,6 +4,8 @@ import {
   createWorkspaceSchema,
   inviteMemberSchema,
   listMembersSchema,
+  removeMemberSchema,
+  updateMemberRoleSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull } from "drizzle-orm";
@@ -174,5 +176,72 @@ export const workspaceRouter = router({
       where: eq(schema.workspaces.id, invite.workspaceId),
     });
     return workspace;
+  }),
+
+  updateMemberRole: protectedProcedure
+    .input(updateMemberRoleSchema)
+    .mutation(async ({ ctx, input }) => {
+      const role = await getMembershipRole(input.workspaceId, ctx.user.id);
+      if (!can(ctx.user, "workspace:manage", { type: "workspace", role })) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const targetRole = await getMembershipRole(input.workspaceId, input.userId);
+      if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });
+      if (targetRole === "owner") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The workspace owner's role can't be changed" });
+      }
+
+      await db
+        .update(schema.memberships)
+        .set({ role: input.role })
+        .where(
+          and(
+            eq(schema.memberships.workspaceId, input.workspaceId),
+            eq(schema.memberships.userId, input.userId),
+          ),
+        );
+
+      await db.insert(schema.activity).values({
+        workspaceId: input.workspaceId,
+        actorId: ctx.user.id,
+        entityType: "membership",
+        entityId: input.userId,
+        verb: "membership.role_changed",
+      });
+
+      return { userId: input.userId, role: input.role };
+    }),
+
+  removeMember: protectedProcedure.input(removeMemberSchema).mutation(async ({ ctx, input }) => {
+    const role = await getMembershipRole(input.workspaceId, ctx.user.id);
+    if (!can(ctx.user, "workspace:manage", { type: "workspace", role })) {
+      throw new TRPCError({ code: "FORBIDDEN" });
+    }
+
+    const targetRole = await getMembershipRole(input.workspaceId, input.userId);
+    if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });
+    if (targetRole === "owner") {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "The workspace owner can't be removed" });
+    }
+
+    await db
+      .delete(schema.memberships)
+      .where(
+        and(
+          eq(schema.memberships.workspaceId, input.workspaceId),
+          eq(schema.memberships.userId, input.userId),
+        ),
+      );
+
+    await db.insert(schema.activity).values({
+      workspaceId: input.workspaceId,
+      actorId: ctx.user.id,
+      entityType: "membership",
+      entityId: input.userId,
+      verb: "membership.removed",
+    });
+
+    return { userId: input.userId };
   }),
 });

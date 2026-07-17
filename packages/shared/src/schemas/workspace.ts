@@ -20,5 +20,18 @@ export const listMembersSchema = z.object({
   workspaceId: z.string().uuid(),
 });
 
+export const updateMemberRoleSchema = z.object({
+  workspaceId: z.string().uuid(),
+  userId: z.string().uuid(),
+  // Ownership transfer isn't in scope here — only one owner, set at
+  // workspace creation.
+  role: z.enum(MEMBERSHIP_ROLES).exclude(["owner"]),
+});
+
+export const removeMemberSchema = z.object({
+  workspaceId: z.string().uuid(),
+  userId: z.string().uuid(),
+});
+
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

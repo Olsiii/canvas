@@ -21,6 +21,12 @@ describe("can", () => {
     expect(can(user, "workspace:invite", { type: "workspace", role: "owner" })).toBe(true);
   });
 
+  it("only allows admins+ to manage members (role changes, removal)", () => {
+    expect(can(user, "workspace:manage", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "workspace:manage", { type: "workspace", role: "admin" })).toBe(true);
+    expect(can(user, "workspace:manage", { type: "workspace", role: "owner" })).toBe(true);
+  });
+
   it("only allows owners to delete the workspace", () => {
     expect(can(user, "workspace:delete", { type: "workspace", role: "admin" })).toBe(false);
     expect(can(user, "workspace:delete", { type: "workspace", role: "owner" })).toBe(true);

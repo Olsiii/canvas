@@ -1,3 +1,4 @@
+import { MEMBERSHIP_ROLES, type MembershipRole } from "@canvas/shared";
 import { RequireAuth } from "@/components/require-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +7,11 @@ import { trpc } from "@/lib/trpc";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { rootRoute } from "./__root";
+
+type InvitableRole = Exclude<MembershipRole, "owner">;
+const INVITABLE_ROLES = MEMBERSHIP_ROLES.filter(
+  (r): r is InvitableRole => r !== "owner",
+);
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -79,6 +85,7 @@ function WorkspaceRow({
   role: string;
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<InvitableRole>("member");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const canInvite = role === "owner" || role === "admin";
@@ -110,7 +117,7 @@ function WorkspaceRow({
             e.preventDefault();
             setInviteError(null);
             setInviteLink(null);
-            invite.mutate({ workspaceId, email: inviteEmail, role: "member" });
+            invite.mutate({ workspaceId, email: inviteEmail, role: inviteRole });
           }}
         >
           <Input
@@ -120,6 +127,18 @@ function WorkspaceRow({
             onChange={(e) => setInviteEmail(e.target.value)}
             required
           />
+          <select
+            value={inviteRole}
+            aria-label="Invite role"
+            onChange={(e) => setInviteRole(e.target.value as InvitableRole)}
+            className="border-border bg-background h-9 rounded-md border px-2 text-sm"
+          >
+            {INVITABLE_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
           <Button type="submit" size="sm" disabled={invite.isPending}>
             Invite
           </Button>

@@ -16,7 +16,7 @@ export type { AppRouter } from "./trpc/router";
 // not this — the task detail panel alone now fires 8+ queries on mount,
 // so a 100-char cap here surfaces as an opaque 414 with no server-side
 // error log (the request never reaches the tRPC handler at all).
-const app = Fastify({ logger: true, maxParamLength: 5000 });
+const app = Fastify({ logger: true, routerOptions: { maxParamLength: 5000 } });
 
 await app.register(cors, { origin: env.WEB_URL, credentials: true });
 await app.register(cookie);

@@ -23,8 +23,9 @@ export async function createWorkspaceAndOpen(page: Page, name: string) {
 }
 
 /** Invites an email to the workspace shown on the dashboard and returns the invite link. */
-export async function inviteAndGetLink(page: Page, email: string) {
+export async function inviteAndGetLink(page: Page, email: string, role?: "admin" | "guest") {
   await page.getByPlaceholder("teammate@example.com").fill(email);
+  if (role) await page.getByLabel("Invite role").selectOption(role);
   await page.getByRole("button", { name: "Invite" }).click();
   const link = page.locator("p", { hasText: "Invite link:" }).locator("span");
   await expect(link).toBeVisible();
