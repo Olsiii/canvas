@@ -8,7 +8,7 @@ export default defineConfig({
   retries: isCI ? 1 : 0,
   reporter: isCI ? "line" : "html",
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "http://localhost:5183",
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
@@ -23,7 +23,7 @@ export default defineConfig({
     },
     {
       command: "pnpm --filter @canvas/web dev",
-      url: "http://localhost:5173",
+      url: "http://localhost:5183",
       reuseExistingServer: !isCI,
       timeout: 30_000,
     },

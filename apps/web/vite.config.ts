@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 5183,
     proxy: {
       "/trpc": "http://localhost:3001",
       "/auth": "http://localhost:3001",
