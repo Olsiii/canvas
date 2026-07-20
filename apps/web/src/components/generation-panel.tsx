@@ -3,14 +3,16 @@ import {
   ASPECT_PRESET_LABELS,
   STYLE_PRESETS,
   STYLE_PRESET_LABELS,
+  buildImageVersionTree,
   type AspectPreset,
   type StylePreset,
 } from "@canvas/shared";
 import { Button } from "@/components/ui/button";
-import { ImageVersionThumb } from "@/components/image-version-thumb";
+import { VersionCompare } from "@/components/version-compare";
+import { VersionTreeSidebar } from "@/components/version-tree-sidebar";
 import { useImageAssetJob } from "@/hooks/use-image-asset-job";
 import { trpc } from "@/lib/trpc";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 export function GenerationPanel({
   workspaceId,
@@ -31,9 +33,13 @@ export function GenerationPanel({
   const [useBrandPalette, setUseBrandPalette] = useState(false);
   const [assetId, setAssetId] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [compareVersionId, setCompareVersionId] = useState<string | null>(null);
   const [editInstruction, setEditInstruction] = useState("");
   const [targetVersionCount, setTargetVersionCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // When true, the next job "done" selects the new tip; then cleared so the
+  // user can pick an older node to branch/compare without being snapped back.
+  const followTipAfterJob = useRef(false);
 
   const generate = trpc.imageAsset.generate.useMutation();
   const edit = trpc.imageAsset.edit.useMutation();
@@ -72,6 +78,10 @@ export function GenerationPanel({
   );
 
   const versions = asset.data?.versions ?? [];
+  const treeRoots = useMemo(
+    () => buildImageVersionTree(asset.data?.versions ?? []),
+    [asset.data?.versions],
+  );
 
   useEffect(() => {
     if (targetVersionCount > 0 && versions.length >= targetVersionCount) {
@@ -85,9 +95,9 @@ export function GenerationPanel({
     const currentId = asset.data?.currentVersionId ?? null;
     const versionList = asset.data?.versions ?? [];
     if (!asset.data) return;
-    // After a job finishes, follow the new current version (edit produces a child).
-    if (jobStatus === "done" && currentId) {
+    if (followTipAfterJob.current && jobStatus === "done" && currentId) {
       setSelectedVersionId(currentId);
+      followTipAfterJob.current = false;
       return;
     }
     if (selectedVersionId && versionList.some((v) => v.id === selectedVersionId)) return;
@@ -101,8 +111,10 @@ export function GenerationPanel({
     setError(null);
     setAssetId(null);
     setSelectedVersionId(null);
+    setCompareVersionId(null);
     setTargetVersionCount(n);
     setJobStatus("queued");
+    followTipAfterJob.current = true;
     try {
       const created = await generate.mutateAsync({
         workspaceId,
@@ -126,6 +138,7 @@ export function GenerationPanel({
     setError(null);
     setTargetVersionCount(versions.length + 1);
     setJobStatus("queued");
+    followTipAfterJob.current = true;
     try {
       await edit.mutateAsync({
         assetId,
@@ -140,10 +153,15 @@ export function GenerationPanel({
   }
 
   const ready = versions.length > 0;
-  const busy = jobStatus === "queued" || jobStatus === "generating" || generate.isPending || edit.isPending;
+  const busy =
+    jobStatus === "queued" ||
+    jobStatus === "generating" ||
+    generate.isPending ||
+    edit.isPending;
   const waiting =
-    !!assetId &&
-    (busy || (targetVersionCount > 0 && versions.length < targetVersionCount));
+    !!assetId && (busy || (targetVersionCount > 0 && versions.length < targetVersionCount));
+  const isCurrentSelected =
+    !!selectedVersionId && selectedVersionId === asset.data?.currentVersionId;
 
   const statusLabel =
     jobStatus === "queued"
@@ -292,25 +310,46 @@ export function GenerationPanel({
 
       {ready && (
         <div className="space-y-3">
-          <p className="text-xs font-medium">Versions — click to select &amp; promote</p>
-          <div data-testid="generation-variants" className="flex flex-wrap gap-2">
-            {versions.map((v) => (
-              <ImageVersionThumb
-                key={v.id}
-                version={v}
-                selected={selectedVersionId === v.id}
-                onSelect={() => {
-                  if (!assetId) return;
-                  setSelectedVersionId(v.id);
-                  promote.mutate({ assetId, versionId: v.id });
-                }}
-              />
-            ))}
+          <VersionTreeSidebar
+            roots={treeRoots}
+            selectedVersionId={selectedVersionId}
+            currentVersionId={asset.data?.currentVersionId ?? null}
+            compareVersionId={compareVersionId}
+            onSelect={setSelectedVersionId}
+            onToggleCompare={(versionId) => {
+              setCompareVersionId((prev) => (prev === versionId ? null : versionId));
+            }}
+          />
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              data-testid="generation-promote"
+              disabled={!assetId || !selectedVersionId || isCurrentSelected || promote.isPending}
+              onClick={() => {
+                if (!assetId || !selectedVersionId) return;
+                promote.mutate({ assetId, versionId: selectedVersionId });
+              }}
+            >
+              {isCurrentSelected ? "Current version" : "Set as current"}
+            </Button>
           </div>
+
+          {selectedVersionId &&
+            compareVersionId &&
+            compareVersionId !== selectedVersionId && (
+              <VersionCompare
+                leftVersionId={selectedVersionId}
+                rightVersionId={compareVersionId}
+                onClear={() => setCompareVersionId(null)}
+              />
+            )}
 
           <form onSubmit={handleEdit} className="space-y-2 border-t border-border pt-3">
             <label htmlFor="gen-edit" className="mb-1 block text-xs font-medium">
-              Edit selected version
+              Branch from selected
             </label>
             <textarea
               id="gen-edit"
@@ -329,7 +368,7 @@ export function GenerationPanel({
               disabled={!selectedVersionId || !editInstruction.trim() || edit.isPending || busy}
               data-testid="generation-edit-submit"
             >
-              {edit.isPending ? "Starting edit…" : "Apply edit"}
+              {edit.isPending ? "Starting branch…" : "Branch / edit"}
             </Button>
           </form>
 

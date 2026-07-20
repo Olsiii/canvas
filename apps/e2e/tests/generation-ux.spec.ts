@@ -39,12 +39,16 @@ test("Generation UX: set brand palette, generate variants, promote one, attach t
   await gen.getByTestId("generation-submit").click();
 
   await expect(gen.getByTestId("generation-variants")).toBeVisible({ timeout: 30_000 });
-  const variants = gen.getByTestId("generation-variants").locator("button");
+  const variants = gen
+    .getByTestId("generation-variants")
+    .locator("button[data-testid^='image-version-']");
   await expect(variants).toHaveCount(2, { timeout: 30_000 });
 
-  // Promote the second variant
-  await variants.nth(1).click();
-  await expect(variants.nth(1)).toHaveAttribute("aria-pressed", "true");
+  // With n=2 the worker promotes the last variant; switch current to the first.
+  await variants.nth(0).click();
+  await expect(variants.nth(0)).toHaveAttribute("aria-pressed", "true");
+  await gen.getByTestId("generation-promote").click();
+  await expect(gen.getByTestId("generation-promote")).toHaveText("Current version");
 
   await gen.getByTestId("generation-attach").click();
   await expect(gen.getByText("Attached to task")).toBeVisible({ timeout: 10_000 });

@@ -575,3 +575,22 @@ Built:
 ### Verified
 
 - `pnpm check` / unit tests green; Playwright `iterative-edit.spec.ts` + `generation-ux.spec.ts` green with worker.
+
+### M2.6 — Version tree UI (sidebar, compare, promote, branch) — done (2026-07-20)
+
+Built:
+
+- Shared `buildImageVersionTree` / `flattenImageVersionTree` (pure; unit-tested) — no schema/API changes; tree edges already on `parent_version_id`.
+- `VersionTreeSidebar` (depth-indented nodes, current marker, compare toggle) + `VersionCompare` (side-by-side full-res).
+- `GenerationPanel`: select without auto-promote; explicit **Set as current**; **Branch / edit** from any selected node; compare two versions.
+- Playwright `version-tree.spec.ts` (root → two sibling branches, compare, promote); `generation-ux` updated for explicit promote.
+
+### Decisions
+
+- **Select ≠ promote** — M2.5 clicked-to-promote; M2.6 needs select-for-compare/branch without changing current, so promote is a button.
+- **Branch = existing `imageAsset.edit`** with chosen `parentVersionId` — no new mutation.
+- **No nested tree payload from API** — client builds the forest from the flat `get` list.
+
+### Verified
+
+- `pnpm check` / unit tests green; Playwright `version-tree.spec.ts` + `generation-ux` + `iterative-edit` green with worker.
