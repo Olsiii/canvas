@@ -2,6 +2,7 @@ import { TaskBoard } from "@/components/task-board";
 import { TaskCalendarView } from "@/components/task-calendar-view";
 import { TaskDetailPanel } from "@/components/task-detail-panel";
 import { TaskListView } from "@/components/task-list-view";
+import { TaskTableView } from "@/components/task-table-view";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -26,7 +27,7 @@ function ListPage() {
   const { workspaceId, listId } = listRoute.useParams();
   const { openTask } = listRoute.useSearch();
   const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
-  const [view, setView] = useState<"list" | "board" | "calendar">("list");
+  const [view, setView] = useState<"list" | "board" | "calendar" | "table">("list");
   const [openTaskId, setOpenTaskId] = useState<string | null>(openTask ?? null);
 
   // A notification click navigates here via client-side routing, which
@@ -64,43 +65,37 @@ function ListPage() {
           <h1 className="text-lg font-semibold"># {list.name}</h1>
         </div>
         <div className="flex gap-1 text-sm">
-          <button
-            type="button"
-            onClick={() => setView("list")}
-            className={
-              view === "list" ? "font-medium" : "text-muted-foreground hover:text-foreground"
-            }
-          >
-            List
-          </button>
-          <span className="text-muted-foreground">·</span>
-          <button
-            type="button"
-            onClick={() => setView("board")}
-            className={
-              view === "board" ? "font-medium" : "text-muted-foreground hover:text-foreground"
-            }
-          >
-            Board
-          </button>
-          <span className="text-muted-foreground">·</span>
-          <button
-            type="button"
-            onClick={() => setView("calendar")}
-            className={
-              view === "calendar" ? "font-medium" : "text-muted-foreground hover:text-foreground"
-            }
-          >
-            Calendar
-          </button>
+          {(
+            [
+              ["list", "List"],
+              ["board", "Board"],
+              ["calendar", "Calendar"],
+              ["table", "Table"],
+            ] as const
+          ).map(([id, label], i) => (
+            <span key={id} className="contents">
+              {i > 0 && <span className="text-muted-foreground">·</span>}
+              <button
+                type="button"
+                onClick={() => setView(id)}
+                className={
+                  view === id ? "font-medium" : "text-muted-foreground hover:text-foreground"
+                }
+              >
+                {label}
+              </button>
+            </span>
+          ))}
         </div>
       </div>
       {view === "list" ? (
         <TaskListView listId={listId} onOpenTask={setOpenTaskId} />
       ) : view === "board" ? (
         <TaskBoard listId={listId} onOpenTask={setOpenTaskId} />
-      ) : (
+      ) : view === "calendar" ? (
         <TaskCalendarView listId={listId} onOpenTask={setOpenTaskId} />
+      ) : (
+        <TaskTableView listId={listId} onOpenTask={setOpenTaskId} />
       )}
 
       {openTaskId && (

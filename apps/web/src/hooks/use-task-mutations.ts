@@ -24,6 +24,7 @@ export function useOptimisticTaskUpdate(listId: string) {
                 ...(input.orderKey !== undefined ? { orderKey: input.orderKey } : {}),
                 ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
                 ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
+                ...(input.priority !== undefined ? { priority: input.priority } : {}),
               }
             : task,
         ),

@@ -632,3 +632,21 @@ Built:
 ### Verified
 
 - `pnpm check` / unit tests green; Playwright `calendar-view.spec.ts` green.
+
+### M3.2 — Table view (spreadsheet-ish bulk edit) — done (2026-07-20)
+
+Built:
+
+- `task.bulkUpdate` + `bulkUpdateTasksSchema` (status / priority / dates on up to 500 tasks in one list).
+- `TaskTableView`: virtualized columns (title, status, priority, start, due) with inline cell edits, row checkboxes, bulk toolbar.
+- List page switcher: List · Board · Calendar · **Table**.
+- Playwright `table-view.spec.ts`; schema unit tests for bulk input.
+
+### Decisions
+
+- **Table ≠ List** — List keeps sort/filter/group (M1.3); Table adds dates/priority + multi-select bulk patch.
+- **One activity row** for a bulk apply (`task.bulk_updated` on the list) plus per-task WS invalidations.
+
+### Verified
+
+- `pnpm check` / unit tests green; Playwright `table-view.spec.ts` green.

@@ -2,6 +2,7 @@ import { db, schema } from "@canvas/db";
 import {
   addTaskTagSchema,
   assignTaskSchema,
+  bulkUpdateTasksSchema,
   createTaskSchema,
   deleteTaskSchema,
   getTaskSchema,
@@ -12,7 +13,7 @@ import {
   updateTaskSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
@@ -252,6 +253,83 @@ export const taskRouter = router({
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.updated");
     publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
     return updated;
+  }),
+
+  bulkUpdate: protectedProcedure.input(bulkUpdateTasksSchema).mutation(async ({ ctx, input }) => {
+    const workspaceId = await workspaceIdForList(input.listId);
+    await assertCan(ctx.user, workspaceId, "task:update");
+
+    if (input.statusId !== undefined) {
+      await requireStatusInList(input.statusId, input.listId);
+    }
+
+    const rows = await db
+      .select({ id: schema.tasks.id, statusId: schema.tasks.statusId })
+      .from(schema.tasks)
+      .where(
+        and(
+          eq(schema.tasks.listId, input.listId),
+          inArray(schema.tasks.id, input.taskIds),
+          isNull(schema.tasks.deletedAt),
+        ),
+      );
+
+    if (rows.length !== input.taskIds.length) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "One or more tasks were not found in this list",
+      });
+    }
+
+    // Status changes append each task to the end of the new column so we
+    // don't invent a shared orderKey for the whole selection.
+    let orderKeyByTaskId: Map<string, string> | undefined;
+    if (input.statusId !== undefined) {
+      orderKeyByTaskId = new Map();
+      let lastKey = await lastTaskOrderKey(input.listId, input.statusId);
+      for (const row of rows) {
+        if (row.statusId === input.statusId) continue;
+        lastKey = nextOrderKey(lastKey);
+        orderKeyByTaskId.set(row.id, lastKey);
+      }
+    }
+
+    const updatedAt = new Date();
+    for (const row of rows) {
+      const orderKey = orderKeyByTaskId?.get(row.id);
+      await db
+        .update(schema.tasks)
+        .set({
+          ...buildTaskUpdateFields({
+            statusId:
+              input.statusId !== undefined && row.statusId !== input.statusId
+                ? input.statusId
+                : undefined,
+            orderKey,
+            priority: input.priority,
+            startDate: input.startDate,
+            dueDate: input.dueDate,
+          }),
+          updatedAt,
+        })
+        .where(eq(schema.tasks.id, row.id));
+      publish(workspaceId, {
+        entity: "task",
+        id: row.id,
+        listId: input.listId,
+        kind: "updated",
+      });
+    }
+
+    await logActivity(workspaceId, ctx.user.id, "list", input.listId, "task.bulk_updated", {
+      taskIds: input.taskIds,
+      statusId: input.statusId,
+      priority: input.priority,
+      startDate: input.startDate,
+      dueDate: input.dueDate,
+    });
+
+    return { updated: rows.length };
   }),
 
   delete: protectedProcedure.input(deleteTaskSchema).mutation(async ({ ctx, input }) => {
