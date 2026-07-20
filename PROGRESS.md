@@ -535,3 +535,24 @@ Built:
 
 - `pnpm check` / `pnpm test` green (82 api tests including new tool/mock cases).
 - Playwright: `brain-tools.spec.ts` green; `brain-chat.spec.ts` still passes (echo path).
+
+### M2.4 — Generation UX (prompt box, aspect/style presets, brand palette, n-variants grid) — done (2026-07-20)
+
+Built:
+
+- `brand_settings` table (DATA_MODEL.md) + migration `0012_windy_venus.sql`; `brandSettings.get` / `.upsert` with `brandSettings:view` (guest+) / `brandSettings:update` (admin+).
+- `STYLE_PRESETS` + labels; `ASPECT_PRESET_LABELS`; `generateImageAssetSchema` gains `n` (1–4), `style`, `useBrandPalette`.
+- `imageAsset.generate` loads palette when requested; `promoteVersion` sets `currentVersionId`; `attachToTask` reuses Brain object keys (same as M2.3 tool).
+- REST `/image-versions/:id` (+ `/thumb`) for Generation grid (permission-gated, mirrors attachments).
+- UI: `GenerationPanel` (task detail + global **Generate** slide-over), `BrandSettingsPanel` on workspace home, `ImageVersionThumb` (blurhash → thumb).
+- Tests: shared schema/preset unit tests; Playwright `generation-ux.spec.ts` (brand → generate ×2 → promote → attach).
+
+### Decisions
+
+- **No `imageAsset.edit` tRPC yet** — edit loop is M2.5; generate + promote + attach covers this milestone’s accept path.
+- **Brand form hydrates once** — avoiding TanStack Query refetch wiping controlled inputs mid-edit (caught by e2e).
+- **Checkbox “Use brand palette” stays enabled** even when empty (no-op at generate time).
+
+### Verified
+
+- `pnpm check` / unit tests green; Playwright `generation-ux.spec.ts` green with worker.

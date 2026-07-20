@@ -16,6 +16,7 @@ export default defineConfig({
       "/trpc": "http://localhost:3001",
       "/auth": "http://localhost:3001",
       "/uploads": "http://localhost:3001",
+      "/image-versions": "http://localhost:3001",
       "/ws": { target: "ws://localhost:3001", ws: true },
     },
   },

@@ -104,4 +104,10 @@ describe("can", () => {
     expect(can(user, "brain:chat", { type: "workspace", role: "guest" })).toBe(false);
     expect(can(user, "brain:chat", { type: "workspace", role: "member" })).toBe(true);
   });
+
+  it("allows guests to view brand settings, but only admins can update them", () => {
+    expect(can(user, "brandSettings:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "brandSettings:update", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "brandSettings:update", { type: "workspace", role: "admin" })).toBe(true);
+  });
 });

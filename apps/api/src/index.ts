@@ -9,6 +9,7 @@ import { ensureBucketExists } from "./lib/storage";
 import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBrainRealtimeRoutes } from "./routes/brain-realtime";
+import { registerImageAssetRoutes } from "./routes/image-assets";
 import { registerRealtimeRoutes } from "./routes/realtime";
 import { createContext } from "./trpc/context";
 import { appRouter } from "./trpc/router";
@@ -38,6 +39,7 @@ await app.register(fastifyTRPCPlugin, {
 
 registerAuthRoutes(app);
 registerAttachmentRoutes(app);
+registerImageAssetRoutes(app);
 registerRealtimeRoutes(app);
 registerBrainRealtimeRoutes(app);
 

@@ -1,4 +1,5 @@
 import { BrainChatPanel } from "@/components/brain-chat-panel";
+import { GenerationPanel } from "@/components/generation-panel";
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { RequireAuth } from "@/components/require-auth";
@@ -24,6 +25,7 @@ function WorkspaceShell() {
   const workspaces = trpc.workspace.listMine.useQuery();
   const workspace = workspaces.data?.find((w) => w.workspace.id === workspaceId)?.workspace;
   const [brainOpen, setBrainOpen] = useState(false);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   useRealtime(workspaceId);
 
@@ -36,6 +38,14 @@ function WorkspaceShell() {
               ← All workspaces
             </Link>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Generate image"
+                onClick={() => setGenerateOpen(true)}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Generate
+              </button>
               <button
                 type="button"
                 aria-label="Open Brain"
@@ -67,6 +77,19 @@ function WorkspaceShell() {
           contextType="global"
           onClose={() => setBrainOpen(false)}
         />
+      )}
+      {generateOpen && workspaceId && (
+        <div className="fixed inset-0 z-[60] flex justify-end">
+          <button
+            type="button"
+            aria-label="Close generate panel"
+            className="absolute inset-0 bg-black/20"
+            onClick={() => setGenerateOpen(false)}
+          />
+          <div className="border-border bg-background relative h-full w-full max-w-md overflow-y-auto border-l p-4 shadow-xl">
+            <GenerationPanel workspaceId={workspaceId} onClose={() => setGenerateOpen(false)} />
+          </div>
+        </div>
       )}
     </div>
   );

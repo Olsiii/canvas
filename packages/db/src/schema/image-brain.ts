@@ -140,3 +140,24 @@ export const brainMessages = pgTable(
     index("brain_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
   ],
 );
+
+// One row per workspace (unique workspace_id). Palette/tone/guidelines feed
+// Generation UX (M2.4) and Brain system context. logo_asset_id is optional
+// and may point at a Brain image_asset used as the brand mark.
+export const brandSettings = pgTable("brand_settings", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => uuidv7()),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .unique()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  paletteJson: jsonb("palette_json").$type<string[]>().notNull().default([]),
+  tone: text("tone"),
+  logoAssetId: uuid("logo_asset_id").references((): AnyPgColumn => imageAssets.id, {
+    onDelete: "set null",
+  }),
+  guidelines: text("guidelines"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

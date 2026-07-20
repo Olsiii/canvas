@@ -33,7 +33,9 @@ export type WorkspaceAction =
   | "imageAsset:view"
   | "imageAsset:create"
   | "brain:view"
-  | "brain:chat";
+  | "brain:chat"
+  | "brandSettings:view"
+  | "brandSettings:update";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -79,6 +81,9 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // Sending a chat message costs real money (ai_usage), same reasoning as
   // imageAsset:create.
   "brain:chat": "member",
+  "brandSettings:view": "guest",
+  // Workspace brand is an admin concern (same tier as workspace:manage).
+  "brandSettings:update": "admin",
 };
 
 export interface WorkspaceResource {

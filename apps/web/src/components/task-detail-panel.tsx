@@ -6,6 +6,7 @@ import { BrainChatPanel } from "@/components/brain-chat-panel";
 import { CommentsSection } from "@/components/comments-section";
 import { CustomFieldsSection } from "@/components/custom-fields-section";
 import { Field, Section } from "@/components/detail-field";
+import { GenerationPanel } from "@/components/generation-panel";
 import { TagsSection } from "@/components/tags-section";
 import { Input } from "@/components/ui/input";
 import { useOptimisticChecklistItemUpdate } from "@/hooks/use-checklist-mutations";
@@ -220,6 +221,10 @@ export function TaskDetailPanel({
             <ChecklistsSection taskId={taskId} />
 
             <AttachmentsSection taskId={taskId} />
+
+            <Section label="Generate image">
+              <GenerationPanel workspaceId={workspaceId} taskId={taskId} />
+            </Section>
 
             <TagsSection
               taskId={taskId}

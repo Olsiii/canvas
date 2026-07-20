@@ -2,6 +2,7 @@ import { activityRouter } from "./routers/activity";
 import { attachmentRouter } from "./routers/attachment";
 import { authRouter } from "./routers/auth";
 import { brainRouter } from "./routers/brain";
+import { brandSettingsRouter } from "./routers/brand-settings";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
 import { customFieldRouter } from "./routers/custom-field";
@@ -29,6 +30,7 @@ export const appRouter = router({
   customField: customFieldRouter,
   attachment: attachmentRouter,
   imageAsset: imageAssetRouter,
+  brandSettings: brandSettingsRouter,
   brain: brainRouter,
 });
 
