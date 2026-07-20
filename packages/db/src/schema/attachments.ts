@@ -2,6 +2,7 @@ import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { comments } from "./comments";
+import { imageAssets } from "./image-brain";
 import { tasks } from "./tasks";
 import { workspaces } from "./workspaces";
 
@@ -26,6 +27,15 @@ export const attachments = pgTable("attachments", {
   uploaderId: uuid("uploader_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  // Set when this attachment originated from (or was attached from) the
+  // Image Brain rather than a plain upload. DATA_MODEL.md always listed
+  // this column; M1.9 deliberately left it out because `image_assets`
+  // didn't exist yet, flagging it as "add when M2.1 creates image_assets"
+  // — this is that. Still unused by any app code (nothing links an
+  // attachment to an image_asset yet — that's M2.3's `attach_to_task`
+  // tool), same "schema supports it, nothing sets it yet" precedent as
+  // M1.8's workspace-wide custom field defs.
+  imageAssetId: uuid("image_asset_id").references(() => imageAssets.id),
   fileKey: text("file_key").notNull(),
   fileName: text("file_name").notNull(),
   mime: text("mime").notNull(),

@@ -6,6 +6,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../env";
 
 export const s3 = new S3Client({
@@ -37,6 +38,19 @@ export async function putObject(key: string, body: Buffer, contentType: string) 
 
 export async function getObject(key: string) {
   return s3.send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+}
+
+// Server-to-external-provider only (the image-generation worker handing a
+// source image to an ImageEngine adapter's edit() call) — not exposed to
+// the browser. Distinct from M1.9's decision to stream every attachment
+// byte through the app rather than issue presigned URLs, which was
+// specifically about not exposing MinIO to the browser directly; this is a
+// different boundary (server -> external API), where a short-lived
+// presigned URL is the standard, simplest way to hand off image bytes.
+export async function getPresignedUrl(key: string, expiresInSeconds = 300): Promise<string> {
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }), {
+    expiresIn: expiresInSeconds,
+  });
 }
 
 export async function deleteObject(key: string) {

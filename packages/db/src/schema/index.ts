@@ -7,4 +7,5 @@ export * from "./checklists";
 export * from "./comments";
 export * from "./tags";
 export * from "./custom-fields";
+export * from "./image-brain";
 export * from "./attachments";

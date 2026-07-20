@@ -5,6 +5,7 @@ import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
 import { customFieldRouter } from "./routers/custom-field";
 import { hierarchyRouter } from "./routers/hierarchy";
+import { imageAssetRouter } from "./routers/image-asset";
 import { notificationRouter } from "./routers/notification";
 import { statusRouter } from "./routers/status";
 import { tagRouter } from "./routers/tag";
@@ -26,6 +27,7 @@ export const appRouter = router({
   tag: tagRouter,
   customField: customFieldRouter,
   attachment: attachmentRouter,
+  imageAsset: imageAssetRouter,
 });
 
 export type AppRouter = typeof appRouter;

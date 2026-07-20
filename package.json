@@ -8,7 +8,7 @@
   },
   "packageManager": "pnpm@11.0.9",
   "scripts": {
-    "dev": "docker compose up -d && turbo run dev",
+    "dev": "docker compose up -d && turbo run dev worker",
     "build": "turbo run build",
     "check": "turbo run typecheck lint format:check",
     "typecheck": "turbo run typecheck",

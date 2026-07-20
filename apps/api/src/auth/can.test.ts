@@ -92,4 +92,10 @@ describe("can", () => {
     expect(can(user, "attachment:delete", { type: "workspace", role: "guest" })).toBe(false);
     expect(can(user, "attachment:delete", { type: "workspace", role: "member" })).toBe(true);
   });
+
+  it("allows guests to view image assets, but only members can generate/edit them", () => {
+    expect(can(user, "imageAsset:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "imageAsset:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "imageAsset:create", { type: "workspace", role: "member" })).toBe(true);
+  });
 });

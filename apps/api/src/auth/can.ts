@@ -29,7 +29,9 @@ export type WorkspaceAction =
   | "customFieldValue:update"
   | "attachment:view"
   | "attachment:create"
-  | "attachment:delete";
+  | "attachment:delete"
+  | "imageAsset:view"
+  | "imageAsset:create";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -67,6 +69,10 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // Uploading/removing a file is a task edit, same tier as task:update.
   "attachment:create": "member",
   "attachment:delete": "member",
+  "imageAsset:view": "guest",
+  // Generating an image costs real money (ai_usage) — same tier as
+  // creating a task, not the guest-level "view" tier.
+  "imageAsset:create": "member",
 };
 
 export interface WorkspaceResource {

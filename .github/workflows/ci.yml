@@ -23,9 +23,27 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # M2.1: apps/api's router now imports the BullMQ image queue at
+      # module load (trpc/routers/image-asset.ts -> queues/image-queue.ts),
+      # which opens a Redis connection as an import-time side effect — so
+      # even `apps/api`'s vitest suite touches Redis now, not just the
+      # worker process. Without this, ioredis retries in the background and
+      # dumps ECONNREFUSED noise into CI logs (tests still pass — nothing
+      # here actually calls the queue yet — but the noise is worth avoiding
+      # by matching what docker-compose.yml already provisions locally).
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       DATABASE_URL: postgres://canvas:canvas@localhost:5432/canvas
+      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@v4
@@ -86,9 +104,22 @@ jobs:
           MINIO_DEFAULT_BUCKETS: canvas-dev
         ports:
           - 9000:9000
+      # M2.1: the API server the Playwright webServer boots now imports the
+      # BullMQ queue module at startup too — see the `ci` job's redis
+      # service comment above for why.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       DATABASE_URL: postgres://canvas:canvas@localhost:5432/canvas
+      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@v4
