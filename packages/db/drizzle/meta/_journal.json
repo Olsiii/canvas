@@ -57,6 +57,13 @@
       "when": 1784538380835,
       "tag": "0007_misty_bill_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784539796402,
+      "tag": "0008_neat_pride",
+      "breakpoints": true
     }
   ]
 }

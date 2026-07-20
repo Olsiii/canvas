@@ -44,9 +44,25 @@ describe("buildTaskUpdateFields", () => {
       }),
     ).toEqual({
       descriptionJson: { type: "doc", content: [] },
+      descriptionText: "",
       priority: "urgent",
       startDate: "2026-01-01",
       dueDate: "2026-01-15",
+    });
+  });
+
+  it("derives descriptionText from descriptionJson for search, and clears it alongside a null description", () => {
+    const doc = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "hello world" }] }],
+    };
+    expect(buildTaskUpdateFields({ descriptionJson: doc })).toEqual({
+      descriptionJson: doc,
+      descriptionText: "hello world",
+    });
+    expect(buildTaskUpdateFields({ descriptionJson: null })).toEqual({
+      descriptionJson: null,
+      descriptionText: null,
     });
   });
 });

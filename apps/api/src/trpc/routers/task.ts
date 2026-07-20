@@ -7,14 +7,16 @@ import {
   getTaskSchema,
   listTasksSchema,
   removeTaskTagSchema,
+  searchTasksSchema,
   unassignTaskSchema,
   updateTaskSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { validateSubtaskParent } from "../../lib/subtask";
 import { buildTaskUpdateFields } from "../../lib/task-update";
 import { requireTask, workspaceIdForList } from "../../lib/task-queries";
@@ -140,6 +142,40 @@ export const taskRouter = router({
     return { ...task, assignees, tags, subtasks };
   }),
 
+  // Workspace-wide (not scoped to one list, unlike `list` above) — the
+  // point of search is finding a task without already knowing where it
+  // lives. DATA_MODEL.md: "FTS: generated tsvector on tasks.title +
+  // description (GIN)" (see schema/tasks.ts's searchVector column).
+  search: protectedProcedure.input(searchTasksSchema).query(async ({ ctx, input }) => {
+    await assertCan(ctx.user, input.workspaceId, "task:view");
+
+    const tsquery = sql`websearch_to_tsquery('english', ${input.query})`;
+    const rank = sql<number>`ts_rank(${schema.tasks.searchVector}, ${tsquery})`;
+
+    return db
+      .select({
+        id: schema.tasks.id,
+        title: schema.tasks.title,
+        listId: schema.tasks.listId,
+        listName: schema.lists.name,
+        spaceName: schema.spaces.name,
+      })
+      .from(schema.tasks)
+      .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
+      .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+      .where(
+        and(
+          eq(schema.spaces.workspaceId, input.workspaceId),
+          isNull(schema.tasks.deletedAt),
+          isNull(schema.lists.deletedAt),
+          isNull(schema.spaces.deletedAt),
+          sql`${schema.tasks.searchVector} @@ ${tsquery}`,
+        ),
+      )
+      .orderBy(desc(rank))
+      .limit(20);
+  }),
+
   create: protectedProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
     await assertCan(ctx.user, workspaceId, "task:create");
@@ -172,6 +208,7 @@ export const taskRouter = router({
     if (!task) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.created");
+    publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "created" });
     return task;
   }),
 
@@ -213,6 +250,7 @@ export const taskRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.updated");
+    publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
     return updated;
   }),
 
@@ -232,6 +270,7 @@ export const taskRouter = router({
       .where(and(eq(schema.tasks.parentTaskId, task.id), isNull(schema.tasks.deletedAt)));
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.deleted");
+    publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "deleted" });
     return { id: task.id };
   }),
 
@@ -248,6 +287,7 @@ export const taskRouter = router({
         .onConflictDoNothing();
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.assigned");
+      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
       return getAssignees(task.id);
     }),
 
@@ -266,6 +306,7 @@ export const taskRouter = router({
         );
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.unassigned");
+      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
       return getAssignees(task.id);
     }),
   }),
@@ -283,6 +324,7 @@ export const taskRouter = router({
         .onConflictDoNothing();
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.tagged");
+      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
       return getTags(task.id);
     }),
 
@@ -296,6 +338,7 @@ export const taskRouter = router({
         .where(and(eq(schema.taskTags.taskId, task.id), eq(schema.taskTags.tagId, input.tagId)));
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.untagged");
+      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
       return getTags(task.id);
     }),
   }),

@@ -59,6 +59,11 @@ export const getTaskSchema = z.object({
   taskId: z.string().uuid(),
 });
 
+export const searchTasksSchema = z.object({
+  workspaceId: z.string().uuid(),
+  query: z.string().trim().min(1).max(200),
+});
+
 export const assignTaskSchema = z.object({
   taskId: z.string().uuid(),
   userId: z.string().uuid(),

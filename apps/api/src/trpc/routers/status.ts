@@ -11,6 +11,7 @@ import { logActivity } from "../../lib/activity";
 import { requireList, requireSpace } from "../../lib/hierarchy";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { protectedProcedure, router } from "../trpc";
 
 async function requireStatus(statusId: string) {
@@ -66,6 +67,12 @@ export const statusRouter = router({
     if (!status) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "status", status.id, "status.created");
+    publish(workspaceId, {
+      entity: "status",
+      id: status.id,
+      listId: status.listId,
+      kind: "created",
+    });
     return status;
   }),
 
@@ -86,6 +93,12 @@ export const statusRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "status", status.id, "status.updated");
+    publish(workspaceId, {
+      entity: "status",
+      id: status.id,
+      listId: status.listId,
+      kind: "updated",
+    });
     return updated;
   }),
 
@@ -109,6 +122,12 @@ export const statusRouter = router({
     await db.delete(schema.statuses).where(eq(schema.statuses.id, status.id));
 
     await logActivity(workspaceId, ctx.user.id, "status", status.id, "status.deleted");
+    publish(workspaceId, {
+      entity: "status",
+      id: status.id,
+      listId: status.listId,
+      kind: "deleted",
+    });
     return { id: status.id };
   }),
 });

@@ -1,6 +1,8 @@
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { RequireAuth } from "@/components/require-auth";
+import { SearchBox } from "@/components/search-box";
+import { useRealtime } from "@/hooks/use-realtime";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link, Outlet, useParams } from "@tanstack/react-router";
 import { rootRoute } from "./__root";
@@ -20,6 +22,8 @@ function WorkspaceShell() {
   const workspaces = trpc.workspace.listMine.useQuery();
   const workspace = workspaces.data?.find((w) => w.workspace.id === workspaceId)?.workspace;
 
+  useRealtime(workspaceId);
+
   return (
     <div className="flex h-svh">
       <aside className="border-border flex w-64 shrink-0 flex-col border-r">
@@ -31,6 +35,11 @@ function WorkspaceShell() {
             <NotificationsBell />
           </div>
           <h1 className="truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
+          {workspaceId && (
+            <div className="mt-2">
+              <SearchBox workspaceId={workspaceId} />
+            </div>
+          )}
         </div>
         <div className="min-h-0 flex-1">
           {workspaceId && <HierarchySidebar workspaceId={workspaceId} activeListId={listId} />}

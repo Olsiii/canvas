@@ -58,7 +58,7 @@ export function TaskDetailPanel({
   }, [taskTitle]);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div data-testid="task-detail-panel" className="fixed inset-0 z-50 flex justify-end">
       <button
         type="button"
         aria-label="Close task details"

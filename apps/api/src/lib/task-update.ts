@@ -1,4 +1,5 @@
 import type { TaskPriority } from "@canvas/shared";
+import { extractPlainText } from "./plain-text";
 
 /**
  * Builds the Drizzle `.set()` fields for a task update. Each field is
@@ -20,7 +21,15 @@ export function buildTaskUpdateFields(input: {
     ...(input.title !== undefined ? { title: input.title } : {}),
     ...(input.statusId !== undefined ? { statusId: input.statusId } : {}),
     ...(input.orderKey !== undefined ? { orderKey: input.orderKey } : {}),
-    ...(input.descriptionJson !== undefined ? { descriptionJson: input.descriptionJson } : {}),
+    ...(input.descriptionJson !== undefined
+      ? {
+          descriptionJson: input.descriptionJson,
+          // searchVector (Postgres generated column) reads this, not
+          // descriptionJson directly — kept in lockstep with every write.
+          descriptionText:
+            input.descriptionJson === null ? null : extractPlainText(input.descriptionJson),
+        }
+      : {}),
     ...(input.priority !== undefined ? { priority: input.priority } : {}),
     ...(input.startDate !== undefined ? { startDate: input.startDate } : {}),
     ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
