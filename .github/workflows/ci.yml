@@ -72,6 +72,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # bitnami's image (not the official minio/minio one docker-compose.yml
+      # uses locally) because GitHub Actions service containers can't
+      # override a container's command/entrypoint — bitnami's image runs
+      # `minio server` by default, official minio/minio does not. Matches
+      # docker-compose.yml's creds/bucket so apps/api/src/env.ts's defaults
+      # need no CI-specific overrides. See PROGRESS.md (M1.9 decisions).
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: canvas
+          MINIO_ROOT_PASSWORD: canvas12345
+          MINIO_DEFAULT_BUCKETS: canvas-dev
+        ports:
+          - 9000:9000
 
     env:
       DATABASE_URL: postgres://canvas:canvas@localhost:5432/canvas
@@ -89,6 +103,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm db:migrate
+
+      - name: Wait for MinIO
+        run: until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done
 
       - run: pnpm --filter @canvas/e2e exec playwright install --with-deps chromium
 

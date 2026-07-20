@@ -14,3 +14,4 @@ export * from "./schemas/notifications";
 export * from "./schemas/activity";
 export * from "./schemas/tags";
 export * from "./schemas/custom-fields";
+export * from "./schemas/attachments";

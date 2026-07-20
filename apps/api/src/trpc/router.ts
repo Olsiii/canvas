@@ -1,4 +1,5 @@
 import { activityRouter } from "./routers/activity";
+import { attachmentRouter } from "./routers/attachment";
 import { authRouter } from "./routers/auth";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
@@ -24,6 +25,7 @@ export const appRouter = router({
   activity: activityRouter,
   tag: tagRouter,
   customField: customFieldRouter,
+  attachment: attachmentRouter,
 });
 
 export type AppRouter = typeof appRouter;

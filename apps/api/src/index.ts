@@ -1,11 +1,16 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
 import Fastify from "fastify";
 import { env } from "./env";
+import { ensureBucketExists } from "./lib/storage";
+import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
 import { createContext } from "./trpc/context";
 import { appRouter } from "./trpc/router";
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export type { AppRouter } from "./trpc/router";
 
@@ -20,6 +25,7 @@ const app = Fastify({ logger: true, routerOptions: { maxParamLength: 5000 } });
 
 await app.register(cors, { origin: env.WEB_URL, credentials: true });
 await app.register(cookie);
+await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 await app.register(fastifyTRPCPlugin, {
   prefix: "/trpc",
@@ -27,8 +33,11 @@ await app.register(fastifyTRPCPlugin, {
 });
 
 registerAuthRoutes(app);
+registerAttachmentRoutes(app);
 
 app.get("/health", async () => ({ ok: true }));
+
+await ensureBucketExists();
 
 app
   .listen({ port: env.API_PORT, host: "0.0.0.0" })

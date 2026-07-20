@@ -84,4 +84,12 @@ describe("can", () => {
     expect(can(user, "customFieldValue:update", { type: "workspace", role: "member" })).toBe(true);
     expect(can(user, "customFieldValue:update", { type: "workspace", role: "guest" })).toBe(false);
   });
+
+  it("allows guests to view attachments, but only members can upload/delete them", () => {
+    expect(can(user, "attachment:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "attachment:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "attachment:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "attachment:delete", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "attachment:delete", { type: "workspace", role: "member" })).toBe(true);
+  });
 });

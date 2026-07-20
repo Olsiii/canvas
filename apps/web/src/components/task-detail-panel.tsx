@@ -1,6 +1,7 @@
 import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES } from "@canvas/shared";
 import { ActivitySection } from "@/components/activity-section";
+import { AttachmentsSection } from "@/components/attachments-section";
 import { CommentsSection } from "@/components/comments-section";
 import { CustomFieldsSection } from "@/components/custom-fields-section";
 import { Field, Section } from "@/components/detail-field";
@@ -205,6 +206,8 @@ export function TaskDetailPanel({
             )}
 
             <ChecklistsSection taskId={taskId} />
+
+            <AttachmentsSection taskId={taskId} />
 
             <TagsSection
               taskId={taskId}

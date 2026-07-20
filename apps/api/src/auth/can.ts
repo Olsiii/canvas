@@ -26,7 +26,10 @@ export type WorkspaceAction =
   | "customFieldDef:create"
   | "customFieldDef:update"
   | "customFieldDef:delete"
-  | "customFieldValue:update";
+  | "customFieldValue:update"
+  | "attachment:view"
+  | "attachment:create"
+  | "attachment:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -60,6 +63,10 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "customFieldDef:delete": "admin",
   // Setting a task's own field value is a task edit, same tier as task:update.
   "customFieldValue:update": "member",
+  "attachment:view": "guest",
+  // Uploading/removing a file is a task edit, same tier as task:update.
+  "attachment:create": "member",
+  "attachment:delete": "member",
 };
 
 export interface WorkspaceResource {

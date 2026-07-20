@@ -1,5 +1,6 @@
 import { db, schema } from "@canvas/db";
 import { eq } from "drizzle-orm";
+import type { FastifyRequest } from "fastify";
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
 const SESSION_RENEW_THRESHOLD_MS = 1000 * 60 * 60 * 24 * 15; // renew when <15 days left
@@ -59,4 +60,14 @@ export async function validateSession(
 
 export async function invalidateSession(sessionId: string) {
   await db.delete(schema.sessions).where(eq(schema.sessions.id, sessionId));
+}
+
+// For plain Fastify routes outside tRPC's context (file upload/download —
+// see routes/attachments.ts), mirroring the same cookie-based lookup
+// createContext does for tRPC procedures.
+export async function getSessionUser(req: FastifyRequest): Promise<SessionUser | null> {
+  const sessionId = req.cookies[SESSION_COOKIE_NAME];
+  if (!sessionId) return null;
+  const result = await validateSession(sessionId);
+  return result?.user ?? null;
 }
