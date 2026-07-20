@@ -613,3 +613,22 @@ Built:
 ### Verified
 
 - `pnpm check` / unit tests green; Playwright `image-engine.spec.ts` + generation/edit smoke green with worker.
+
+### M3.1 — Calendar view — done (2026-07-20)
+
+Built:
+
+- Shared `buildMonthGrid` / date-only helpers (unit-tested).
+- `TaskCalendarView` on the list page (List · Board · Calendar): month grid, tasks by `dueDate` (fallback `startDate`), undated strip, drag onto a day → `task.update({ dueDate })`.
+- Optimistic list cache patches for `dueDate` / `startDate`.
+- Playwright `calendar-view.spec.ts`.
+
+### Decisions
+
+- **No calendar library** — hand-rolled 6×7 grid; enough for month placement without vendor lock-in.
+- **Placement primary = due date**, start date only if due is null; ranges/Gantt deferred to M3.3.
+- **View stays local state** on `/l/$listId` (same as List/Board) — no new route.
+
+### Verified
+
+- `pnpm check` / unit tests green; Playwright `calendar-view.spec.ts` green.

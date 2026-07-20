@@ -154,6 +154,7 @@ export function TaskDetailPanel({
               <Field label="Due date">
                 <Input
                   type="date"
+                  data-testid="task-due-date"
                   value={task.data.dueDate ?? ""}
                   onChange={(e) => update.mutate({ taskId, dueDate: e.target.value || null })}
                   className="h-8 text-sm"

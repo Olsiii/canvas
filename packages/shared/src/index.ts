@@ -9,6 +9,7 @@ export * from "./aspect-presets";
 export * from "./style-presets";
 export * from "./image-version-tree";
 export * from "./image-providers";
+export * from "./calendar";
 export * from "./brain-context";
 export * from "./schemas/auth";
 export * from "./schemas/workspace";
