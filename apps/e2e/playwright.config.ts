@@ -16,7 +16,11 @@ export default defineConfig({
   // already running (e.g. from `pnpm dev`) to keep iteration fast.
   webServer: [
     {
-      command: "pnpm --filter @canvas/api dev",
+      // API + BullMQ worker together — Brain chat (and image jobs) need the
+      // worker process. Health-check the API; the worker shares the same
+      // startup path and is up by the time /health responds.
+      command:
+        "sh -c 'pnpm --filter @canvas/api worker & worker_pid=$!; trap \"kill $worker_pid\" EXIT INT TERM; pnpm --filter @canvas/api dev'",
       url: "http://localhost:3001/health",
       reuseExistingServer: !isCI,
       timeout: 30_000,

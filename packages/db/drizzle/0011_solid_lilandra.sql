@@ -1,0 +1,1 @@
+CREATE INDEX "brain_messages_conversation_created_idx" ON "brain_messages" USING btree ("conversation_id","created_at");

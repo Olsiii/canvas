@@ -1,3 +1,4 @@
+import { BrainChatPanel } from "@/components/brain-chat-panel";
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { RequireAuth } from "@/components/require-auth";
@@ -5,6 +6,7 @@ import { SearchBox } from "@/components/search-box";
 import { useRealtime } from "@/hooks/use-realtime";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link, Outlet, useParams } from "@tanstack/react-router";
+import { useState } from "react";
 import { rootRoute } from "./__root";
 
 export const workspaceShellRoute = createRoute({
@@ -21,6 +23,7 @@ function WorkspaceShell() {
   const { workspaceId, listId } = useParams({ strict: false });
   const workspaces = trpc.workspace.listMine.useQuery();
   const workspace = workspaces.data?.find((w) => w.workspace.id === workspaceId)?.workspace;
+  const [brainOpen, setBrainOpen] = useState(false);
 
   useRealtime(workspaceId);
 
@@ -32,7 +35,17 @@ function WorkspaceShell() {
             <Link to="/" className="text-muted-foreground hover:text-foreground text-xs">
               ← All workspaces
             </Link>
-            <NotificationsBell />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Open Brain"
+                onClick={() => setBrainOpen(true)}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Brain
+              </button>
+              <NotificationsBell />
+            </div>
           </div>
           <h1 className="truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
           {workspaceId && (
@@ -48,6 +61,13 @@ function WorkspaceShell() {
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
+      {brainOpen && workspaceId && (
+        <BrainChatPanel
+          workspaceId={workspaceId}
+          contextType="global"
+          onClose={() => setBrainOpen(false)}
+        />
+      )}
     </div>
   );
 }

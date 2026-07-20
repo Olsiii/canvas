@@ -1,5 +1,6 @@
 import {
   type AnyPgColumn,
+  index,
   integer,
   jsonb,
   numeric,
@@ -16,6 +17,8 @@ import { workspaces } from "./workspaces";
 export const imageOrigin = pgEnum("image_origin", ["upload", "generation"]);
 export const imageVersionSource = pgEnum("image_version_source", ["upload", "generate", "edit"]);
 export const aiUsageKind = pgEnum("ai_usage_kind", ["generate", "edit", "chat", "vision"]);
+export const brainContextType = pgEnum("brain_context_type", ["task", "doc", "channel", "global"]);
+export const brainMessageRole = pgEnum("brain_message_role", ["user", "assistant", "tool"]);
 
 // `imageAssets.currentVersionId` <-> `imageVersions.assetId` is a genuine
 // circular FK between the two tables (DATA_MODEL.md: current_version_id
@@ -88,3 +91,52 @@ export const aiUsage = pgTable("ai_usage", {
   costUsdEst: numeric("cost_usd_est", { precision: 10, scale: 4 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// DATA_MODEL.md: "One brain_conversation per context (task, doc, channel, or
+// global)". M2.2 only ever creates 'task'/'global' conversations (Docs is
+// M4.1, Chat is M4.3 — no UI surface exists yet for those contexts), but the
+// enum matches the full spec now rather than needing a migration later.
+// `contextId` is null for 'global'. No DB unique constraint enforcing
+// "one per (workspace, contextType, contextId, createdBy)" — conversations
+// are scoped per-user (see PROGRESS.md M2.2 decisions), found-or-created by
+// the API layer; a rare race producing two rows is a low-stakes edge case,
+// not worth a partial unique index on a nullable column for this milestone.
+export const brainConversations = pgTable("brain_conversations", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => uuidv7()),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  contextType: brainContextType("context_type").notNull(),
+  contextId: uuid("context_id"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const brainMessages = pgTable(
+  "brain_messages",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => brainConversations.id, { onDelete: "cascade" }),
+    role: brainMessageRole("role").notNull(),
+    // "text + tool calls + image refs" per DATA_MODEL.md — M2.2 only ever
+    // writes `{ text: string }` (no tool-use yet; that's M2.3). Kept as
+    // unknown jsonb rather than a narrower type so M2.3 can extend the shape
+    // without a schema migration.
+    contentJson: jsonb("content_json").$type<unknown>().notNull(),
+    imageVersionIds: uuid("image_version_ids").array(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // DATA_MODEL.md: "brain_messages(conversation_id, created_at)" — list
+    // history is always ordered by created_at within one conversation.
+    index("brain_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+  ],
+);

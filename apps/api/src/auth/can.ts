@@ -31,7 +31,9 @@ export type WorkspaceAction =
   | "attachment:create"
   | "attachment:delete"
   | "imageAsset:view"
-  | "imageAsset:create";
+  | "imageAsset:create"
+  | "brain:view"
+  | "brain:chat";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -73,6 +75,10 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // Generating an image costs real money (ai_usage) — same tier as
   // creating a task, not the guest-level "view" tier.
   "imageAsset:create": "member",
+  "brain:view": "guest",
+  // Sending a chat message costs real money (ai_usage), same reasoning as
+  // imageAsset:create.
+  "brain:chat": "member",
 };
 
 export interface WorkspaceResource {

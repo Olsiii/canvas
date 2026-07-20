@@ -14,6 +14,10 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().default("canvas"),
   S3_SECRET_ACCESS_KEY: z.string().default("canvas12345"),
   S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+  // Unset in this environment (no key available) — the Brain chat client
+  // falls back to a mock (apps/api/src/brain/), same degrade-gracefully
+  // precedent as GOOGLE_CLIENT_ID/SECRET being unset. See PROGRESS.md (M2.2).
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

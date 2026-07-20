@@ -98,4 +98,10 @@ describe("can", () => {
     expect(can(user, "imageAsset:create", { type: "workspace", role: "guest" })).toBe(false);
     expect(can(user, "imageAsset:create", { type: "workspace", role: "member" })).toBe(true);
   });
+
+  it("allows guests to view Brain conversations, but only members can send chat messages", () => {
+    expect(can(user, "brain:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "brain:chat", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "brain:chat", { type: "workspace", role: "member" })).toBe(true);
+  });
 });

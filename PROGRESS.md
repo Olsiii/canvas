@@ -475,3 +475,35 @@ Built:
 - Verified the permission gate for real: a second signed-up user with no membership in the workspace got a genuine `FORBIDDEN` (403) calling `imageAsset.generate`, not just asserted in a unit test.
 - All 10 Playwright specs (unrelated to this milestone, no UI changed) still pass — sanity check that `can.ts`/`router.ts` changes didn't regress anything.
 - Did not verify the CI `redis` service additions on GitHub Actions itself (no push this session) — same "reasoned through, not GH-Actions-verified" caveat M1.9's `bitnami/minio` addition carries.
+
+### M2.2 — Brain chat panel (global + per-task), streaming, persisted conversations — done (2026-07-20)
+
+Built on the unfinished mid-session draft (schema/tRPC/worker/WS route were already sketched; streaming was broken across processes; no web UI).
+
+Built:
+
+- `packages/db/src/schema/image-brain.ts`: `brainConversations` / `brainMessages` (enums match DATA_MODEL.md full set; M2.2 only creates `task`/`global`). Migration `0010_panoramic_prima.sql` for tables; `0011_solid_lilandra.sql` adds `brain_messages_conversation_created_idx` per DATA_MODEL.md's `(conversation_id, created_at)` index.
+- `packages/shared`: `schemas/brain.ts` (getOrCreate / list / send), `brainStreamEventSchema` (`delta` | `done` | `error`) on a **separate** WS channel from Phase-1 board invalidation.
+- `apps/api/src/brain/`: `ChatClient` interface, `AnthropicChatClient` (when `ANTHROPIC_API_KEY` set), `MockChatClient` echo fallback (default in this environment).
+- `apps/api/src/queues/brain-queue.ts` + worker job in `worker.ts`: load history → system prompt → stream → persist assistant message → `ai_usage` (`kind: chat`) → publish `done`. AI call never runs in the request handler.
+- `apps/api/src/lib/brain-realtime.ts`: **Redis pub/sub bridge** — worker `PUBLISH`es on `brain:{conversationId}`; API process `PSUBSCRIBE`s and fans out to local WS sockets. Board realtime stays in-process (published from API handlers only); brain must cross the API/worker process boundary.
+- `apps/api/src/routes/brain-realtime.ts`: `GET /ws/brain?conversationId=…` (cookie auth + conversation ownership).
+- `apps/api/src/trpc/routers/brain.ts`: `getOrCreateConversation`, `messages.list`, `messages.send` (enqueue only). Activity: `brain.conversation_created` / `brain.message_sent`. Permissions: `brain:view` (guest+), `brain:chat` (member+).
+- `apps/api/src/lib/brain-system-prompt.ts`: global base prompt; task context injects title/list/description (plain text). No brand settings yet (M2.4).
+- Web: `brain-chat-panel.tsx` slide-over + `use-brain-stream.ts`. Global trigger beside notifications in workspace shell; per-task "Ask Brain" in `task-detail-panel.tsx` (z-[60] above detail panel).
+- `.env.example`: documents optional `ANTHROPIC_API_KEY`.
+- Playwright: `brain-chat.spec.ts`; e2e `webServer` now starts API **and** worker (Brain/image jobs need it).
+
+### Decisions
+
+- **Conversations are per-user** (`createdBy` ownership), not shared per context. Ada's Brain thread on a task is private to Ada — simplest privacy model; matches "ownership check not role check" pattern from comment delete.
+- **Redis pub/sub for brain streams only**, not for board invalidation. Board events are published from the same API process that holds sockets; brain deltas are published from the worker. Reusing the in-memory Map alone silently dropped every delta. Channel prefix `brain:` + psubscribe on the API side.
+- **Payloads on `/ws/brain` are intentional** — Phase 1's "no payloads over WS" rule stays for board invalidation; chat token streaming is a different channel/lifecycle (open only while the panel is mounted).
+- **Mock chat client when `ANTHROPIC_API_KEY` is unset** — same degrade-gracefully precedent as Google OAuth. Queue, worker, WS, persistence, and metering are fully real either way.
+- **No tool-use in M2.2** — ROADMAP assigns orchestration tools to M2.3. Assistant messages are plain `{ text }` in `content_json`.
+- **Doc/channel context types** exist on the enum but have no UI/API create path yet (Phase 4).
+
+### Verified
+
+- `pnpm check` and `pnpm test` green, including `brain-system-prompt.test.ts`, `brain-realtime.test.ts` (channel helper), extended `can.test.ts` / `ai-usage.test.ts`.
+- Playwright `brain-chat.spec.ts`: open task Brain → send → mock streamed reply visible → reload → Board → reopen → messages persisted; global Brain from shell also sends and receives. Run with worker started via e2e webServer.

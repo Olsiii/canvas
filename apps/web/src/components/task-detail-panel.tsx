@@ -2,6 +2,7 @@ import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES } from "@canvas/shared";
 import { ActivitySection } from "@/components/activity-section";
 import { AttachmentsSection } from "@/components/attachments-section";
+import { BrainChatPanel } from "@/components/brain-chat-panel";
 import { CommentsSection } from "@/components/comments-section";
 import { CustomFieldsSection } from "@/components/custom-fields-section";
 import { Field, Section } from "@/components/detail-field";
@@ -52,6 +53,7 @@ export function TaskDetailPanel({
   const unassign = trpc.task.assignees.remove.useMutation({ onSuccess: invalidate });
 
   const [title, setTitle] = useState("");
+  const [brainOpen, setBrainOpen] = useState(false);
   const taskTitle = task.data?.title;
   useEffect(() => {
     if (taskTitle !== undefined) setTitle(taskTitle);
@@ -66,14 +68,24 @@ export function TaskDetailPanel({
         onClick={onClose}
       />
       <div className="border-border bg-background relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l p-6 shadow-xl">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="text-muted-foreground hover:text-foreground absolute top-4 right-4 text-sm"
-        >
-          ✕ Close
-        </button>
+        <div className="absolute top-4 right-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setBrainOpen(true)}
+            aria-label="Ask Brain about this task"
+            className="text-muted-foreground hover:text-foreground text-sm"
+          >
+            Ask Brain
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-muted-foreground hover:text-foreground text-sm"
+          >
+            ✕ Close
+          </button>
+        </div>
 
         {task.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
 
@@ -216,7 +228,11 @@ export function TaskDetailPanel({
               onChanged={invalidate}
             />
 
-            <CustomFieldsSection taskId={taskId} workspaceId={workspaceId} listId={task.data.listId} />
+            <CustomFieldsSection
+              taskId={taskId}
+              workspaceId={workspaceId}
+              listId={task.data.listId}
+            />
 
             <CommentsSection taskId={taskId} workspaceId={workspaceId} />
 
@@ -224,6 +240,14 @@ export function TaskDetailPanel({
           </div>
         )}
       </div>
+      {brainOpen && (
+        <BrainChatPanel
+          workspaceId={workspaceId}
+          contextType="task"
+          contextId={taskId}
+          onClose={() => setBrainOpen(false)}
+        />
+      )}
     </div>
   );
 }

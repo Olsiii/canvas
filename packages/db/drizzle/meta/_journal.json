@@ -71,6 +71,20 @@
       "when": 1784541834984,
       "tag": "0009_dry_luminals",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784545605707,
+      "tag": "0010_panoramic_prima",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784547166547,
+      "tag": "0011_solid_lilandra",
+      "breakpoints": true
     }
   ]
 }
