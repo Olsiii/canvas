@@ -387,6 +387,20 @@ export function GenerationPanel({
               {attach.isSuccess ? "Attached to task" : "Attach current to task"}
             </Button>
           )}
+
+          {asset.data?.altText && (
+            <div data-testid="generation-understanding" className="border-border space-y-1 border-t pt-3">
+              <p className="text-xs font-medium">Auto description</p>
+              <p data-testid="generation-alt-text" className="text-muted-foreground text-sm">
+                {asset.data.altText}
+              </p>
+              {Array.isArray(asset.data.tagsJson) && asset.data.tagsJson.length > 0 && (
+                <p data-testid="generation-tags" className="text-muted-foreground text-xs">
+                  Tags: {asset.data.tagsJson.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

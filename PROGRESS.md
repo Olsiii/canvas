@@ -594,3 +594,22 @@ Built:
 ### Verified
 
 - `pnpm check` / unit tests green; Playwright `version-tree.spec.ts` + `generation-ux` + `iterative-edit` green with worker.
+
+### M2.7 — Second adapter (gpt-image-1) + provider config + image understanding — done (2026-07-20)
+
+Built:
+
+- `OpenAIImageAdapter` (`gpt-image-1`, mocked like Gemini) + `getImageEngine(provider)` / `getImageEngineForWorkspace`.
+- `brand_settings.image_provider` (migration `0013_nosy_wonder_man.sql`); Brand settings **Image engine** select uses opaque labels (“Balanced edits” / “Generation quality”) — no vendor names in UI.
+- Post-generate/edit `applyImageUnderstanding` writes `alt_text` + `tags_json` + `ai_usage` kind `vision` (mock Claude vision; real vision when Anthropic key lands later).
+- Generation panel shows auto description/tags; Playwright `image-engine.spec.ts`.
+
+### Decisions
+
+- **Provider config lives on `brand_settings`**, not a new table — already the workspace creative-config row.
+- **Both image adapters stay mocked** (no live keys) — same M2.1 precedent; selection + metering still exercise the real path.
+- **Vision understanding runs in the same image job** after versions are stored (still worker-only), not a separate queue.
+
+### Verified
+
+- `pnpm check` / unit tests green; Playwright `image-engine.spec.ts` + generation/edit smoke green with worker.

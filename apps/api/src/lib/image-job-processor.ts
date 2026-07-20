@@ -1,9 +1,10 @@
 import { db, schema } from "@canvas/db";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
-import { getImageEngine } from "../image-engine";
+import { getImageEngineForWorkspace } from "../image-engine";
 import { logActivity } from "./activity";
 import { estimateImageCostUsd } from "./ai-usage";
+import { applyImageUnderstanding } from "./image-understanding";
 import { processImage } from "./image-processing";
 import { getPresignedUrl, putObject } from "./storage";
 import type { ImageJobData } from "../queues/image-queue";
@@ -26,7 +27,7 @@ async function sourceUrlForVersion(versionId: string): Promise<string> {
 // image-jobs or brain-jobs worker still satisfies CLAUDE.md's "AI calls
 // run in BullMQ workers" rule.
 export async function processImageJob(data: ImageJobData): Promise<ProcessImageJobResult> {
-  const engine = getImageEngine();
+  const engine = await getImageEngineForWorkspace(data.workspaceId);
 
   const generated =
     data.kind === "generate"
@@ -103,6 +104,14 @@ export async function processImageJob(data: ImageJobData): Promise<ProcessImageJ
     data.assetId,
     data.kind === "generate" ? "image_asset.generated" : "image_asset.edited",
   );
+
+  await applyImageUnderstanding({
+    workspaceId: data.workspaceId,
+    userId: data.userId,
+    assetId: data.assetId,
+    prompt: data.kind === "generate" ? data.prompt : null,
+    instruction: data.kind === "edit" ? data.instruction : null,
+  });
 
   return { versionIds, currentVersionId: lastVersionId };
 }

@@ -40,7 +40,7 @@ export const imageAssets = pgTable("image_assets", {
   origin: imageOrigin("origin").notNull(),
   currentVersionId: uuid("current_version_id").references((): AnyPgColumn => imageVersions.id),
   altText: text("alt_text"),
-  tagsJson: jsonb("tags_json").$type<unknown>(),
+  tagsJson: jsonb("tags_json").$type<string[]>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -158,6 +158,10 @@ export const brandSettings = pgTable("brand_settings", {
     onDelete: "set null",
   }),
   guidelines: text("guidelines"),
+  // M2.7: workspace default ImageEngine ("gemini" | "openai"). Stored as
+  // text rather than pgEnum so adding adapters later doesn't need an enum
+  // migration; validated at the API boundary via IMAGE_PROVIDERS.
+  imageProvider: text("image_provider").notNull().default("gemini"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

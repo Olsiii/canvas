@@ -1,3 +1,9 @@
+import {
+  DEFAULT_IMAGE_PROVIDER,
+  IMAGE_PROVIDER_LABELS,
+  IMAGE_PROVIDERS,
+  type ImageProvider,
+} from "@canvas/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -12,12 +18,14 @@ export function BrandSettingsPanel({ workspaceId }: { workspaceId: string }) {
       setPaletteText((row.paletteJson ?? []).join(", "));
       setTone(row.tone ?? "");
       setGuidelines(row.guidelines ?? "");
+      setImageProvider((row.imageProvider as ImageProvider) ?? DEFAULT_IMAGE_PROVIDER);
     },
   });
 
   const [paletteText, setPaletteText] = useState("");
   const [tone, setTone] = useState("");
   const [guidelines, setGuidelines] = useState("");
+  const [imageProvider, setImageProvider] = useState<ImageProvider>(DEFAULT_IMAGE_PROVIDER);
   const [message, setMessage] = useState<string | null>(null);
   const hydrated = useRef(false);
 
@@ -28,6 +36,7 @@ export function BrandSettingsPanel({ workspaceId }: { workspaceId: string }) {
     setPaletteText((brand.data.paletteJson ?? []).join(", "));
     setTone(brand.data.tone ?? "");
     setGuidelines(brand.data.guidelines ?? "");
+    setImageProvider((brand.data.imageProvider as ImageProvider) ?? DEFAULT_IMAGE_PROVIDER);
     hydrated.current = true;
   }, [brand.data]);
 
@@ -48,6 +57,7 @@ export function BrandSettingsPanel({ workspaceId }: { workspaceId: string }) {
         palette,
         tone: tone.trim() || null,
         guidelines: guidelines.trim() || null,
+        imageProvider,
       });
       setMessage("Brand settings saved.");
     } catch {
@@ -96,6 +106,24 @@ export function BrandSettingsPanel({ workspaceId }: { workspaceId: string }) {
             rows={2}
             className="border-border focus-visible:ring-primary w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2"
           />
+        </div>
+        <div>
+          <label htmlFor="brand-image-engine" className="mb-1 block text-xs font-medium">
+            Image engine
+          </label>
+          <select
+            id="brand-image-engine"
+            data-testid="brand-image-engine"
+            value={imageProvider}
+            onChange={(e) => setImageProvider(e.target.value as ImageProvider)}
+            className="border-border bg-background h-8 w-full rounded border text-sm"
+          >
+            {IMAGE_PROVIDERS.map((provider) => (
+              <option key={provider} value={provider}>
+                {IMAGE_PROVIDER_LABELS[provider]}
+              </option>
+            ))}
+          </select>
         </div>
         <Button type="submit" size="sm" disabled={upsert.isPending}>
           Save brand

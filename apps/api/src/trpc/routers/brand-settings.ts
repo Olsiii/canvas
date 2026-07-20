@@ -20,6 +20,7 @@ export const brandSettingsRouter = router({
         tone: null,
         logoAssetId: null,
         guidelines: null,
+        imageProvider: "gemini" as const,
       }
     );
   }),
@@ -39,6 +40,8 @@ export const brandSettingsRouter = router({
           tone: input.tone === undefined ? existing.tone : input.tone,
           guidelines: input.guidelines === undefined ? existing.guidelines : input.guidelines,
           logoAssetId: input.logoAssetId === undefined ? existing.logoAssetId : input.logoAssetId,
+          imageProvider:
+            input.imageProvider === undefined ? existing.imageProvider : input.imageProvider,
           updatedAt: new Date(),
         })
         .where(eq(schema.brandSettings.id, existing.id))
@@ -62,6 +65,7 @@ export const brandSettingsRouter = router({
         tone: input.tone ?? null,
         guidelines: input.guidelines ?? null,
         logoAssetId: input.logoAssetId ?? null,
+        imageProvider: input.imageProvider ?? "gemini",
       })
       .returning();
     if (!created) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });

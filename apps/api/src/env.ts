@@ -18,6 +18,9 @@ const envSchema = z.object({
   // falls back to a mock (apps/api/src/brain/), same degrade-gracefully
   // precedent as GOOGLE_CLIENT_ID/SECRET being unset. See PROGRESS.md (M2.2).
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Optional — image adapters stay mocked when unset (same as M2.1 Gemini).
+  OPENAI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
