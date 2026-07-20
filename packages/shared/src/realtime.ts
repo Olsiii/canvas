@@ -21,10 +21,28 @@ export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;
 // concern with its own connection lifecycle (open only while a chat panel
 // is mounted, vs. the board channel's whole-session connection). See
 // PROGRESS.md (M2.2 decisions).
+//
+// M2.3 extends this with tool/image status events so the chat UI can show
+// queued → generating → done without polling.
 export const brainStreamEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("delta"), text: z.string() }),
   z.object({ type: z.literal("done"), messageId: z.string().uuid() }),
   z.object({ type: z.literal("error"), message: z.string() }),
+  z.object({
+    type: z.literal("tool_status"),
+    name: z.string(),
+    status: z.enum(["running", "done", "error"]),
+    toolUseId: z.string(),
+    detail: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("image_status"),
+    status: z.enum(["queued", "generating", "done", "error"]),
+    assetId: z.string().uuid(),
+    versionId: z.string().uuid().optional(),
+    toolUseId: z.string().optional(),
+    message: z.string().optional(),
+  }),
 ]);
 
 export type BrainStreamEvent = z.infer<typeof brainStreamEventSchema>;

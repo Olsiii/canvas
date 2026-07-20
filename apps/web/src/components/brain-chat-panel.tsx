@@ -9,6 +9,25 @@ function messageText(contentJson: unknown): string {
   return typeof text === "string" ? text : "";
 }
 
+function toolCallNames(contentJson: unknown): string[] {
+  if (!contentJson || typeof contentJson !== "object") return [];
+  const calls = (contentJson as { toolCalls?: unknown }).toolCalls;
+  if (!Array.isArray(calls)) return [];
+  return calls
+    .map((c) =>
+      c && typeof c === "object" && typeof (c as { name?: unknown }).name === "string"
+        ? (c as { name: string }).name
+        : null,
+    )
+    .filter((n): n is string => !!n);
+}
+
+function toolResultLabel(contentJson: unknown): string {
+  if (!contentJson || typeof contentJson !== "object") return "Tool result";
+  const name = (contentJson as { name?: unknown }).name;
+  return typeof name === "string" ? `Tool: ${name}` : "Tool result";
+}
+
 export function BrainChatPanel({
   workspaceId,
   contextType,
@@ -27,6 +46,7 @@ export function BrainChatPanel({
   const [streamingText, setStreamingText] = useState("");
   const [streamError, setStreamError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [statusLine, setStatusLine] = useState<string | null>(null);
 
   const getOrCreate = trpc.brain.getOrCreateConversation.useMutation({
     onSuccess: (conversation) => setConversationId(conversation.id),
@@ -56,10 +76,14 @@ export function BrainChatPanel({
     },
     onDone: () => {
       setStreamingText("");
+      setStatusLine(null);
       setSending(false);
       void (async () => {
         if (conversationId) {
           await utils.brain.messages.list.invalidate({ conversationId });
+          if (contextType === "task" && contextId) {
+            await utils.attachment.list.invalidate({ taskId: contextId });
+          }
         }
         setPendingUserText(null);
       })();
@@ -67,8 +91,21 @@ export function BrainChatPanel({
     onError: (message) => {
       setStreamError(message);
       setStreamingText("");
+      setStatusLine(null);
       setPendingUserText(null);
       setSending(false);
+    },
+    onToolStatus: (event) => {
+      if (event.status === "running") setStatusLine(`Running ${event.name}…`);
+      else if (event.status === "error")
+        setStatusLine(`${event.name} failed${event.detail ? `: ${event.detail}` : ""}`);
+      else setStatusLine(null);
+    },
+    onImageStatus: (event) => {
+      if (event.status === "queued") setStatusLine("Image queued…");
+      else if (event.status === "generating") setStatusLine("Generating image…");
+      else if (event.status === "done") setStatusLine("Image ready");
+      else if (event.status === "error") setStatusLine(event.message ?? "Image generation failed");
     },
   });
 
@@ -81,6 +118,7 @@ export function BrainChatPanel({
     setPendingUserText(text);
     setStreamingText("");
     setStreamError(null);
+    setStatusLine(null);
     setSending(true);
 
     try {
@@ -131,22 +169,43 @@ export function BrainChatPanel({
             <p className="text-destructive text-sm">Could not open Brain chat.</p>
           )}
 
-          {(messages.data ?? []).map((m) => (
-            <div
-              key={m.id}
-              data-testid={`brain-message-${m.role}`}
-              className={
-                m.role === "user"
-                  ? "bg-muted ml-6 rounded-md px-3 py-2 text-sm"
-                  : "border-border mr-6 rounded-md border px-3 py-2 text-sm"
-              }
-            >
-              <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wide">
-                {m.role === "user" ? "You" : "Brain"}
-              </p>
-              <p className="whitespace-pre-wrap">{messageText(m.contentJson)}</p>
-            </div>
-          ))}
+          {persistedMessages.map((m) => {
+            if (m.role === "tool") {
+              return (
+                <div
+                  key={m.id}
+                  data-testid="brain-message-tool"
+                  className="text-muted-foreground mr-6 text-xs italic"
+                >
+                  {toolResultLabel(m.contentJson)}
+                </div>
+              );
+            }
+
+            const text = messageText(m.contentJson);
+            const tools = toolCallNames(m.contentJson);
+            if (!text && tools.length === 0) return null;
+
+            return (
+              <div
+                key={m.id}
+                data-testid={`brain-message-${m.role}`}
+                className={
+                  m.role === "user"
+                    ? "bg-muted ml-6 rounded-md px-3 py-2 text-sm"
+                    : "border-border mr-6 rounded-md border px-3 py-2 text-sm"
+                }
+              >
+                <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wide">
+                  {m.role === "user" ? "You" : "Brain"}
+                </p>
+                {text && <p className="whitespace-pre-wrap">{text}</p>}
+                {tools.length > 0 && (
+                  <p className="text-muted-foreground mt-1 text-xs">Used {tools.join(", ")}</p>
+                )}
+              </div>
+            );
+          })}
 
           {showPending && (
             <div
@@ -158,7 +217,7 @@ export function BrainChatPanel({
             </div>
           )}
 
-          {(streamingText || (sending && !streamingText)) && (
+          {(streamingText || (sending && !streamingText) || statusLine) && (
             <div
               data-testid="brain-message-assistant-streaming"
               className="border-border mr-6 rounded-md border px-3 py-2 text-sm"
@@ -166,7 +225,14 @@ export function BrainChatPanel({
               <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wide">
                 Brain
               </p>
-              <p className="whitespace-pre-wrap">{streamingText || (sending ? "…" : "")}</p>
+              {statusLine && (
+                <p data-testid="brain-status-line" className="text-muted-foreground mb-1 text-xs">
+                  {statusLine}
+                </p>
+              )}
+              <p className="whitespace-pre-wrap">
+                {streamingText || (sending && !statusLine ? "…" : "")}
+              </p>
             </div>
           )}
 
@@ -189,7 +255,7 @@ export function BrainChatPanel({
             placeholder="Ask Brain…"
             rows={3}
             disabled={!conversationId || sending}
-            className="border-border mb-2 w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-primary focus-visible:ring-2 disabled:opacity-50"
+            className="border-border focus-visible:ring-primary mb-2 w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

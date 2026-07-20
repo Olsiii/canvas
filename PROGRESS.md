@@ -507,3 +507,31 @@ Built:
 
 - `pnpm check` and `pnpm test` green, including `brain-system-prompt.test.ts`, `brain-realtime.test.ts` (channel helper), extended `can.test.ts` / `ai-usage.test.ts`.
 - Playwright `brain-chat.spec.ts`: open task Brain → send → mock streamed reply visible → reload → Board → reopen → messages persisted; global Brain from shell also sends and receives. Run with worker started via e2e webServer.
+
+### M2.3 — Claude tool-use orchestration (generate_image, edit_image, attach_to_task, summarize_thread) — done (2026-07-20)
+
+Built:
+
+- `apps/api/src/brain/tools.ts`: Zod + Anthropic JSON Schema for the four ROADMAP tools (`search_workspace` from ARCHITECTURE deferred).
+- `apps/api/src/brain/types.ts`: `ProviderMessage` / `StreamChunk` (text | tool_use | message_stop); `ChatClient.streamChat` now takes `{ messages, systemPrompt, tools }`.
+- `anthropic-client.ts`: streams tool_use + text; maps tool results back as Anthropic `tool_result` blocks. Still untested live (no key).
+- `mock-client.ts`: keyword heuristics fire tools (`generate an image…`, `edit…`, `attach <uuid>`, `summarize … thread`); after tool results, emits a final success text. Plain echo preserved for M2.2 e2e.
+- `execute-tool.ts`: permission-checked executors — generate/edit via shared `processImageJob`, attach writes `attachments` with `imageAssetId` (reuses Brain S3 keys), summarize returns a comment transcript for the model’s next turn.
+- `lib/image-job-processor.ts`: extracted from the image worker so Brain tools and `image-jobs` share one path.
+- Brain worker: agent loop (max 5 rounds) — stream → persist assistant (with `toolCalls`) → execute tools → persist `role: tool` → repeat until `end_turn`. Publishes `tool_status` / `image_status` (queued → generating → done) over Redis→WS.
+- `packages/shared/src/realtime.ts`: extended `brainStreamEventSchema` with those status events.
+- Web: status line in `brain-chat-panel`; muted tool chrome; invalidate attachments on done when in task context.
+- Tests: `tools.test.ts`, `mock-client.test.ts`; Playwright `brain-tools.spec.ts` (generate → attach → Attachments (1)).
+
+### Decisions
+
+- **Image work for tools runs inside the brain worker via `processImageJob`**, not a nested `image-jobs` wait — still a BullMQ worker, one S3/DB/metering path shared with the image queue consumer used by tRPC `imageAsset.generate`.
+- **`summarize_thread` returns a transcript**, not a nested Claude call — the outer model writes the user-facing summary on the next turn (one less AI call / clearer metering).
+- **Attach reuses image-assets object keys** on the attachment row (no byte copy). Documented here so a future storage GC knows attachments may alias Brain keys.
+- **`search_workspace` deferred** — on ARCHITECTURE’s tool list but not ROADMAP M2.3.
+- Generation UX (presets, n-grid, thumbs in chat) remains M2.4.
+
+### Verified
+
+- `pnpm check` / `pnpm test` green (82 api tests including new tool/mock cases).
+- Playwright: `brain-tools.spec.ts` green; `brain-chat.spec.ts` still passes (echo path).

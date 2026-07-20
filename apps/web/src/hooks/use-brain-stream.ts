@@ -7,12 +7,25 @@ export type BrainStreamHandlers = {
   onDelta: (text: string) => void;
   onDone: (messageId: string) => void;
   onError: (message: string) => void;
+  onToolStatus?: (event: {
+    name: string;
+    status: "running" | "done" | "error";
+    toolUseId: string;
+    detail?: string;
+  }) => void;
+  onImageStatus?: (event: {
+    status: "queued" | "generating" | "done" | "error";
+    assetId: string;
+    versionId?: string;
+    toolUseId?: string;
+    message?: string;
+  }) => void;
 };
 
 /**
  * Opens `/ws/brain?conversationId=…` while a Brain chat panel is mounted.
  * Unlike the board invalidation channel (payload-free, whole-session), this
- * carries streamed message text and lives only for the open panel.
+ * carries streamed message text and tool/image status (M2.3).
  */
 export function useBrainStream(conversationId: string | undefined, handlers: BrainStreamHandlers) {
   const handlersRef = useRef(handlers);
@@ -50,6 +63,8 @@ export function useBrainStream(conversationId: string | undefined, handlers: Bra
         if (event.type === "delta") handlersRef.current.onDelta(event.text);
         else if (event.type === "done") handlersRef.current.onDone(event.messageId);
         else if (event.type === "error") handlersRef.current.onError(event.message);
+        else if (event.type === "tool_status") handlersRef.current.onToolStatus?.(event);
+        else if (event.type === "image_status") handlersRef.current.onImageStatus?.(event);
       };
 
       socket.onclose = () => {

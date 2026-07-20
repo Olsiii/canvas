@@ -7,9 +7,12 @@ let client: ChatClient | undefined;
 
 export function getChatClient(): ChatClient {
   if (!client) {
-    client = env.ANTHROPIC_API_KEY ? new AnthropicChatClient(env.ANTHROPIC_API_KEY) : new MockChatClient();
+    client = env.ANTHROPIC_API_KEY
+      ? new AnthropicChatClient(env.ANTHROPIC_API_KEY)
+      : new MockChatClient();
   }
   return client;
 }
 
 export * from "./types";
+export * from "./tools";

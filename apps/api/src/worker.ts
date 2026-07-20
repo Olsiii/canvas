@@ -1,15 +1,14 @@
 import { db, schema } from "@canvas/db";
 import { Worker } from "bullmq";
 import { asc, eq } from "drizzle-orm";
-import { uuidv7 } from "uuidv7";
-import { getChatClient, type ChatMessage } from "./brain";
-import { getImageEngine } from "./image-engine";
-import { logActivity } from "./lib/activity";
-import { estimateChatCostUsd, estimateImageCostUsd } from "./lib/ai-usage";
+import { getChatClient, type ProviderMessage, type ToolCall } from "./brain";
+import { executeTool } from "./brain/execute-tool";
+import { BRAIN_TOOLS } from "./brain/tools";
+import { estimateChatCostUsd } from "./lib/ai-usage";
 import { buildSystemPrompt } from "./lib/brain-system-prompt";
 import { publish as publishBrainEvent } from "./lib/brain-realtime";
-import { processImage } from "./lib/image-processing";
-import { ensureBucketExists, getPresignedUrl, putObject } from "./lib/storage";
+import { processImageJob } from "./lib/image-job-processor";
+import { ensureBucketExists } from "./lib/storage";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
@@ -19,106 +18,15 @@ import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
 // ARCHITECTURE.md's diagram, which draws "BullMQ workers" as its own box
 // distinct from the Fastify API, and CLAUDE.md's hard rule that external AI
 // calls "run in BullMQ workers — never in request handlers." Both queues
-// (image-jobs, brain-jobs) are consumed by this one process for now — see
-// PROGRESS.md (M2.2 decisions) — not two separate deployables yet.
+// (image-jobs, brain-jobs) are consumed by this one process for now.
 await ensureBucketExists();
 
-const engine = getImageEngine();
-
-async function sourceUrlForVersion(versionId: string): Promise<string> {
-  const version = await db.query.imageVersions.findFirst({
-    where: eq(schema.imageVersions.id, versionId),
-  });
-  if (!version) throw new Error(`image_versions row ${versionId} not found`);
-  return getPresignedUrl(version.fileKey);
-}
+const MAX_AGENT_ROUNDS = 5;
 
 const imageWorker = new Worker<ImageJobData>(
   IMAGE_QUEUE_NAME,
   async (job) => {
-    const data = job.data;
-
-    const generated =
-      data.kind === "generate"
-        ? await engine.generate({
-            prompt: data.prompt,
-            size: data.size,
-            style: data.style,
-            brandPalette: data.brandPalette,
-            n: data.n,
-          })
-        : await engine.edit({
-            sourceImageUrl: await sourceUrlForVersion(data.parentVersionId),
-            instruction: data.instruction,
-            size: data.size,
-          });
-
-    let lastVersionId: string | null = null;
-
-    for (const image of generated) {
-      const versionId = uuidv7();
-      const fileKey = `image-assets/${data.workspaceId}/${data.assetId}/${versionId}.png`;
-      await putObject(fileKey, image.buffer, "image/png");
-
-      // Always a real, decodable image here (synthesized or provider
-      // output) — processImage returning null (M1.9's "not actually an
-      // image" boundary case) shouldn't happen, but the null-check stays
-      // for the same reason M1.9's upload route keeps it: a real provider's
-      // response isn't a guarantee either.
-      const processed = await processImage(image.buffer);
-      let thumbKey: string | null = null;
-      if (processed) {
-        thumbKey = `image-assets/${data.workspaceId}/${data.assetId}/${versionId}-thumb.webp`;
-        await putObject(thumbKey, processed.thumbBuffer, processed.thumbContentType);
-      }
-
-      await db.insert(schema.imageVersions).values({
-        id: versionId,
-        assetId: data.assetId,
-        parentVersionId: data.kind === "edit" ? data.parentVersionId : null,
-        source: data.kind,
-        prompt: data.kind === "generate" ? data.prompt : null,
-        instruction: data.kind === "edit" ? data.instruction : null,
-        provider: engine.provider,
-        model: engine.model,
-        fileKey,
-        thumbKey,
-        blurhash: processed?.blurhash ?? null,
-        width: image.width,
-        height: image.height,
-        createdBy: data.userId,
-      });
-
-      lastVersionId = versionId;
-    }
-
-    // Multiple generated variants (n > 1) all become independent top-level
-    // versions for now — the picker UX that would let a user choose one
-    // (ARCHITECTURE.md's "n-variants grid") is M2.4's job, not this
-    // milestone's. Whichever came out of the loop last becomes "current";
-    // revisit once that picker exists.
-    await db
-      .update(schema.imageAssets)
-      .set({ currentVersionId: lastVersionId, updatedAt: new Date() })
-      .where(eq(schema.imageAssets.id, data.assetId));
-
-    await db.insert(schema.aiUsage).values({
-      workspaceId: data.workspaceId,
-      userId: data.userId,
-      kind: data.kind,
-      provider: engine.provider,
-      model: engine.model,
-      credits: generated.length,
-      costUsdEst: estimateImageCostUsd(generated.length),
-    });
-
-    await logActivity(
-      data.workspaceId,
-      data.userId,
-      "image_asset",
-      data.assetId,
-      data.kind === "generate" ? "image_asset.generated" : "image_asset.edited",
-    );
+    await processImageJob(job.data);
   },
   { connection: redisConnection },
 );
@@ -137,6 +45,51 @@ function messageText(contentJson: unknown): string {
     return (contentJson as { text: string }).text;
   }
   return "";
+}
+
+function toolCallsFromContent(contentJson: unknown): ToolCall[] | undefined {
+  if (!contentJson || typeof contentJson !== "object") return undefined;
+  const calls = (contentJson as { toolCalls?: unknown }).toolCalls;
+  if (!Array.isArray(calls) || calls.length === 0) return undefined;
+  return calls as ToolCall[];
+}
+
+function historyToProviderMessages(
+  history: (typeof schema.brainMessages.$inferSelect)[],
+): ProviderMessage[] {
+  const out: ProviderMessage[] = [];
+  for (const m of history) {
+    if (m.role === "user") {
+      out.push({ role: "user", text: messageText(m.contentJson) });
+      continue;
+    }
+    if (m.role === "assistant") {
+      const text = messageText(m.contentJson);
+      const toolCalls = toolCallsFromContent(m.contentJson);
+      out.push({
+        role: "assistant",
+        ...(text ? { text } : {}),
+        ...(toolCalls ? { toolCalls } : {}),
+      });
+      continue;
+    }
+    if (m.role === "tool") {
+      const c = m.contentJson as {
+        toolUseId?: string;
+        name?: string;
+        result?: unknown;
+      } | null;
+      if (c?.toolUseId && c.name) {
+        out.push({
+          role: "tool",
+          toolUseId: c.toolUseId,
+          name: c.name,
+          result: c.result ?? {},
+        });
+      }
+    }
+  }
+  return out;
 }
 
 async function buildTaskSystemPrompt(taskId: string): Promise<string> {
@@ -161,28 +114,102 @@ const brainWorker = new Worker<BrainJobData>(
     });
     if (!conversation) throw new Error(`brain_conversations row ${data.conversationId} not found`);
 
-    const history = await db.query.brainMessages.findMany({
-      where: eq(schema.brainMessages.conversationId, data.conversationId),
-      orderBy: asc(schema.brainMessages.createdAt),
-    });
-    const chatMessages: ChatMessage[] = history
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role as "user" | "assistant", text: messageText(m.contentJson) }));
-
     const systemPrompt =
       conversation.contextType === "task" && conversation.contextId
         ? await buildTaskSystemPrompt(conversation.contextId)
         : buildSystemPrompt({ type: "global" });
 
     const chatClient = getChatClient();
-    const inputChars =
-      systemPrompt.length + chatMessages.reduce((sum, m) => sum + m.text.length, 0);
-    let fullText = "";
+    let lastAssistantMessageId: string | null = null;
+    let totalInputChars = systemPrompt.length;
+    let totalOutputChars = 0;
 
     try {
-      for await (const chunk of chatClient.streamChat(chatMessages, systemPrompt)) {
-        fullText += chunk;
-        await publishBrainEvent(data.conversationId, { type: "delta", text: chunk });
+      for (let round = 0; round < MAX_AGENT_ROUNDS; round++) {
+        const history = await db.query.brainMessages.findMany({
+          where: eq(schema.brainMessages.conversationId, data.conversationId),
+          orderBy: asc(schema.brainMessages.createdAt),
+        });
+        const providerMessages = historyToProviderMessages(history);
+        totalInputChars += providerMessages.reduce((sum, m) => {
+          if (m.role === "user") return sum + m.text.length;
+          if (m.role === "assistant") return sum + (m.text?.length ?? 0);
+          return sum + JSON.stringify(m.result).length;
+        }, 0);
+
+        let fullText = "";
+        const toolCalls: ToolCall[] = [];
+        let stopReason: "end_turn" | "tool_use" | "max_tokens" | "other" = "end_turn";
+
+        for await (const chunk of chatClient.streamChat({
+          messages: providerMessages,
+          systemPrompt,
+          tools: BRAIN_TOOLS,
+        })) {
+          if (chunk.type === "text") {
+            fullText += chunk.text;
+            await publishBrainEvent(data.conversationId, { type: "delta", text: chunk.text });
+          } else if (chunk.type === "tool_use") {
+            toolCalls.push({ id: chunk.id, name: chunk.name, input: chunk.input });
+          } else if (chunk.type === "message_stop") {
+            stopReason = chunk.stopReason;
+          }
+        }
+
+        totalOutputChars += fullText.length;
+
+        const [assistantMessage] = await db
+          .insert(schema.brainMessages)
+          .values({
+            conversationId: data.conversationId,
+            role: "assistant",
+            contentJson: {
+              ...(fullText ? { text: fullText } : {}),
+              ...(toolCalls.length > 0 ? { toolCalls } : {}),
+            },
+            imageVersionIds: null,
+          })
+          .returning();
+        if (!assistantMessage) throw new Error("Failed to save assistant message");
+        lastAssistantMessageId = assistantMessage.id;
+
+        if (stopReason !== "tool_use" || toolCalls.length === 0) {
+          break;
+        }
+
+        const versionIds: string[] = [];
+        for (const call of toolCalls) {
+          const executed = await executeTool(call.name, call.input, {
+            conversationId: data.conversationId,
+            workspaceId: data.workspaceId,
+            userId: data.userId,
+            contextType: conversation.contextType,
+            contextId: conversation.contextId,
+            toolUseId: call.id,
+          });
+
+          if (executed.imageVersionIds?.length) {
+            versionIds.push(...executed.imageVersionIds);
+          }
+
+          await db.insert(schema.brainMessages).values({
+            conversationId: data.conversationId,
+            role: "tool",
+            contentJson: {
+              toolUseId: call.id,
+              name: executed.name,
+              result: executed.result,
+            },
+            imageVersionIds: executed.imageVersionIds ?? null,
+          });
+        }
+
+        if (versionIds.length > 0) {
+          await db
+            .update(schema.brainMessages)
+            .set({ imageVersionIds: versionIds })
+            .where(eq(schema.brainMessages.id, assistantMessage.id));
+        }
       }
     } catch (err) {
       console.error(`[worker] brain job for conversation ${data.conversationId} failed:`, err);
@@ -193,15 +220,9 @@ const brainWorker = new Worker<BrainJobData>(
       throw err;
     }
 
-    const [assistantMessage] = await db
-      .insert(schema.brainMessages)
-      .values({
-        conversationId: data.conversationId,
-        role: "assistant",
-        contentJson: { text: fullText },
-      })
-      .returning();
-    if (!assistantMessage) throw new Error("Failed to save assistant message");
+    if (!lastAssistantMessageId) {
+      throw new Error("Brain agent loop produced no assistant message");
+    }
 
     await db.insert(schema.aiUsage).values({
       workspaceId: data.workspaceId,
@@ -210,10 +231,13 @@ const brainWorker = new Worker<BrainJobData>(
       provider: chatClient.provider,
       model: chatClient.model,
       credits: 1,
-      costUsdEst: estimateChatCostUsd(inputChars, fullText.length),
+      costUsdEst: estimateChatCostUsd(totalInputChars, totalOutputChars),
     });
 
-    await publishBrainEvent(data.conversationId, { type: "done", messageId: assistantMessage.id });
+    await publishBrainEvent(data.conversationId, {
+      type: "done",
+      messageId: lastAssistantMessageId,
+    });
   },
   { connection: redisConnection },
 );
