@@ -46,3 +46,15 @@ export const brainStreamEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export type BrainStreamEvent = z.infer<typeof brainStreamEventSchema>;
+
+// Generation UX / edit loop (M2.5): live job status for an image_asset,
+// separate from brain chat's conversation-scoped stream.
+export const imageAssetJobEventSchema = z.object({
+  status: z.enum(["queued", "generating", "done", "error"]),
+  assetId: z.string().uuid(),
+  versionId: z.string().uuid().optional(),
+  kind: z.enum(["generate", "edit"]).optional(),
+  message: z.string().optional(),
+});
+
+export type ImageAssetJobEvent = z.infer<typeof imageAssetJobEventSchema>;

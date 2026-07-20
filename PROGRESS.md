@@ -556,3 +556,22 @@ Built:
 ### Verified
 
 - `pnpm check` / unit tests green; Playwright `generation-ux.spec.ts` green with worker.
+
+### M2.5 — Iterative editing loop (select → NL edit → child version; live status) — done (2026-07-20)
+
+Built:
+
+- `editImageAssetSchema` + `imageAsset.edit` enqueues `kind: "edit"` on the existing image queue (worker path already implemented in M2.1).
+- Live job status via Redis pub/sub + `/ws/image-asset?assetId=…` (`imageAssetJobEventSchema`: queued / generating / done / error); worker publishes generating→done/error; generate/edit mutations publish `queued`.
+- `GenerationPanel`: select/promote a version → edit instruction → new child version; status line for live job state; attach after edits.
+- Tests: schema unit coverage for edit; Playwright `iterative-edit.spec.ts` (generate → edit ×3 → attach — Phase-2 smoke).
+
+### Decisions
+
+- **Click still promotes** (M2.4) and also sets the edit source; no separate “select without promote” control this milestone.
+- **Status channel is asset-scoped**, not conversation-scoped — Generation UX is outside Brain chat; reuse the same Redis fan-out pattern as M2.2 brain realtime.
+- **Version tree visualization** deferred to M2.6; parent links are already stored on `image_versions.parent_version_id`.
+
+### Verified
+
+- `pnpm check` / unit tests green; Playwright `iterative-edit.spec.ts` + `generation-ux.spec.ts` green with worker.

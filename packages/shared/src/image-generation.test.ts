@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STYLE_PRESETS } from "./style-presets";
-import { generateImageAssetSchema } from "./schemas/image-assets";
+import { editImageAssetSchema, generateImageAssetSchema } from "./schemas/image-assets";
 import { upsertBrandSettingsSchema } from "./schemas/brand-settings";
 
 describe("generateImageAssetSchema", () => {
@@ -32,6 +32,27 @@ describe("generateImageAssetSchema", () => {
         workspaceId: "01900000-0000-7000-8000-000000000001",
         prompt: "x",
         n: 5,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("editImageAssetSchema", () => {
+  it("requires instruction and parent version", () => {
+    const parsed = editImageAssetSchema.parse({
+      assetId: "01900000-0000-7000-8000-000000000001",
+      parentVersionId: "01900000-0000-7000-8000-000000000002",
+      instruction: "make it bluer",
+    });
+    expect(parsed.instruction).toBe("make it bluer");
+  });
+
+  it("rejects empty instruction", () => {
+    expect(() =>
+      editImageAssetSchema.parse({
+        assetId: "01900000-0000-7000-8000-000000000001",
+        parentVersionId: "01900000-0000-7000-8000-000000000002",
+        instruction: "   ",
       }),
     ).toThrow();
   });

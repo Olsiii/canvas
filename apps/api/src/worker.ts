@@ -7,6 +7,7 @@ import { BRAIN_TOOLS } from "./brain/tools";
 import { estimateChatCostUsd } from "./lib/ai-usage";
 import { buildSystemPrompt } from "./lib/brain-system-prompt";
 import { publish as publishBrainEvent } from "./lib/brain-realtime";
+import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
 import { ensureBucketExists } from "./lib/storage";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
@@ -26,7 +27,25 @@ const MAX_AGENT_ROUNDS = 5;
 const imageWorker = new Worker<ImageJobData>(
   IMAGE_QUEUE_NAME,
   async (job) => {
-    await processImageJob(job.data);
+    const { assetId, kind } = job.data;
+    await publishImageAssetJob(assetId, { status: "generating", assetId, kind });
+    try {
+      const result = await processImageJob(job.data);
+      await publishImageAssetJob(assetId, {
+        status: "done",
+        assetId,
+        kind,
+        versionId: result.currentVersionId,
+      });
+    } catch (err) {
+      await publishImageAssetJob(assetId, {
+        status: "error",
+        assetId,
+        kind,
+        message: err instanceof Error ? err.message : "Image job failed",
+      });
+      throw err;
+    }
   },
   { connection: redisConnection },
 );

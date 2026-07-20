@@ -9,6 +9,7 @@ import { ensureBucketExists } from "./lib/storage";
 import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBrainRealtimeRoutes } from "./routes/brain-realtime";
+import { registerImageAssetRealtimeRoutes } from "./routes/image-asset-realtime";
 import { registerImageAssetRoutes } from "./routes/image-assets";
 import { registerRealtimeRoutes } from "./routes/realtime";
 import { createContext } from "./trpc/context";
@@ -42,6 +43,7 @@ registerAttachmentRoutes(app);
 registerImageAssetRoutes(app);
 registerRealtimeRoutes(app);
 registerBrainRealtimeRoutes(app);
+registerImageAssetRealtimeRoutes(app);
 
 app.get("/health", async () => ({ ok: true }));
 

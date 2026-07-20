@@ -1,6 +1,7 @@
 import { db, schema } from "@canvas/db";
 import {
   attachImageAssetToTaskSchema,
+  editImageAssetSchema,
   generateImageAssetSchema,
   getImageAssetSchema,
   promoteImageVersionSchema,
@@ -8,6 +9,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { publishImageAssetJob } from "../../lib/image-asset-realtime";
 import { assertCan } from "../../lib/permissions";
 import { workspaceIdForTask } from "../../lib/task-queries";
 import { imageQueue } from "../../queues/image-queue";
@@ -63,6 +65,55 @@ export const imageAssetRouter = router({
       style: input.style,
       brandPalette,
       n: input.n,
+    });
+
+    await publishImageAssetJob(asset.id, {
+      status: "queued",
+      assetId: asset.id,
+      kind: "generate",
+    });
+
+    return asset;
+  }),
+
+  edit: protectedProcedure.input(editImageAssetSchema).mutation(async ({ ctx, input }) => {
+    const asset = await db.query.imageAssets.findFirst({
+      where: and(eq(schema.imageAssets.id, input.assetId), isNull(schema.imageAssets.deletedAt)),
+    });
+    if (!asset) throw new TRPCError({ code: "NOT_FOUND" });
+    await assertCan(ctx.user, asset.workspaceId, "imageAsset:create");
+
+    const parent = await db.query.imageVersions.findFirst({
+      where: and(
+        eq(schema.imageVersions.id, input.parentVersionId),
+        eq(schema.imageVersions.assetId, asset.id),
+      ),
+    });
+    if (!parent) throw new TRPCError({ code: "NOT_FOUND", message: "Parent version not found" });
+
+    await logActivity(
+      asset.workspaceId,
+      ctx.user.id,
+      "image_asset",
+      asset.id,
+      "image_asset.edit_requested",
+      { parentVersionId: parent.id },
+    );
+
+    await imageQueue.add("edit", {
+      kind: "edit",
+      assetId: asset.id,
+      workspaceId: asset.workspaceId,
+      userId: ctx.user.id,
+      parentVersionId: parent.id,
+      instruction: input.instruction,
+      size: input.size,
+    });
+
+    await publishImageAssetJob(asset.id, {
+      status: "queued",
+      assetId: asset.id,
+      kind: "edit",
     });
 
     return asset;

@@ -27,3 +27,10 @@ export const attachImageAssetToTaskSchema = z.object({
   assetId: z.string().uuid(),
   taskId: z.string().uuid(),
 });
+
+export const editImageAssetSchema = z.object({
+  assetId: z.string().uuid(),
+  parentVersionId: z.string().uuid(),
+  instruction: z.string().trim().min(1).max(2000),
+  size: z.enum(ASPECT_PRESETS).optional(),
+});
