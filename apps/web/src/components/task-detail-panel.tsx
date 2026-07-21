@@ -16,6 +16,7 @@ import { CustomFieldsSection } from "@/components/custom-fields-section";
 import { Field, Section } from "@/components/detail-field";
 import { GenerationPanel } from "@/components/generation-panel";
 import { TagsSection } from "@/components/tags-section";
+import { TimeTrackingSection } from "@/components/time-tracking-section";
 import { Input } from "@/components/ui/input";
 import { useOptimisticChecklistItemUpdate } from "@/hooks/use-checklist-mutations";
 import { trpc } from "@/lib/trpc";
@@ -327,6 +328,8 @@ export function TaskDetailPanel({
             />
 
             <RemindersSection taskId={taskId} />
+
+            <TimeTrackingSection taskId={taskId} />
 
             <ChecklistsSection taskId={taskId} />
 

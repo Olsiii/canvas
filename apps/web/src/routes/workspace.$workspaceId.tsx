@@ -3,6 +3,7 @@ import { GenerationPanel } from "@/components/generation-panel";
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { RequireAuth } from "@/components/require-auth";
+import { RunningTimerWidget } from "@/components/running-timer-widget";
 import { SearchBox } from "@/components/search-box";
 import { useRealtime } from "@/hooks/use-realtime";
 import { trpc } from "@/lib/trpc";
@@ -38,6 +39,15 @@ function WorkspaceShell() {
               ← All workspaces
             </Link>
             <div className="flex items-center gap-2">
+              {workspaceId && (
+                <Link
+                  to="/w/$workspaceId/timesheet"
+                  params={{ workspaceId }}
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                >
+                  Timesheet
+                </Link>
+              )}
               <button
                 type="button"
                 aria-label="Generate image"
@@ -63,6 +73,9 @@ function WorkspaceShell() {
               <SearchBox workspaceId={workspaceId} />
             </div>
           )}
+          <div className="mt-2">
+            <RunningTimerWidget />
+          </div>
         </div>
         <div className="min-h-0 flex-1">
           {workspaceId && <HierarchySidebar workspaceId={workspaceId} activeListId={listId} />}

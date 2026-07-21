@@ -134,6 +134,13 @@
       "when": 1784626979458,
       "tag": "0018_romantic_magik",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784628326032,
+      "tag": "0019_bumpy_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }
