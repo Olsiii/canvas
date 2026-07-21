@@ -6,6 +6,7 @@ export const TOOL_NAMES = [
   "edit_image",
   "attach_to_task",
   "summarize_thread",
+  "critique_image",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -29,10 +30,15 @@ export const summarizeThreadInputSchema = z.object({
   task_id: z.string().uuid().optional(),
 });
 
+export const critiqueImageInputSchema = z.object({
+  image_version_id: z.string().uuid(),
+});
+
 export type GenerateImageInput = z.infer<typeof generateImageInputSchema>;
 export type EditImageInput = z.infer<typeof editImageInputSchema>;
 export type AttachToTaskInput = z.infer<typeof attachToTaskInputSchema>;
 export type SummarizeThreadInput = z.infer<typeof summarizeThreadInputSchema>;
+export type CritiqueImageInput = z.infer<typeof critiqueImageInputSchema>;
 
 export type ToolDefinition = {
   name: ToolName;
@@ -109,6 +115,18 @@ export const BRAIN_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    name: "critique_image",
+    description:
+      "Give design feedback on an existing image version — what would you improve? Requires image_version_id.",
+    input_schema: {
+      type: "object",
+      properties: {
+        image_version_id: { type: "string", description: "UUID of the image version to critique" },
+      },
+      required: ["image_version_id"],
+    },
+  },
 ];
 
 export function parseToolInput(name: ToolName, input: unknown) {
@@ -121,6 +139,8 @@ export function parseToolInput(name: ToolName, input: unknown) {
       return attachToTaskInputSchema.parse(input);
     case "summarize_thread":
       return summarizeThreadInputSchema.parse(input);
+    case "critique_image":
+      return critiqueImageInputSchema.parse(input);
   }
 }
 

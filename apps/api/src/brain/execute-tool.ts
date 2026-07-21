@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { can, type WorkspaceAction } from "../auth/can";
 import { logActivity } from "../lib/activity";
 import { publish as publishBrainEvent } from "../lib/brain-realtime";
+import { critiqueImage } from "../lib/image-critique";
 import { processImageJob } from "../lib/image-job-processor";
 import { getMembershipRole } from "../lib/membership";
 import { extractPlainText } from "../lib/plain-text";
@@ -11,6 +12,7 @@ import {
   isToolName,
   parseToolInput,
   type AttachToTaskInput,
+  type CritiqueImageInput,
   type EditImageInput,
   type GenerateImageInput,
   type SummarizeThreadInput,
@@ -240,6 +242,32 @@ async function executeAttachToTask(ctx: ToolExecutionContext, input: AttachToTas
   };
 }
 
+async function executeCritiqueImage(ctx: ToolExecutionContext, input: CritiqueImageInput) {
+  await assertWorkerCan(ctx.userId, ctx.workspaceId, "imageAsset:view");
+
+  const version = await db.query.imageVersions.findFirst({
+    where: eq(schema.imageVersions.id, input.image_version_id),
+  });
+  if (!version) throw new Error(`image version ${input.image_version_id} not found`);
+
+  const asset = await db.query.imageAssets.findFirst({
+    where: eq(schema.imageAssets.id, version.assetId),
+  });
+  if (!asset || asset.workspaceId !== ctx.workspaceId) {
+    throw new Error("Image version does not belong to this workspace");
+  }
+
+  const critique = await critiqueImage({
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+    versionId: version.id,
+    prompt: version.prompt,
+    instruction: version.instruction,
+  });
+
+  return { versionId: version.id, critique };
+}
+
 async function executeSummarizeThread(ctx: ToolExecutionContext, input: SummarizeThreadInput) {
   await assertWorkerCan(ctx.userId, ctx.workspaceId, "comment:view");
 
@@ -312,6 +340,9 @@ export async function executeTool(
         break;
       case "summarize_thread":
         result = await executeSummarizeThread(ctx, input as SummarizeThreadInput);
+        break;
+      case "critique_image":
+        result = await executeCritiqueImage(ctx, input as CritiqueImageInput);
         break;
     }
 

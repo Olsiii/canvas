@@ -8,6 +8,7 @@ import {
   type StylePreset,
 } from "@canvas/shared";
 import { Button } from "@/components/ui/button";
+import { ImageProofing } from "@/components/image-proofing";
 import { VersionCompare } from "@/components/version-compare";
 import { VersionTreeSidebar } from "@/components/version-tree-sidebar";
 import { useImageAssetJob } from "@/hooks/use-image-asset-job";
@@ -17,10 +18,13 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 export function GenerationPanel({
   workspaceId,
   taskId,
+  onAskBrain,
   onClose,
 }: {
   workspaceId: string;
   taskId?: string;
+  /** M4.4: opens the caller's task-context Brain panel for an image critique. */
+  onAskBrain?: () => void;
   onClose?: () => void;
 }) {
   const utils = trpc.useUtils();
@@ -340,6 +344,10 @@ export function GenerationPanel({
               rightVersionId={compareVersionId}
               onClear={() => setCompareVersionId(null)}
             />
+          )}
+
+          {selectedVersionId && (
+            <ImageProofing versionId={selectedVersionId} taskId={taskId} onAskBrain={onAskBrain} />
           )}
 
           <form onSubmit={handleEdit} className="space-y-2 border-t border-border pt-3">

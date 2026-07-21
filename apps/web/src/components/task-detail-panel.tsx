@@ -336,7 +336,11 @@ export function TaskDetailPanel({
             <AttachmentsSection taskId={taskId} />
 
             <Section label="Generate image">
-              <GenerationPanel workspaceId={workspaceId} taskId={taskId} />
+              <GenerationPanel
+                workspaceId={workspaceId}
+                taskId={taskId}
+                onAskBrain={() => setBrainOpen(true)}
+              />
             </Section>
 
             <TagsSection

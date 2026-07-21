@@ -1,9 +1,11 @@
 import { db, schema } from "@canvas/db";
 import {
   attachImageAssetToTaskSchema,
+  createAnnotationSchema,
   editImageAssetSchema,
   generateImageAssetSchema,
   getImageAssetSchema,
+  listAnnotationsSchema,
   promoteImageVersionSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
@@ -11,7 +13,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { publishImageAssetJob } from "../../lib/image-asset-realtime";
 import { assertCan } from "../../lib/permissions";
-import { workspaceIdForTask } from "../../lib/task-queries";
+import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
 import { imageQueue } from "../../queues/image-queue";
 import { protectedProcedure, router } from "../trpc";
 
@@ -210,4 +212,118 @@ export const imageAssetRouter = router({
 
       return attachment;
     }),
+
+  annotation: router({
+    list: protectedProcedure.input(listAnnotationsSchema).query(async ({ ctx, input }) => {
+      const version = await db.query.imageVersions.findFirst({
+        where: eq(schema.imageVersions.id, input.versionId),
+      });
+      if (!version) throw new TRPCError({ code: "NOT_FOUND" });
+      const asset = await db.query.imageAssets.findFirst({
+        where: eq(schema.imageAssets.id, version.assetId),
+      });
+      if (!asset) throw new TRPCError({ code: "NOT_FOUND" });
+      await assertCan(ctx.user, asset.workspaceId, "imageAsset:view");
+
+      const rows = await db
+        .select({
+          id: schema.annotations.id,
+          x: schema.annotations.x,
+          y: schema.annotations.y,
+          w: schema.annotations.w,
+          h: schema.annotations.h,
+          createdAt: schema.annotations.createdAt,
+          commentId: schema.comments.id,
+          bodyJson: schema.comments.bodyJson,
+          authorId: schema.comments.authorId,
+          authorName: schema.users.name,
+        })
+        .from(schema.annotations)
+        .innerJoin(schema.comments, eq(schema.comments.id, schema.annotations.commentId))
+        .innerJoin(schema.users, eq(schema.users.id, schema.comments.authorId))
+        .where(
+          and(eq(schema.annotations.imageVersionId, version.id), isNull(schema.comments.deletedAt)),
+        )
+        .orderBy(asc(schema.annotations.createdAt));
+
+      return rows.map((r) => ({
+        id: r.id,
+        x: r.x,
+        y: r.y,
+        w: r.w,
+        h: r.h,
+        createdAt: r.createdAt,
+        comment: {
+          id: r.commentId,
+          bodyJson: r.bodyJson,
+          authorId: r.authorId,
+          authorName: r.authorName,
+        },
+      }));
+    }),
+
+    create: protectedProcedure.input(createAnnotationSchema).mutation(async ({ ctx, input }) => {
+      const version = await db.query.imageVersions.findFirst({
+        where: eq(schema.imageVersions.id, input.versionId),
+      });
+      if (!version) throw new TRPCError({ code: "NOT_FOUND" });
+      const asset = await db.query.imageAssets.findFirst({
+        where: eq(schema.imageAssets.id, version.assetId),
+      });
+      if (!asset) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const task = await requireTask(input.taskId);
+      const taskWorkspaceId = await workspaceIdForTask(task.id);
+      if (taskWorkspaceId !== asset.workspaceId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Task does not belong to this workspace",
+        });
+      }
+      // Same guest-level participation reasoning as comment:create — pinning
+      // a comment to an image you can already see isn't a workspace mutation.
+      await assertCan(ctx.user, asset.workspaceId, "comment:create");
+
+      const [comment] = await db
+        .insert(schema.comments)
+        .values({ taskId: task.id, authorId: ctx.user.id, bodyJson: input.bodyJson })
+        .returning();
+      if (!comment) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [annotation] = await db
+        .insert(schema.annotations)
+        .values({
+          imageVersionId: version.id,
+          commentId: comment.id,
+          x: input.x,
+          y: input.y,
+        })
+        .returning();
+      if (!annotation) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await logActivity(
+        asset.workspaceId,
+        ctx.user.id,
+        "annotation",
+        annotation.id,
+        "annotation.created",
+        { taskId: task.id, imageVersionId: version.id },
+      );
+
+      return {
+        id: annotation.id,
+        x: annotation.x,
+        y: annotation.y,
+        w: annotation.w,
+        h: annotation.h,
+        createdAt: annotation.createdAt,
+        comment: {
+          id: comment.id,
+          bodyJson: comment.bodyJson,
+          authorId: comment.authorId,
+          authorName: ctx.user.name,
+        },
+      };
+    }),
+  }),
 });

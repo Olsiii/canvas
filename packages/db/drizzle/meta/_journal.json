@@ -169,6 +169,13 @@
       "when": 1784640049816,
       "tag": "0023_rich_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784643086124,
+      "tag": "0024_brave_silver_sable",
+      "breakpoints": true
     }
   ]
 }

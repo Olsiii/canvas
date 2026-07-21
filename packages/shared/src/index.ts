@@ -34,6 +34,7 @@ export * from "./schemas/brand-settings";
 export * from "./schemas/brain";
 export * from "./schemas/docs";
 export * from "./schemas/chat";
+export * from "./schemas/annotations";
 export * from "./schemas/recurrence";
 export * from "./schemas/reminders";
 export * from "./schemas/task-templates";

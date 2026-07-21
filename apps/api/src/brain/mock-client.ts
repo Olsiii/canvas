@@ -129,6 +129,23 @@ export class MockChatClient implements ChatClient {
       }
     }
 
+    if (/\b(improve|critique|feedback)\b/.test(lower) && /\bimage\b/.test(lower)) {
+      const versionMatch = userText.match(
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+      );
+      if (versionMatch) {
+        yield* emitWords("Let me take a look at that image.");
+        yield {
+          type: "tool_use",
+          id: uuidv7(),
+          name: "critique_image",
+          input: { image_version_id: versionMatch[0] },
+        };
+        yield { type: "message_stop", stopReason: "tool_use" };
+        return;
+      }
+    }
+
     if (/\bsummarize\b/.test(lower) && /\b(thread|comment|discussion)\b/.test(lower)) {
       yield* emitWords("I'll pull the comment thread and summarize it.");
       yield {
