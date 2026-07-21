@@ -66,3 +66,16 @@ export function monthLabel(year: number, monthIndex: number): string {
 }
 
 export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/**
+ * Which date a task is placed on in a date-keyed view (Calendar, M3.1;
+ * Workload, M3.8): due date, falling back to start date, or unplaced if
+ * neither is set. Extracted here (was local to TaskCalendarView) once
+ * Workload needed the identical fallback rule.
+ */
+export function taskDateKey(task: {
+  dueDate: string | null;
+  startDate: string | null;
+}): string | null {
+  return task.dueDate ?? task.startDate ?? null;
+}

@@ -38,36 +38,45 @@ function WorkspaceShell() {
             <Link to="/" className="text-muted-foreground hover:text-foreground text-xs">
               ← All workspaces
             </Link>
-            <div className="flex items-center gap-2">
-              {workspaceId && (
-                <Link
-                  to="/w/$workspaceId/timesheet"
-                  params={{ workspaceId }}
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                >
-                  Timesheet
-                </Link>
-              )}
-              <button
-                type="button"
-                aria-label="Generate image"
-                onClick={() => setGenerateOpen(true)}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Generate
-              </button>
-              <button
-                type="button"
-                aria-label="Open Brain"
-                onClick={() => setBrainOpen(true)}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Brain
-              </button>
-              <NotificationsBell />
-            </div>
+            <NotificationsBell />
           </div>
-          <h1 className="truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
+          <h1 className="mt-1 truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {workspaceId && (
+              <Link
+                to="/w/$workspaceId/workload"
+                params={{ workspaceId }}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Workload
+              </Link>
+            )}
+            {workspaceId && (
+              <Link
+                to="/w/$workspaceId/timesheet"
+                params={{ workspaceId }}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Timesheet
+              </Link>
+            )}
+            <button
+              type="button"
+              aria-label="Generate image"
+              onClick={() => setGenerateOpen(true)}
+              className="text-muted-foreground hover:text-foreground text-xs"
+            >
+              Generate
+            </button>
+            <button
+              type="button"
+              aria-label="Open Brain"
+              onClick={() => setBrainOpen(true)}
+              className="text-muted-foreground hover:text-foreground text-xs"
+            >
+              Brain
+            </button>
+          </div>
           {workspaceId && (
             <div className="mt-2">
               <SearchBox workspaceId={workspaceId} />

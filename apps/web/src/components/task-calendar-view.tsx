@@ -1,4 +1,4 @@
-import { WEEKDAY_LABELS, buildMonthGrid, monthLabel } from "@canvas/shared";
+import { WEEKDAY_LABELS, buildMonthGrid, monthLabel, taskDateKey } from "@canvas/shared";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import { useMemo, useState } from "react";
@@ -9,10 +9,6 @@ type CalendarTask = {
   dueDate: string | null;
   startDate: string | null;
 };
-
-function taskDateKey(task: CalendarTask): string | null {
-  return task.dueDate ?? task.startDate ?? null;
-}
 
 export function TaskCalendarView({
   listId,

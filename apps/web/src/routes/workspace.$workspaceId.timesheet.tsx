@@ -1,32 +1,15 @@
 import {
+  addDaysToDateOnly,
   formatDurationSec,
   groupTimeEntriesByDay,
-  parseDateOnly,
+  startOfWeekSunday,
   sumDurations,
-  toDateOnly,
+  todayDateOnly,
 } from "@canvas/shared";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
-
-function todayDateOnly(): string {
-  const now = new Date();
-  return toDateOnly(now.getFullYear(), now.getMonth(), now.getDate());
-}
-
-function addDays(dateOnly: string, delta: number): string {
-  const { year, monthIndex, day } = parseDateOnly(dateOnly);
-  const shifted = new Date(year, monthIndex, day + delta);
-  return toDateOnly(shifted.getFullYear(), shifted.getMonth(), shifted.getDate());
-}
-
-/** Sunday of the week containing `dateOnly` — matches Calendar's (M3.1) Sunday-start convention. */
-function startOfWeek(dateOnly: string): string {
-  const { year, monthIndex, day } = parseDateOnly(dateOnly);
-  const weekday = new Date(year, monthIndex, day).getDay();
-  return addDays(dateOnly, -weekday);
-}
 
 export const timesheetRoute = createRoute({
   getParentRoute: () => workspaceShellRoute,
@@ -36,8 +19,8 @@ export const timesheetRoute = createRoute({
 
 function TimesheetPage() {
   const { workspaceId } = timesheetRoute.useParams();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(todayDateOnly()));
-  const weekEnd = addDays(weekStart, 6);
+  const [weekStart, setWeekStart] = useState(() => startOfWeekSunday(todayDateOnly()));
+  const weekEnd = addDaysToDateOnly(weekStart, 6);
 
   const entries = trpc.timeEntry.timesheet.useQuery({
     workspaceId,
@@ -56,7 +39,7 @@ function TimesheetPage() {
           <button
             type="button"
             data-testid="timesheet-prev-week"
-            onClick={() => setWeekStart((w) => addDays(w, -7))}
+            onClick={() => setWeekStart((w) => addDaysToDateOnly(w, -7))}
             className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
           >
             Prev
@@ -67,7 +50,7 @@ function TimesheetPage() {
           <button
             type="button"
             data-testid="timesheet-next-week"
-            onClick={() => setWeekStart((w) => addDays(w, 7))}
+            onClick={() => setWeekStart((w) => addDaysToDateOnly(w, 7))}
             className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
           >
             Next

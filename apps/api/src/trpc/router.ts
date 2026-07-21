@@ -15,6 +15,7 @@ import { tagRouter } from "./routers/tag";
 import { taskRouter } from "./routers/task";
 import { taskTemplateRouter } from "./routers/task-template";
 import { timeEntryRouter } from "./routers/time-entry";
+import { workloadRouter } from "./routers/workload";
 import { workspaceRouter } from "./routers/workspace";
 import { publicProcedure, router } from "./trpc";
 
@@ -33,6 +34,7 @@ export const appRouter = router({
   tag: tagRouter,
   taskTemplate: taskTemplateRouter,
   timeEntry: timeEntryRouter,
+  workload: workloadRouter,
   customField: customFieldRouter,
   attachment: attachmentRouter,
   imageAsset: imageAssetRouter,
