@@ -24,7 +24,9 @@ test("M2.6 version tree: branch siblings, compare, promote", async ({ page }) =>
   await gen.getByTestId("generation-submit").click();
 
   await expect(gen.getByTestId("generation-version-tree")).toBeVisible({ timeout: 30_000 });
-  const variants = gen.getByTestId("generation-variants").locator("button[data-testid^='image-version-']");
+  const variants = gen
+    .getByTestId("generation-variants")
+    .locator("button[data-testid^='image-version-']");
   await expect(variants).toHaveCount(1, { timeout: 30_000 });
   await expect(gen.getByTestId("generation-job-status")).toHaveAttribute("data-status", "done", {
     timeout: 30_000,

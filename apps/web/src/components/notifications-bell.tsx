@@ -88,8 +88,7 @@ export function NotificationsBell() {
                     n.readAt ? "" : "bg-muted/50"
                   } hover:bg-muted`}
                 >
-                  <span className="font-medium">{n.actorName}</span>{" "}
-                  {VERB_LABEL[n.verb] ?? n.verb}
+                  <span className="font-medium">{n.actorName}</span> {VERB_LABEL[n.verb] ?? n.verb}
                   <div className="text-muted-foreground mt-0.5">
                     {formatRelativeTime(new Date(n.createdAt))}
                   </div>

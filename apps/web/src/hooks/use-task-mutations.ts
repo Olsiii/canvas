@@ -14,7 +14,7 @@ export function useOptimisticTaskUpdate(listId: string) {
       await utils.task.list.cancel({ listId });
       const previous = utils.task.list.getData({ listId });
 
-          utils.task.list.setData({ listId }, (old) =>
+      utils.task.list.setData({ listId }, (old) =>
         old?.map((task) =>
           task.id === input.taskId
             ? {

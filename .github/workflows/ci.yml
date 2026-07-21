@@ -90,20 +90,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      # bitnami's image (not the official minio/minio one docker-compose.yml
-      # uses locally) because GitHub Actions service containers can't
-      # override a container's command/entrypoint — bitnami's image runs
-      # `minio server` by default, official minio/minio does not. Matches
-      # docker-compose.yml's creds/bucket so apps/api/src/env.ts's defaults
-      # need no CI-specific overrides. See PROGRESS.md (M1.9 decisions).
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: canvas
-          MINIO_ROOT_PASSWORD: canvas12345
-          MINIO_DEFAULT_BUCKETS: canvas-dev
-        ports:
-          - 9000:9000
       # M2.1: the API server the Playwright webServer boots now imports the
       # BullMQ queue module at startup too — see the `ci` job's redis
       # service comment above for why.
@@ -123,6 +109,25 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Plain `docker run`, not a `services:` container: GitHub Actions'
+      # services block has no way to override a container's command, and
+      # the official minio/minio image (same one docker-compose.yml uses
+      # locally) needs `server /data` passed explicitly — it doesn't run a
+      # server by default. Bucket creation is handled by the app itself
+      # (storage.ts's ensureBucketExists(), called on both api and worker
+      # startup), so no bucket-provisioning env var is needed here either.
+      # Was previously bitnami/minio:latest specifically because its image
+      # *did* default to running the server — but Bitnami retired free
+      # Docker Hub images in 2025, so that tag stopped resolving and this
+      # job's containers failed to even initialize. See PROGRESS.md.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=canvas \
+            -e MINIO_ROOT_PASSWORD=canvas12345 \
+            minio/minio:latest server /data --console-address ":9001"
 
       - uses: pnpm/action-setup@v4
 

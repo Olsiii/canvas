@@ -25,9 +25,7 @@ export function useRealtime(workspaceId: string | undefined) {
 
     function connect() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(
-        `${protocol}//${window.location.host}/ws?workspaceId=${workspaceId}`,
-      );
+      socket = new WebSocket(`${protocol}//${window.location.host}/ws?workspaceId=${workspaceId}`);
 
       socket.onmessage = (raw) => {
         let json: unknown;

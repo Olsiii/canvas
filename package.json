@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "docker compose up -d && turbo run dev worker",
     "build": "turbo run build",
-    "check": "turbo run typecheck lint format:check",
+    "check": "turbo run typecheck lint && pnpm format:check",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "prettier --write .",

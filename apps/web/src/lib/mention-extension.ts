@@ -1,4 +1,8 @@
-import { MentionList, type MentionCandidate, type MentionListHandle } from "@/components/mention-list";
+import {
+  MentionList,
+  type MentionCandidate,
+  type MentionListHandle,
+} from "@/components/mention-list";
 import Mention from "@tiptap/extension-mention";
 import { ReactRenderer } from "@tiptap/react";
 import type { RefObject } from "react";

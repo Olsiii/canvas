@@ -1,10 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  createSpaceAndList,
-  createWorkspaceAndOpen,
-  inviteAndGetLink,
-  signUp,
-} from "./helpers";
+import { createSpaceAndList, createWorkspaceAndOpen, inviteAndGetLink, signUp } from "./helpers";
 
 test("search finds a task by title across the workspace", async ({ page }) => {
   await signUp(page, "Search Tester");

@@ -30,8 +30,8 @@ export function ActivitySection({ taskId }: { taskId: string }) {
       <ul className="space-y-1">
         {entries.map((entry) => (
           <li key={entry.id} className="text-muted-foreground text-xs">
-            <span className="text-foreground font-medium">{entry.actorName}</span>{" "}
-            {describe(entry)} · {formatRelativeTime(new Date(entry.createdAt))}
+            <span className="text-foreground font-medium">{entry.actorName}</span> {describe(entry)}{" "}
+            · {formatRelativeTime(new Date(entry.createdAt))}
           </li>
         ))}
       </ul>

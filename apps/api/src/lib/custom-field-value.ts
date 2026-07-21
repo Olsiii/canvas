@@ -30,9 +30,7 @@ export function validateCustomFieldValue(
       return typeof value === "string" ? null : "Value must be text";
     case "number":
     case "currency":
-      return typeof value === "number" && Number.isFinite(value)
-        ? null
-        : "Value must be a number";
+      return typeof value === "number" && Number.isFinite(value) ? null : "Value must be a number";
     case "checkbox":
       return typeof value === "boolean" ? null : "Value must be true or false";
     case "date":
@@ -59,7 +57,10 @@ export function validateCustomFieldValue(
 }
 
 /** Dropdown/label field defs need at least one configured option. */
-export function validateCustomFieldOptions(type: CustomFieldType, optionsJson: unknown): string | null {
+export function validateCustomFieldOptions(
+  type: CustomFieldType,
+  optionsJson: unknown,
+): string | null {
   if (type !== "dropdown" && type !== "label") return null;
   return optionsFrom(optionsJson).length > 0
     ? null

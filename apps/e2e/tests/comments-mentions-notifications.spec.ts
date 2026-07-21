@@ -1,10 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  createSpaceAndList,
-  createWorkspaceAndOpen,
-  inviteAndGetLink,
-  signUp,
-} from "./helpers";
+import { createSpaceAndList, createWorkspaceAndOpen, inviteAndGetLink, signUp } from "./helpers";
 
 test("comment, @mention, react, and reply across two users; mentioned user gets a notification", async ({
   page,

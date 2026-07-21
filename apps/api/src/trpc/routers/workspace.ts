@@ -189,7 +189,10 @@ export const workspaceRouter = router({
       const targetRole = await getMembershipRole(input.workspaceId, input.userId);
       if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });
       if (targetRole === "owner") {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "The workspace owner's role can't be changed" });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The workspace owner's role can't be changed",
+        });
       }
 
       await db

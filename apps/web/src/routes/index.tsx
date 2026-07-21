@@ -9,9 +9,7 @@ import { useState } from "react";
 import { rootRoute } from "./__root";
 
 type InvitableRole = Exclude<MembershipRole, "owner">;
-const INVITABLE_ROLES = MEMBERSHIP_ROLES.filter(
-  (r): r is InvitableRole => r !== "owner",
-);
+const INVITABLE_ROLES = MEMBERSHIP_ROLES.filter((r): r is InvitableRole => r !== "owner");
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,

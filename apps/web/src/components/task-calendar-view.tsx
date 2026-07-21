@@ -45,10 +45,7 @@ export function TaskCalendarView({
     return map;
   }, [tasks.data]);
 
-  const undated = useMemo(
-    () => (tasks.data ?? []).filter((t) => !taskDateKey(t)),
-    [tasks.data],
-  );
+  const undated = useMemo(() => (tasks.data ?? []).filter((t) => !taskDateKey(t)), [tasks.data]);
 
   function shiftMonth(delta: number) {
     const next = new Date(year, monthIndex + delta, 1);

@@ -102,9 +102,7 @@ export function TaskTableView({
       }),
       columnHelper.accessor("startDate", {
         header: "Start",
-        cell: (info) => (
-          <DateCell listId={listId} task={info.row.original} field="startDate" />
-        ),
+        cell: (info) => <DateCell listId={listId} task={info.row.original} field="startDate" />,
       }),
       columnHelper.accessor("dueDate", {
         header: "Due",

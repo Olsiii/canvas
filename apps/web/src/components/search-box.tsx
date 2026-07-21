@@ -25,10 +25,7 @@ export function SearchBox({ workspaceId }: { workspaceId: string }) {
     return () => clearTimeout(timer);
   }, [input]);
 
-  const results = trpc.task.search.useQuery(
-    { workspaceId, query },
-    { enabled: query.length > 0 },
-  );
+  const results = trpc.task.search.useQuery({ workspaceId, query }, { enabled: query.length > 0 });
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {

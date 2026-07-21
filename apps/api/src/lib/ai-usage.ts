@@ -24,5 +24,8 @@ const CHARS_PER_TOKEN_ESTIMATE = 4;
 export function estimateChatCostUsd(inputChars: number, outputChars: number): string {
   const inputTokens = inputChars / CHARS_PER_TOKEN_ESTIMATE;
   const outputTokens = outputChars / CHARS_PER_TOKEN_ESTIMATE;
-  return (inputTokens * OPUS_INPUT_USD_PER_TOKEN + outputTokens * OPUS_OUTPUT_USD_PER_TOKEN).toFixed(4);
+  return (
+    inputTokens * OPUS_INPUT_USD_PER_TOKEN +
+    outputTokens * OPUS_OUTPUT_USD_PER_TOKEN
+  ).toFixed(4);
 }

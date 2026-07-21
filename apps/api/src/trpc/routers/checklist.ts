@@ -104,85 +104,79 @@ export const checklistRouter = router({
   }),
 
   items: router({
-    create: protectedProcedure
-      .input(createChecklistItemSchema)
-      .mutation(async ({ ctx, input }) => {
-        const checklist = await requireChecklist(input.checklistId);
-        const workspaceId = await workspaceIdForTask(checklist.taskId);
-        await assertCan(ctx.user, workspaceId, "task:update");
+    create: protectedProcedure.input(createChecklistItemSchema).mutation(async ({ ctx, input }) => {
+      const checklist = await requireChecklist(input.checklistId);
+      const workspaceId = await workspaceIdForTask(checklist.taskId);
+      await assertCan(ctx.user, workspaceId, "task:update");
 
-        const lastKey = await lastItemOrderKey(checklist.id);
-        const [item] = await db
-          .insert(schema.checklistItems)
-          .values({
-            checklistId: checklist.id,
-            text: input.text,
-            orderKey: nextOrderKey(lastKey),
-          })
-          .returning();
-        if (!item) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const lastKey = await lastItemOrderKey(checklist.id);
+      const [item] = await db
+        .insert(schema.checklistItems)
+        .values({
+          checklistId: checklist.id,
+          text: input.text,
+          orderKey: nextOrderKey(lastKey),
+        })
+        .returning();
+      if (!item) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-        await logActivity(
-          workspaceId,
-          ctx.user.id,
-          "checklist_item",
-          item.id,
-          "checklist_item.created",
-        );
-        return item;
-      }),
+      await logActivity(
+        workspaceId,
+        ctx.user.id,
+        "checklist_item",
+        item.id,
+        "checklist_item.created",
+      );
+      return item;
+    }),
 
-    update: protectedProcedure
-      .input(updateChecklistItemSchema)
-      .mutation(async ({ ctx, input }) => {
-        const item = await requireChecklistItem(input.itemId);
-        const checklist = await requireChecklist(item.checklistId);
-        const workspaceId = await workspaceIdForTask(checklist.taskId);
-        await assertCan(ctx.user, workspaceId, "task:update");
+    update: protectedProcedure.input(updateChecklistItemSchema).mutation(async ({ ctx, input }) => {
+      const item = await requireChecklistItem(input.itemId);
+      const checklist = await requireChecklist(item.checklistId);
+      const workspaceId = await workspaceIdForTask(checklist.taskId);
+      await assertCan(ctx.user, workspaceId, "task:update");
 
-        const [updated] = await db
-          .update(schema.checklistItems)
-          .set({
-            ...(input.text !== undefined ? { text: input.text } : {}),
-            ...(input.done !== undefined ? { done: input.done } : {}),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.checklistItems.id, item.id))
-          .returning();
-        if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [updated] = await db
+        .update(schema.checklistItems)
+        .set({
+          ...(input.text !== undefined ? { text: input.text } : {}),
+          ...(input.done !== undefined ? { done: input.done } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.checklistItems.id, item.id))
+        .returning();
+      if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-        await logActivity(
-          workspaceId,
-          ctx.user.id,
-          "checklist_item",
-          item.id,
-          input.done !== undefined
-            ? input.done
-              ? "checklist_item.checked"
-              : "checklist_item.unchecked"
-            : "checklist_item.updated",
-        );
-        return updated;
-      }),
+      await logActivity(
+        workspaceId,
+        ctx.user.id,
+        "checklist_item",
+        item.id,
+        input.done !== undefined
+          ? input.done
+            ? "checklist_item.checked"
+            : "checklist_item.unchecked"
+          : "checklist_item.updated",
+      );
+      return updated;
+    }),
 
-    delete: protectedProcedure
-      .input(deleteChecklistItemSchema)
-      .mutation(async ({ ctx, input }) => {
-        const item = await requireChecklistItem(input.itemId);
-        const checklist = await requireChecklist(item.checklistId);
-        const workspaceId = await workspaceIdForTask(checklist.taskId);
-        await assertCan(ctx.user, workspaceId, "task:update");
+    delete: protectedProcedure.input(deleteChecklistItemSchema).mutation(async ({ ctx, input }) => {
+      const item = await requireChecklistItem(input.itemId);
+      const checklist = await requireChecklist(item.checklistId);
+      const workspaceId = await workspaceIdForTask(checklist.taskId);
+      await assertCan(ctx.user, workspaceId, "task:update");
 
-        await db.delete(schema.checklistItems).where(eq(schema.checklistItems.id, item.id));
+      await db.delete(schema.checklistItems).where(eq(schema.checklistItems.id, item.id));
 
-        await logActivity(
-          workspaceId,
-          ctx.user.id,
-          "checklist_item",
-          item.id,
-          "checklist_item.deleted",
-        );
-        return { id: item.id };
-      }),
+      await logActivity(
+        workspaceId,
+        ctx.user.id,
+        "checklist_item",
+        item.id,
+        "checklist_item.deleted",
+      );
+      return { id: item.id };
+    }),
   }),
 });

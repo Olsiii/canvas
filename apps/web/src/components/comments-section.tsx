@@ -23,13 +23,7 @@ function isEmptyDoc(json: unknown): boolean {
   return !doc?.content?.some((node) => (node.content?.length ?? 0) > 0);
 }
 
-export function CommentsSection({
-  taskId,
-  workspaceId,
-}: {
-  taskId: string;
-  workspaceId: string;
-}) {
+export function CommentsSection({ taskId, workspaceId }: { taskId: string; workspaceId: string }) {
   const utils = trpc.useUtils();
   const { user } = useSession();
   const comments = trpc.comment.list.useQuery({ taskId });

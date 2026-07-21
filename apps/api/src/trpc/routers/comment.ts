@@ -24,7 +24,8 @@ async function requireComment(commentId: string) {
 }
 
 async function getReactions(commentIds: string[], currentUserId: string) {
-  if (commentIds.length === 0) return new Map<string, { emoji: string; count: number; reactedByMe: boolean }[]>();
+  if (commentIds.length === 0)
+    return new Map<string, { emoji: string; count: number; reactedByMe: boolean }[]>();
 
   const rows = await db
     .select({

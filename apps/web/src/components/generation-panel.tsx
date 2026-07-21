@@ -154,10 +154,7 @@ export function GenerationPanel({
 
   const ready = versions.length > 0;
   const busy =
-    jobStatus === "queued" ||
-    jobStatus === "generating" ||
-    generate.isPending ||
-    edit.isPending;
+    jobStatus === "queued" || jobStatus === "generating" || generate.isPending || edit.isPending;
   const waiting =
     !!assetId && (busy || (targetVersionCount > 0 && versions.length < targetVersionCount));
   const isCurrentSelected =
@@ -337,15 +334,13 @@ export function GenerationPanel({
             </Button>
           </div>
 
-          {selectedVersionId &&
-            compareVersionId &&
-            compareVersionId !== selectedVersionId && (
-              <VersionCompare
-                leftVersionId={selectedVersionId}
-                rightVersionId={compareVersionId}
-                onClear={() => setCompareVersionId(null)}
-              />
-            )}
+          {selectedVersionId && compareVersionId && compareVersionId !== selectedVersionId && (
+            <VersionCompare
+              leftVersionId={selectedVersionId}
+              rightVersionId={compareVersionId}
+              onClear={() => setCompareVersionId(null)}
+            />
+          )}
 
           <form onSubmit={handleEdit} className="space-y-2 border-t border-border pt-3">
             <label htmlFor="gen-edit" className="mb-1 block text-xs font-medium">
@@ -389,7 +384,10 @@ export function GenerationPanel({
           )}
 
           {asset.data?.altText && (
-            <div data-testid="generation-understanding" className="border-border space-y-1 border-t pt-3">
+            <div
+              data-testid="generation-understanding"
+              className="border-border space-y-1 border-t pt-3"
+            >
               <p className="text-xs font-medium">Auto description</p>
               <p data-testid="generation-alt-text" className="text-muted-foreground text-sm">
                 {asset.data.altText}
