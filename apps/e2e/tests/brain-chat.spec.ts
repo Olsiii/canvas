@@ -46,8 +46,16 @@ test("Brain chat: send from task panel, stream reply, persist across reload; glo
   await expect(page.getByLabel("Task title")).toHaveValue("Design launch banner");
   await page.getByRole("button", { name: "Ask Brain about this task" }).click();
   const reopened = page.getByTestId("brain-chat-panel");
-  await expect(reopened.getByText(prompt, { exact: true }).first()).toBeVisible();
-  await expect(reopened.getByText(`You said: "${prompt}"`, { exact: false })).toBeVisible();
+  // Reopening after a full page reload re-runs getOrCreate (a mutation)
+  // before the messages.list query even starts — two serialized round
+  // trips, same as the streaming-reply checks below, so it needs the same
+  // generous timeout rather than Playwright's 5s default.
+  await expect(reopened.getByText(prompt, { exact: true }).first()).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(reopened.getByText(`You said: "${prompt}"`, { exact: false })).toBeVisible({
+    timeout: 20_000,
+  });
 
   await reopened.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Close", exact: true }).click();

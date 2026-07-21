@@ -34,11 +34,19 @@ test("Brain tools: generate image via chat, show status, then attach to task", a
     timeout: 30_000,
   });
 
-  // Extract asset id from the assistant's JSON-ish reply for the attach step
+  // The tool-completion status line and the assistant's final text reply
+  // (which echoes the assetId as JSON-ish text) arrive as separate
+  // stream/WS events — under worker contention the status line can render
+  // before the final reply does, so poll for the assetId pattern itself
+  // rather than scraping innerText() once right after the status assertion.
+  const assetIdPattern =
+    /"assetId"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/i;
+  await expect
+    .poll(async () => assetIdPattern.test(await brainPanel.innerText()), { timeout: 15_000 })
+    .toBe(true);
+
   const body = await brainPanel.innerText();
-  const assetMatch = body.match(
-    /"assetId"\s*:\s*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/i,
-  );
+  const assetMatch = body.match(assetIdPattern);
   expect(assetMatch?.[1]).toBeTruthy();
   const assetId = assetMatch![1]!;
 

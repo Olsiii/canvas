@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "brain_conversations_task_uniq" ON "brain_conversations" USING btree ("workspace_id","context_id","created_by") WHERE "brain_conversations"."context_type" != 'global';--> statement-breakpoint
+CREATE UNIQUE INDEX "brain_conversations_global_uniq" ON "brain_conversations" USING btree ("workspace_id","created_by") WHERE "brain_conversations"."context_type" = 'global';

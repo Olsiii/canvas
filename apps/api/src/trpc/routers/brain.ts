@@ -48,18 +48,23 @@ export const brainRouter = router({
         }
       }
 
-      const existing = await db.query.brainConversations.findFirst({
-        where: and(
-          eq(schema.brainConversations.workspaceId, input.workspaceId),
-          eq(schema.brainConversations.contextType, input.contextType),
-          input.contextId
-            ? eq(schema.brainConversations.contextId, input.contextId)
-            : isNull(schema.brainConversations.contextId),
-          eq(schema.brainConversations.createdBy, ctx.user.id),
-        ),
-      });
+      const lookup = and(
+        eq(schema.brainConversations.workspaceId, input.workspaceId),
+        eq(schema.brainConversations.contextType, input.contextType),
+        input.contextId
+          ? eq(schema.brainConversations.contextId, input.contextId)
+          : isNull(schema.brainConversations.contextId),
+        eq(schema.brainConversations.createdBy, ctx.user.id),
+      );
+
+      const existing = await db.query.brainConversations.findFirst({ where: lookup });
       if (existing) return existing;
 
+      // Two concurrent calls (e.g. React StrictMode's double-invoked mount
+      // effect) can both reach here with no existing row and both attempt
+      // to insert — the partial unique indexes on brainConversations make
+      // the loser's insert a no-op instead of a duplicate row, and it falls
+      // back to fetching the winner's row instead of erroring.
       const [created] = await db
         .insert(schema.brainConversations)
         .values({
@@ -68,19 +73,24 @@ export const brainRouter = router({
           contextId: input.contextId ?? null,
           createdBy: ctx.user.id,
         })
+        .onConflictDoNothing()
         .returning();
-      if (!created) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      await logActivity(
-        input.workspaceId,
-        ctx.user.id,
-        "brain_conversation",
-        created.id,
-        "brain.conversation_created",
-        { contextType: input.contextType, contextId: input.contextId ?? null },
-      );
+      if (created) {
+        await logActivity(
+          input.workspaceId,
+          ctx.user.id,
+          "brain_conversation",
+          created.id,
+          "brain.conversation_created",
+          { contextType: input.contextType, contextId: input.contextId ?? null },
+        );
+        return created;
+      }
 
-      return created;
+      const winner = await db.query.brainConversations.findFirst({ where: lookup });
+      if (!winner) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return winner;
     }),
 
   messages: router({

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   index,
@@ -8,6 +9,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
@@ -96,25 +98,46 @@ export const aiUsage = pgTable("ai_usage", {
 // global)". M2.2 only ever creates 'task'/'global' conversations (Docs is
 // M4.1, Chat is M4.3 — no UI surface exists yet for those contexts), but the
 // enum matches the full spec now rather than needing a migration later.
-// `contextId` is null for 'global'. No DB unique constraint enforcing
-// "one per (workspace, contextType, contextId, createdBy)" — conversations
-// are scoped per-user (see PROGRESS.md M2.2 decisions), found-or-created by
-// the API layer; a rare race producing two rows is a low-stakes edge case,
-// not worth a partial unique index on a nullable column for this milestone.
-export const brainConversations = pgTable("brain_conversations", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  contextType: brainContextType("context_type").notNull(),
-  contextId: uuid("context_id"),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// `contextId` is null for 'global'. Conversations are scoped per-user (see
+// PROGRESS.md M2.2 decisions), found-or-created by the API layer.
+//
+// **Revised from M2.2's original call.** M2.2 judged a race producing two
+// rows here "rare" and not worth a partial unique index. It isn't rare:
+// React StrictMode double-invokes the mount effect that fires
+// getOrCreateConversation, so two concurrent SELECT-then-INSERT calls
+// reliably both miss the not-yet-committed row and both insert — a
+// duplicate conversation on effectively every first-open. Since
+// findFirst() has no orderBy, a later getOrCreateConversation call can then
+// non-deterministically return the *other*, message-less duplicate,
+// silently orphaning the conversation the user was actually in (found via
+// PROGRESS.md M3.4's CI investigation). These two partial unique indexes
+// are the real backstop; the API layer pairs them with
+// insert(...).onConflictDoNothing().
+export const brainConversations = pgTable(
+  "brain_conversations",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    contextType: brainContextType("context_type").notNull(),
+    contextId: uuid("context_id"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("brain_conversations_task_uniq")
+      .on(table.workspaceId, table.contextId, table.createdBy)
+      .where(sql`${table.contextType} != 'global'`),
+    uniqueIndex("brain_conversations_global_uniq")
+      .on(table.workspaceId, table.createdBy)
+      .where(sql`${table.contextType} = 'global'`),
+  ],
+);
 
 export const brainMessages = pgTable(
   "brain_messages",
