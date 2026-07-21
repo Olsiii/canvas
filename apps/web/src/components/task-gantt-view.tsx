@@ -67,7 +67,21 @@ export function TaskGanttView({
           (row): row is { task: Task; span: NonNullable<ReturnType<typeof taskDateSpan>> } =>
             row.span !== null,
         )
-        .sort((a, b) => (a.span.start < b.span.start ? -1 : a.span.start > b.span.start ? 1 : 0)),
+        .map((row) => ({
+          ...row,
+          // A milestone renders as a single point (diamond), not a bar
+          // spanning start→due, even if both happen to be set — anchor on
+          // due (falling back to start) rather than the full span.
+          barSpan: row.task.isMilestone
+            ? {
+                start: row.task.dueDate ?? row.task.startDate ?? row.span.start,
+                end: row.task.dueDate ?? row.task.startDate ?? row.span.start,
+              }
+            : row.span,
+        }))
+        .sort((a, b) =>
+          a.barSpan.start < b.barSpan.start ? -1 : a.barSpan.start > b.barSpan.start ? 1 : 0,
+        ),
     [allTasks],
   );
   const undated = useMemo(() => allTasks.filter((t) => taskDateSpan(t) === null), [allTasks]);
@@ -75,7 +89,7 @@ export function TaskGanttView({
   const range = useMemo(
     () =>
       buildGanttRange(
-        rows.map((r) => r.span),
+        rows.map((r) => r.barSpan),
         today(),
       ),
     [rows],
@@ -229,8 +243,31 @@ export function TaskGanttView({
                   />
                 )}
 
-                {rows.map(({ task, span }, i) => {
-                  const offset = ganttBarOffset(span, range);
+                {rows.map(({ task, barSpan }, i) => {
+                  const offset = ganttBarOffset(barSpan, range);
+                  if (task.isMilestone) {
+                    const center = offset.left * DAY_WIDTH + DAY_WIDTH / 2;
+                    const middle = i * ROW_HEIGHT + ROW_HEIGHT / 2;
+                    return (
+                      <button
+                        key={task.id}
+                        type="button"
+                        data-testid={`gantt-milestone-${task.id}`}
+                        aria-label={task.title}
+                        onClick={() => onOpenTask(task.id)}
+                        style={{
+                          position: "absolute",
+                          left: center - 6,
+                          top: middle - 6,
+                          width: 12,
+                          height: 12,
+                          transform: "rotate(45deg)",
+                        }}
+                        className="bg-foreground hover:opacity-80"
+                        title={task.title}
+                      />
+                    );
+                  }
                   return (
                     <button
                       key={task.id}
@@ -273,8 +310,8 @@ export function TaskGanttView({
                   {visibleDeps.map((dep: Dependency) => {
                     const fromRow = rows[rowIndexByTaskId.get(dep.dependsOnTaskId)!]!;
                     const toRow = rows[rowIndexByTaskId.get(dep.taskId)!]!;
-                    const fromOffset = ganttBarOffset(fromRow.span, range);
-                    const toOffset = ganttBarOffset(toRow.span, range);
+                    const fromOffset = ganttBarOffset(fromRow.barSpan, range);
+                    const toOffset = ganttBarOffset(toRow.barSpan, range);
                     const x1 = (fromOffset.left + fromOffset.width) * DAY_WIDTH;
                     const y1 =
                       rowIndexByTaskId.get(dep.dependsOnTaskId)! * ROW_HEIGHT + ROW_HEIGHT / 2;
@@ -307,13 +344,18 @@ export function TaskGanttView({
         <div data-testid="gantt-dependency-list" className="space-y-1">
           <p className="text-xs font-medium">Dependencies</p>
           {visibleDeps.map((dep: Dependency) => {
-            const from = allTasks.find((t) => t.id === dep.taskId);
-            const on = allTasks.find((t) => t.id === dep.dependsOnTaskId);
+            // dep.taskId depends on dep.dependsOnTaskId — read left-to-right
+            // as "<task> depends on <dependency> (<kind>)", matching the
+            // task detail panel's "Blocked by" wording, not the reversed
+            // "<task> <kind> <dependency>" this milestone's predecessor spec
+            // shipped with (see PROGRESS.md M3.4 decisions).
+            const task = allTasks.find((t) => t.id === dep.taskId);
+            const dependsOn = allTasks.find((t) => t.id === dep.dependsOnTaskId);
             return (
               <div key={dep.id} className="flex items-center gap-2 text-xs">
                 <span>
-                  {from?.title} <span className="text-muted-foreground">{dep.kind}</span>{" "}
-                  {on?.title}
+                  {task?.title} <span className="text-muted-foreground">depends on</span>{" "}
+                  {dependsOn?.title} <span className="text-muted-foreground">({dep.kind})</span>
                 </span>
                 <button
                   type="button"

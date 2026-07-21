@@ -18,7 +18,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
-import { validateTaskDependency } from "../../lib/dependency";
+import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
 import { publish } from "../../lib/realtime";
@@ -116,6 +116,55 @@ async function getSubtasks(taskId: string) {
     .orderBy(asc(schema.tasks.orderKey));
 }
 
+async function getListDependencyEdges(listId: string) {
+  return db
+    .select({
+      id: schema.taskDependencies.id,
+      taskId: schema.taskDependencies.taskId,
+      dependsOnTaskId: schema.taskDependencies.dependsOnTaskId,
+      kind: schema.taskDependencies.kind,
+    })
+    .from(schema.taskDependencies)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.taskDependencies.taskId))
+    .where(and(eq(schema.tasks.listId, listId), isNull(schema.tasks.deletedAt)));
+}
+
+// Task-detail-panel view of a task's dependencies (M3.4): "blocked by" (this
+// task depends on others) and "blocking" (others depend on this task) — the
+// same edges as getListDependencyEdges, just split by direction and joined
+// for display instead of cycle-check math.
+async function getTaskDependencies(taskId: string) {
+  const dependencyTask = {
+    id: schema.tasks.id,
+    title: schema.tasks.title,
+    statusId: schema.tasks.statusId,
+  };
+
+  const blockedBy = await db
+    .select({
+      id: schema.taskDependencies.id,
+      kind: schema.taskDependencies.kind,
+      task: dependencyTask,
+    })
+    .from(schema.taskDependencies)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.taskDependencies.dependsOnTaskId))
+    .where(and(eq(schema.taskDependencies.taskId, taskId), isNull(schema.tasks.deletedAt)));
+
+  const blocking = await db
+    .select({
+      id: schema.taskDependencies.id,
+      kind: schema.taskDependencies.kind,
+      task: dependencyTask,
+    })
+    .from(schema.taskDependencies)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.taskDependencies.taskId))
+    .where(
+      and(eq(schema.taskDependencies.dependsOnTaskId, taskId), isNull(schema.tasks.deletedAt)),
+    );
+
+  return { blockedBy, blocking };
+}
+
 export const taskRouter = router({
   list: protectedProcedure.input(listTasksSchema).query(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
@@ -144,7 +193,8 @@ export const taskRouter = router({
     const assignees = await getAssignees(task.id);
     const tags = await getTags(task.id);
     const subtasks = task.parentTaskId ? [] : await getSubtasks(task.id);
-    return { ...task, assignees, tags, subtasks };
+    const dependencies = await getTaskDependencies(task.id);
+    return { ...task, assignees, tags, subtasks, dependencies };
   }),
 
   // Workspace-wide (not scoped to one list, unlike `list` above) — the
@@ -247,6 +297,7 @@ export const taskRouter = router({
           priority: input.priority,
           startDate: input.startDate,
           dueDate: input.dueDate,
+          isMilestone: input.isMilestone,
         }),
         updatedAt: new Date(),
       })
@@ -433,16 +484,7 @@ export const taskRouter = router({
       const workspaceId = await workspaceIdForList(input.listId);
       await assertCan(ctx.user, workspaceId, "task:view");
 
-      return db
-        .select({
-          id: schema.taskDependencies.id,
-          taskId: schema.taskDependencies.taskId,
-          dependsOnTaskId: schema.taskDependencies.dependsOnTaskId,
-          kind: schema.taskDependencies.kind,
-        })
-        .from(schema.taskDependencies)
-        .innerJoin(schema.tasks, eq(schema.tasks.id, schema.taskDependencies.taskId))
-        .where(and(eq(schema.tasks.listId, input.listId), isNull(schema.tasks.deletedAt)));
+      return getListDependencyEdges(input.listId);
     }),
 
     add: protectedProcedure.input(addTaskDependencySchema).mutation(async ({ ctx, input }) => {
@@ -453,6 +495,14 @@ export const taskRouter = router({
 
       const error = validateTaskDependency(task, dependsOnTask);
       if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error });
+
+      const existingEdges = await getListDependencyEdges(task.listId);
+      if (wouldCreateCycle(existingEdges, { taskId: task.id, dependsOnTaskId: dependsOnTask.id })) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That would create a dependency cycle",
+        });
+      }
 
       const [dependency] = await db
         .insert(schema.taskDependencies)

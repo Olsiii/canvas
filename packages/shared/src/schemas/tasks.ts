@@ -50,6 +50,8 @@ export const updateTaskSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).nullable().optional(),
   startDate: z.string().date().nullable().optional(),
   dueDate: z.string().date().nullable().optional(),
+  // M3.4: marks the task as a zero-duration Gantt marker rather than a bar.
+  isMilestone: z.boolean().optional(),
 });
 
 // Spreadsheet table bulk edit (M3.2): apply the same field patch to many

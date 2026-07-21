@@ -1,5 +1,5 @@
 import type { AppRouter } from "@canvas/api";
-import { TASK_PRIORITIES } from "@canvas/shared";
+import { TASK_DEPENDENCY_KINDS, TASK_PRIORITIES, type TaskDependencyKind } from "@canvas/shared";
 import { ActivitySection } from "@/components/activity-section";
 import { AttachmentsSection } from "@/components/attachments-section";
 import { BrainChatPanel } from "@/components/brain-chat-panel";
@@ -160,6 +160,16 @@ export function TaskDetailPanel({
                   className="h-8 text-sm"
                 />
               </Field>
+
+              <Field label="Milestone">
+                <input
+                  type="checkbox"
+                  data-testid="task-is-milestone"
+                  checked={task.data.isMilestone}
+                  onChange={(e) => update.mutate({ taskId, isMilestone: e.target.checked })}
+                  className="h-4 w-4"
+                />
+              </Field>
             </div>
 
             <Field label="Assignees">
@@ -218,6 +228,14 @@ export function TaskDetailPanel({
                 onOpenTask={onOpenTask}
               />
             )}
+
+            <DependenciesSection
+              taskId={taskId}
+              listId={task.data.listId}
+              dependencies={task.data.dependencies}
+              statuses={statuses.data ?? []}
+              onOpenTask={onOpenTask}
+            />
 
             <ChecklistsSection taskId={taskId} />
 
@@ -371,6 +389,161 @@ function SubtasksSection({
             className="h-7 text-xs"
           />
         </form>
+      </div>
+    </Section>
+  );
+}
+
+type TaskDependencies = RouterOutputs["task"]["get"]["dependencies"];
+
+/**
+ * M3.4: the full-management counterpart to the Gantt view's inline form
+ * (M3.3) — "Blocked by" (this task depends on others) and "Blocking"
+ * (others depend on this task), each removable, plus a form to add a new
+ * "blocked by" edge from any other task in the same list. Cycle/self/
+ * cross-list rejections come back from the server (validateTaskDependency /
+ * wouldCreateCycle in apps/api/src/lib/dependency.ts) and surface inline.
+ */
+function DependenciesSection({
+  taskId,
+  listId,
+  dependencies,
+  statuses,
+  onOpenTask,
+}: {
+  taskId: string;
+  listId: string;
+  dependencies: TaskDependencies;
+  statuses: Status[];
+  onOpenTask?: (taskId: string) => void;
+}) {
+  const utils = trpc.useUtils();
+  const invalidate = () => utils.task.get.invalidate({ taskId });
+  const tasks = trpc.task.list.useQuery({ listId });
+
+  const [dependsOnTaskId, setDependsOnTaskId] = useState("");
+  const [kind, setKind] = useState<TaskDependencyKind>("blocks");
+  const [error, setError] = useState<string | null>(null);
+
+  const add = trpc.task.dependencies.add.useMutation({
+    onSuccess: () => {
+      invalidate();
+      setDependsOnTaskId("");
+      setError(null);
+    },
+    onError: (err) => setError(err.message),
+  });
+  const remove = trpc.task.dependencies.remove.useMutation({ onSuccess: invalidate });
+
+  const doneStatusIds = new Set(
+    statuses.filter((s) => s.kind === "done" || s.kind === "closed").map((s) => s.id),
+  );
+
+  const linkedIds = new Set([
+    taskId,
+    ...dependencies.blockedBy.map((d) => d.task.id),
+    ...dependencies.blocking.map((d) => d.task.id),
+  ]);
+  const candidates = (tasks.data ?? []).filter((t) => !linkedIds.has(t.id));
+
+  function renderTask(dep: TaskDependencies["blockedBy"][number]) {
+    const notDone = !doneStatusIds.has(dep.task.statusId);
+    return (
+      <div
+        key={dep.id}
+        className="group border-border flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
+      >
+        {onOpenTask ? (
+          <button
+            type="button"
+            onClick={() => onOpenTask(dep.task.id)}
+            className="flex-1 truncate text-left hover:underline"
+          >
+            {dep.task.title}
+          </button>
+        ) : (
+          <span className="flex-1 truncate">{dep.task.title}</span>
+        )}
+        <span className="text-muted-foreground shrink-0 text-xs">{dep.kind}</span>
+        {notDone && (
+          <span className="text-destructive shrink-0 text-xs" title="Not done yet">
+            ●
+          </span>
+        )}
+        <button
+          type="button"
+          aria-label={`Remove dependency on ${dep.task.title}`}
+          onClick={() => remove.mutate({ dependencyId: dep.id })}
+          className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <Section label="Dependencies">
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <p className="text-muted-foreground text-xs">Blocked by</p>
+          {dependencies.blockedBy.length === 0 ? (
+            <p className="text-muted-foreground text-xs">Nothing yet.</p>
+          ) : (
+            dependencies.blockedBy.map(renderTask)
+          )}
+        </div>
+
+        {dependencies.blocking.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-xs">Blocking</p>
+            {dependencies.blocking.map(renderTask)}
+          </div>
+        )}
+
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setError(null);
+            if (!dependsOnTaskId) return;
+            add.mutate({ taskId, dependsOnTaskId, kind });
+          }}
+        >
+          <select
+            value={dependsOnTaskId}
+            aria-label="Depends on"
+            onChange={(e) => setDependsOnTaskId(e.target.value)}
+            className="border-border bg-background h-7 rounded border text-xs"
+          >
+            <option value="">+ Add dependency…</option>
+            {candidates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+          <select
+            value={kind}
+            aria-label="Dependency kind"
+            onChange={(e) => setKind(e.target.value as TaskDependencyKind)}
+            className="border-border bg-background h-7 rounded border text-xs"
+          >
+            {TASK_DEPENDENCY_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={!dependsOnTaskId || add.isPending}
+            className="bg-primary text-primary-foreground h-7 rounded px-2 text-xs disabled:opacity-50"
+          >
+            Add dependency
+          </button>
+        </form>
+        {error && <p className="text-destructive text-xs">{error}</p>}
       </div>
     </Section>
   );

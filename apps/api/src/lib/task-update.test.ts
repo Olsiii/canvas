@@ -27,6 +27,11 @@ describe("buildTaskUpdateFields", () => {
     expect(buildTaskUpdateFields({})).toEqual({});
   });
 
+  it("applies isMilestone independently of other fields", () => {
+    expect(buildTaskUpdateFields({ isMilestone: true })).toEqual({ isMilestone: true });
+    expect(buildTaskUpdateFields({ isMilestone: false })).toEqual({ isMilestone: false });
+  });
+
   it("distinguishes null (clear the field) from undefined (leave it alone)", () => {
     expect(buildTaskUpdateFields({ priority: null, dueDate: undefined })).toEqual({
       priority: null,

@@ -34,7 +34,9 @@ test("M3.3 gantt: dated tasks render bars, dependency draws an arrow", async ({ 
   await page.getByRole("button", { name: "Gantt", exact: true }).click();
   const gantt = page.getByTestId("task-gantt-view");
   await expect(gantt).toBeVisible();
-  await expect(gantt.locator('[data-testid^="gantt-row-label-"]', { hasText: "Design" })).toBeVisible();
+  await expect(
+    gantt.locator('[data-testid^="gantt-row-label-"]', { hasText: "Design" }),
+  ).toBeVisible();
 
   // Both bars render, positioned in the timeline grid.
   const designBar = gantt.locator('[data-testid^="gantt-bar-"]', { hasText: "Design" });
@@ -49,14 +51,14 @@ test("M3.3 gantt: dated tasks render bars, dependency draws an arrow", async ({ 
   await page.getByTestId("gantt-dep-add").click();
 
   await expect(gantt.getByTestId("gantt-dependency-list")).toBeVisible();
-  await expect(gantt.getByText("Build blocks Design")).toBeVisible();
+  await expect(gantt.getByText("Build depends on Design (blocks)")).toBeVisible();
   await expect(gantt.locator('[data-testid^="gantt-arrow-"]')).toHaveCount(1);
 
   // Reload and confirm the dependency persisted server-side, not just optimistic UI.
   await page.reload();
   await page.getByRole("button", { name: "Gantt", exact: true }).click();
   await expect(page.getByTestId("gantt-dependency-list")).toBeVisible();
-  await expect(page.getByText("Build blocks Design")).toBeVisible();
+  await expect(page.getByText("Build depends on Design (blocks)")).toBeVisible();
 
   // Remove it and confirm the arrow/list entry clear.
   const removeButton = page.locator('[data-testid^="gantt-dep-remove-"]');

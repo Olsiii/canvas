@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   customType,
   date,
   index,
@@ -74,6 +75,10 @@ export const tasks = pgTable(
     priority: taskPriority("priority"),
     startDate: date("start_date"),
     dueDate: date("due_date"),
+    // M3.4: not in DATA_MODEL.md's tasks row (no dedicated `milestones`
+    // table exists there either) — a milestone is modeled as a flag on an
+    // otherwise-ordinary task rather than a new entity. See PROGRESS.md.
+    isMilestone: boolean("is_milestone").notNull().default(false),
     orderKey: text("order_key").notNull(),
     createdBy: uuid("created_by")
       .notNull()
