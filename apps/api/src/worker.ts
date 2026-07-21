@@ -1,6 +1,6 @@
 import { db, schema } from "@canvas/db";
 import { Worker } from "bullmq";
-import { asc, eq } from "drizzle-orm";
+import { asc, and, eq, isNull } from "drizzle-orm";
 import { getChatClient, type ProviderMessage, type ToolCall } from "./brain";
 import { executeTool } from "./brain/execute-tool";
 import { BRAIN_TOOLS } from "./brain/tools";
@@ -125,6 +125,25 @@ async function buildTaskSystemPrompt(taskId: string): Promise<string> {
   });
 }
 
+async function buildDocSystemPrompt(docId: string): Promise<string> {
+  const doc = await db.query.docs.findFirst({
+    where: and(eq(schema.docs.id, docId), isNull(schema.docs.deletedAt)),
+  });
+  if (!doc) return buildSystemPrompt({ type: "global" });
+
+  const linkedTasks = await db
+    .select({ id: schema.tasks.id, title: schema.tasks.title })
+    .from(schema.docTaskLinks)
+    .innerJoin(schema.tasks, eq(schema.tasks.id, schema.docTaskLinks.taskId))
+    .where(and(eq(schema.docTaskLinks.docId, docId), isNull(schema.tasks.deletedAt)));
+
+  return buildSystemPrompt({
+    type: "doc",
+    title: doc.title,
+    linkedTasks,
+  });
+}
+
 const brainWorker = new Worker<BrainJobData>(
   BRAIN_QUEUE_NAME,
   async (job) => {
@@ -138,7 +157,9 @@ const brainWorker = new Worker<BrainJobData>(
     const systemPrompt =
       conversation.contextType === "task" && conversation.contextId
         ? await buildTaskSystemPrompt(conversation.contextId)
-        : buildSystemPrompt({ type: "global" });
+        : conversation.contextType === "doc" && conversation.contextId
+          ? await buildDocSystemPrompt(conversation.contextId)
+          : buildSystemPrompt({ type: "global" });
 
     const chatClient = getChatClient();
     let lastAssistantMessageId: string | null = null;

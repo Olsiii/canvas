@@ -118,4 +118,12 @@ describe("can", () => {
     expect(can(user, "taskTemplate:delete", { type: "workspace", role: "member" })).toBe(false);
     expect(can(user, "taskTemplate:delete", { type: "workspace", role: "admin" })).toBe(true);
   });
+
+  it("allows guests to view docs, but only members can create/update/delete them", () => {
+    expect(can(user, "doc:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "doc:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "doc:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "doc:update", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "doc:delete", { type: "workspace", role: "guest" })).toBe(false);
+  });
 });

@@ -1,11 +1,10 @@
 import { z } from "zod";
 
-// M2.2 only ever creates 'task' or 'global' conversations — 'doc'/'channel'
-// have no UI trigger yet (Docs is M4.1, Chat is M4.3). contextId is required
-// for 'task' (the task id), omitted for 'global'.
+// contextId required for 'task' and 'doc'; omitted for 'global'.
+// 'channel' waits on M4.3.
 export const getOrCreateBrainConversationSchema = z.object({
   workspaceId: z.string().uuid(),
-  contextType: z.enum(["task", "global"]),
+  contextType: z.enum(["task", "doc", "global"]),
   contextId: z.string().uuid().optional(),
 });
 

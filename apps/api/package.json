@@ -33,10 +33,13 @@
     "fastify": "^5.2.0",
     "fractional-indexing": "^4.0.0",
     "ioredis": "^5.11.1",
+    "lib0": "^0.2.117",
     "nodemailer": "^9.0.3",
     "rrule": "^2.8.1",
     "sharp": "^0.35.3",
     "uuidv7": "^1.2.1",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.31",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -14,9 +14,26 @@ const BASE_PROMPT = [
 export function buildSystemPrompt(
   context:
     | { type: "global" }
-    | { type: "task"; title: string; listName: string; descriptionJson: unknown },
+    | { type: "task"; title: string; listName: string; descriptionJson: unknown }
+    | { type: "doc"; title: string; linkedTasks: { id: string; title: string }[] },
 ): string {
   if (context.type === "global") return BASE_PROMPT;
+
+  if (context.type === "doc") {
+    const linked =
+      context.linkedTasks.length === 0
+        ? "(none)"
+        : context.linkedTasks.map((t) => `- ${t.title} (${t.id})`).join("\n");
+    return [
+      BASE_PROMPT,
+      "",
+      "You are currently focused on this doc:",
+      `Title: ${context.title}`,
+      "Linked tasks (use these ids with attach_to_task when relevant):",
+      linked,
+      "When you generate_image in this doc context, the client inserts the result into the doc automatically.",
+    ].join("\n");
+  }
 
   const description = extractPlainText(context.descriptionJson).trim();
   return [

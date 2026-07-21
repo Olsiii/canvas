@@ -40,7 +40,20 @@ async function resolveTaskId(
   ctx: ToolExecutionContext,
   explicitTaskId: string | undefined,
 ): Promise<string> {
-  const taskId = explicitTaskId ?? (ctx.contextType === "task" ? ctx.contextId : null);
+  let taskId = explicitTaskId ?? (ctx.contextType === "task" ? ctx.contextId : null);
+
+  // Doc Brain: if exactly one task is linked, attach_to_task can omit task_id.
+  if (!taskId && ctx.contextType === "doc" && ctx.contextId) {
+    const links = await db
+      .select({ taskId: schema.docTaskLinks.taskId })
+      .from(schema.docTaskLinks)
+      .where(eq(schema.docTaskLinks.docId, ctx.contextId));
+    if (links.length === 1) taskId = links[0]!.taskId;
+    else if (links.length > 1) {
+      throw new Error("Multiple linked tasks — pass task_id explicitly");
+    }
+  }
+
   if (!taskId) {
     throw new Error("task_id is required when not chatting in a task context");
   }

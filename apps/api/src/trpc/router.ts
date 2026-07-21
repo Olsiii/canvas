@@ -6,6 +6,7 @@ import { brandSettingsRouter } from "./routers/brand-settings";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
 import { customFieldRouter } from "./routers/custom-field";
+import { docRouter } from "./routers/doc";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
 import { notificationRouter } from "./routers/notification";
@@ -40,6 +41,7 @@ export const appRouter = router({
   imageAsset: imageAssetRouter,
   brandSettings: brandSettingsRouter,
   brain: brainRouter,
+  doc: docRouter,
 });
 
 export type AppRouter = typeof appRouter;

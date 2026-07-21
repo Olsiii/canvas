@@ -864,3 +864,54 @@ Built:
 - Full suite (25 specs, up from 24) run twice in a row cold-start with `CI=true`: 25/25 both times.
 
 **Phase 3 (Views & workflow depth) is now complete** — all three ROADMAP accept-criteria verified end-to-end over this run of milestones: dependency chains render on Gantt (M3.3/M3.4), a recurring task spawns correctly (M3.5), and timesheet totals match entries (M3.7).
+
+### M4.1 — Docs with Yjs CRDT collaborative editing (TipTap + y-websocket) — done (2026-07-21)
+
+Built:
+
+- `docs` table per DATA_MODEL.md (`ydoc_state` bytea) + migration `0021_condemned_marauders.sql`.
+- Permissions `doc:view|create|update|delete`; tRPC `doc.list|get|create|update|delete`.
+- Fastify `/ws/docs/:docId` Yjs sync (y-protocols sync + awareness) with debounced persist of `ydoc_state`; client uses `y-websocket` `WebsocketProvider` + TipTap Collaboration + CollaborationCaret.
+- UI: sidebar **Docs** → list + create; `/w/$workspaceId/docs/$docId` collaborative editor.
+- Playwright `docs-collab.spec.ts` (two browser contexts typing into one doc).
+
+### Decisions
+
+- **`doc_task_links` deferred to M4.2** (ROADMAP explicitly pairs linking with Brain-in-docs).
+- **y-websocket v3 is client-only** — server sync implemented with `y-protocols` on Fastify (same wire protocol the client expects).
+- **`created_at`/`updated_at` on docs** beyond the compact DATA_MODEL listing — matches every other workspace entity and powers the list’s “updated” column.
+
+### Decisions (continued)
+
+- **Route is `/ws/docs/:docId`** with room name = doc id and `disableBc: true` — a shared `"docs"` room + query param broke serial Playwright runs.
+- **Module-level ref-counted Yjs provider pool** avoids React Strict Mode close/reopen that wedges Vite’s binary `/ws` proxy.
+
+### Verified
+
+- `pnpm check` green after type-fixing `ws` `RawData` (`Buffer | ArrayBuffer | Buffer[]`).
+- Playwright `docs-collab.spec.ts`: Ada creates a doc, Bob opens the same doc in a second browser context; both reach `Synced`; Ada types "Hello from Ada", Bob sees it; Bob appends " and Bob", Ada sees the combined text — ROADMAP Phase 4 accept criterion "two cursors editing one doc" for the docs half.
+- Full suite not re-run this milestone (Phase 3 was 25/25); docs-collab isolated pass confirmed under `CI=true` with the connection pool.
+
+### M4.2 — Doc ↔ task linking; Brain in docs (incl. inline image generation) — done (2026-07-21)
+
+Built:
+
+- `doc_task_links` table + migration `0022_nasty_sir_ram.sql`; tRPC `doc.links.list|add|remove`.
+- Brain `contextType: "doc"` (shared schema + `getOrCreateConversation` validation + worker `buildDocSystemPrompt` with linked task ids).
+- Doc editor: linked-task search/strip, **Ask Brain**, TipTap Image extension; on `image_status: done` the chat panel inserts `/image-versions/:id` into the collaborative doc.
+- `attach_to_task` from doc Brain resolves a single linked task when `task_id` is omitted.
+- Playwright `docs-brain.spec.ts`.
+
+### Decisions
+
+- **Inline image lives in the Yjs doc** (TipTap Image node), not a separate `attachments.doc_id` column — CRDT is the source of truth for doc body; linking tasks is the relational join.
+- **Docs WS room name is the doc id** (`/ws/docs/:docId`) with `disableBc: true`, plus a module-level ref-counted provider pool — Vite's `/ws` proxy wedges after Strict Mode close/reopen churn; pooling avoids that without hardcoding `:3001`.
+
+### Verified
+
+- `pnpm check` green; `brain-system-prompt` unit test covers doc context.
+- Playwright: `docs-brain.spec.ts` (link task → Ask Brain → generate → inline image) and `docs-collab.spec.ts` both green under `CI=true` workers=1, run twice.
+
+### Review pass (2026-07-21)
+
+M4.1/M4.2 were implemented in a separate session; before committing, re-verified independently: schema matches DATA_MODEL.md's `docs`/`doc_task_links` rows exactly, `doc:*` permissions and WS handshake both gate through `can`/`assertCan`, every mutation writes an `activity` row, AI calls stay in the worker. Dropped two review findings: an unused `y-websocket` dependency in `apps/api` (only `y-protocols`+`yjs` are actually imported server-side) and an unused `Button` import in `doc-task-links.tsx`. Full 27-spec suite run twice cold-start with `CI=true`: 27/27 clean on the second run; the first run's single retry (`recurring-tasks-and-reminders.spec.ts`) is the pre-existing M3.5 scheduler-tick timing flake, unrelated to docs.

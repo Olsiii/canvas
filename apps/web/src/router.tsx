@@ -9,6 +9,8 @@ import { workspaceHomeRoute } from "./routes/workspace.$workspaceId.index";
 import { listRoute } from "./routes/workspace.$workspaceId.list.$listId";
 import { timesheetRoute } from "./routes/workspace.$workspaceId.timesheet";
 import { workloadRoute } from "./routes/workspace.$workspaceId.workload";
+import { docsListRoute } from "./routes/workspace.$workspaceId.docs";
+import { docEditorRoute } from "./routes/workspace.$workspaceId.docs.$docId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -17,7 +19,14 @@ const routeTree = rootRoute.addChildren([
   signupRoute,
   newWorkspaceRoute,
   inviteRoute,
-  workspaceShellRoute.addChildren([workspaceHomeRoute, listRoute, timesheetRoute, workloadRoute]),
+  workspaceShellRoute.addChildren([
+    workspaceHomeRoute,
+    listRoute,
+    timesheetRoute,
+    workloadRoute,
+    docsListRoute,
+    docEditorRoute,
+  ]),
 ]);
 
 export const router = createRouter({ routeTree });

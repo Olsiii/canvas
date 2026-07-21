@@ -48,6 +48,22 @@ export const brainRouter = router({
         }
       }
 
+      if (input.contextType === "doc") {
+        if (!input.contextId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "contextId is required for doc" });
+        }
+        const doc = await db.query.docs.findFirst({
+          where: and(eq(schema.docs.id, input.contextId), isNull(schema.docs.deletedAt)),
+        });
+        if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+        if (doc.workspaceId !== input.workspaceId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Doc does not belong to this workspace",
+          });
+        }
+      }
+
       const lookup = and(
         eq(schema.brainConversations.workspaceId, input.workspaceId),
         eq(schema.brainConversations.contextType, input.contextType),

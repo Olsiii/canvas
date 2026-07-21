@@ -1,0 +1,122 @@
+import { BrainChatPanel } from "@/components/brain-chat-panel";
+import {
+  DocCollaborativeEditor,
+  insertImageVersionIntoEditor,
+} from "@/components/doc-collaborative-editor";
+import { DocTaskLinks } from "@/components/doc-task-links";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { trpc } from "@/lib/trpc";
+import { createRoute, Link } from "@tanstack/react-router";
+import type { Editor } from "@tiptap/react";
+import { useEffect, useRef, useState } from "react";
+import { workspaceShellRoute } from "./workspace.$workspaceId";
+
+export const docEditorRoute = createRoute({
+  getParentRoute: () => workspaceShellRoute,
+  path: "/docs/$docId",
+  component: DocEditorPage,
+});
+
+function DocEditorPage() {
+  const { workspaceId, docId } = docEditorRoute.useParams();
+  const utils = trpc.useUtils();
+  const me = trpc.auth.me.useQuery();
+  const doc = trpc.doc.get.useQuery({ docId });
+  const update = trpc.doc.update.useMutation({
+    onSuccess: () => {
+      void utils.doc.get.invalidate({ docId });
+      void utils.doc.list.invalidate({ workspaceId });
+    },
+  });
+  const [title, setTitle] = useState("");
+  const [brainOpen, setBrainOpen] = useState(false);
+  const editorRef = useRef<Editor | null>(null);
+
+  useEffect(() => {
+    if (doc.data?.title) setTitle(doc.data.title);
+  }, [doc.data?.title]);
+
+  if (doc.isLoading) {
+    return <p className="text-muted-foreground p-6 text-sm">Loading…</p>;
+  }
+
+  if (!doc.data) {
+    return (
+      <div className="space-y-2 p-6">
+        <p className="text-muted-foreground text-sm">Doc not found.</p>
+        <Link to="/w/$workspaceId/docs" params={{ workspaceId }} className="text-sm underline">
+          Back to Docs
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-4 p-6" data-testid="doc-editor-page">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          to="/w/$workspaceId/docs"
+          params={{ workspaceId }}
+          className="text-muted-foreground hover:text-foreground text-xs"
+        >
+          ← Docs
+        </Link>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          data-testid="doc-ask-brain"
+          aria-label="Ask Brain about this doc"
+          onClick={() => setBrainOpen(true)}
+        >
+          Ask Brain
+        </Button>
+      </div>
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const next = title.trim();
+          if (next && next !== doc.data.title) {
+            update.mutate({ docId, title: next });
+          }
+        }}
+      >
+        <Input
+          data-testid="doc-title-input"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="h-9 text-lg font-semibold"
+          aria-label="Doc title"
+        />
+        <Button type="submit" size="sm" variant="outline" disabled={update.isPending}>
+          Save title
+        </Button>
+      </form>
+
+      <DocTaskLinks docId={docId} workspaceId={workspaceId} />
+
+      <DocCollaborativeEditor
+        docId={docId}
+        userName={me.data?.name ?? me.data?.email ?? "Someone"}
+        onEditorReady={(editor) => {
+          editorRef.current = editor;
+        }}
+      />
+
+      {brainOpen && (
+        <BrainChatPanel
+          workspaceId={workspaceId}
+          contextType="doc"
+          contextId={docId}
+          onClose={() => setBrainOpen(false)}
+          onImageReady={(versionId) => {
+            const editor = editorRef.current;
+            if (editor) insertImageVersionIntoEditor(editor, versionId);
+          }}
+        />
+      )}
+    </div>
+  );
+}

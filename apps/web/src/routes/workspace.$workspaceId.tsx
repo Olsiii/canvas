@@ -44,6 +44,15 @@ function WorkspaceShell() {
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             {workspaceId && (
               <Link
+                to="/w/$workspaceId/docs"
+                params={{ workspaceId }}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Docs
+              </Link>
+            )}
+            {workspaceId && (
+              <Link
                 to="/w/$workspaceId/workload"
                 params={{ workspaceId }}
                 className="text-muted-foreground hover:text-foreground text-xs"

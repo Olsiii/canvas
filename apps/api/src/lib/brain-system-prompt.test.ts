@@ -32,4 +32,15 @@ describe("buildSystemPrompt", () => {
     });
     expect(prompt).toContain("Description: (no description)");
   });
+
+  it("includes doc title and linked task ids for a doc conversation", () => {
+    const prompt = buildSystemPrompt({
+      type: "doc",
+      title: "Campaign brief",
+      linkedTasks: [{ id: "019f0000-0000-7000-8000-000000000001", title: "Hero banner" }],
+    });
+    expect(prompt).toContain("Title: Campaign brief");
+    expect(prompt).toContain("Hero banner");
+    expect(prompt).toContain("019f0000-0000-7000-8000-000000000001");
+  });
 });

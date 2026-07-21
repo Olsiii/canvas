@@ -33,11 +33,14 @@ export function BrainChatPanel({
   contextType,
   contextId,
   onClose,
+  onImageReady,
 }: {
   workspaceId: string;
-  contextType: "global" | "task";
+  contextType: "global" | "task" | "doc";
   contextId?: string;
   onClose: () => void;
+  /** Doc Brain: insert a finished generation into the collaborative editor. */
+  onImageReady?: (versionId: string) => void;
 }) {
   const utils = trpc.useUtils();
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -56,7 +59,7 @@ export function BrainChatPanel({
     getOrCreate.mutate({
       workspaceId,
       contextType,
-      contextId: contextType === "task" ? contextId : undefined,
+      contextId: contextType === "global" ? undefined : contextId,
     });
     // Intentionally once per mount / context change — not on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-scoped
@@ -104,8 +107,11 @@ export function BrainChatPanel({
     onImageStatus: (event) => {
       if (event.status === "queued") setStatusLine("Image queued…");
       else if (event.status === "generating") setStatusLine("Generating image…");
-      else if (event.status === "done") setStatusLine("Image ready");
-      else if (event.status === "error") setStatusLine(event.message ?? "Image generation failed");
+      else if (event.status === "done") {
+        setStatusLine("Image ready");
+        if (event.versionId) onImageReady?.(event.versionId);
+      } else if (event.status === "error")
+        setStatusLine(event.message ?? "Image generation failed");
     },
   });
 
@@ -130,7 +136,12 @@ export function BrainChatPanel({
     }
   }
 
-  const title = contextType === "task" ? "Brain — this task" : "Brain";
+  const title =
+    contextType === "task"
+      ? "Brain — this task"
+      : contextType === "doc"
+        ? "Brain — this doc"
+        : "Brain";
 
   const persistedMessages = messages.data ?? [];
   const pendingAlreadyPersisted =
