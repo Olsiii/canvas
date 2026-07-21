@@ -79,6 +79,16 @@ export function TaskDetailPanel({
     if (taskTitle !== undefined) setTitle(taskTitle);
   }, [taskTitle]);
 
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const saveTemplate = trpc.taskTemplate.createFromTask.useMutation({
+    onSuccess: () => {
+      void utils.taskTemplate.list.invalidate({ workspaceId });
+      setSavingTemplate(false);
+      setTemplateName("");
+    },
+  });
+
   return (
     <div data-testid="task-detail-panel" className="fixed inset-0 z-50 flex justify-end">
       <button
@@ -89,6 +99,14 @@ export function TaskDetailPanel({
       />
       <div className="border-border bg-background relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l p-6 shadow-xl">
         <div className="absolute top-4 right-4 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSavingTemplate((s) => !s)}
+            aria-label="Save as template"
+            className="text-muted-foreground hover:text-foreground text-sm"
+          >
+            Save as template
+          </button>
           <button
             type="button"
             onClick={() => setBrainOpen(true)}
@@ -106,6 +124,34 @@ export function TaskDetailPanel({
             ✕ Close
           </button>
         </div>
+
+        {savingTemplate && (
+          <form
+            className="border-border bg-muted/40 mt-14 flex items-center gap-2 rounded-md border p-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (templateName.trim()) {
+                saveTemplate.mutate({ taskId, name: templateName.trim() });
+              }
+            }}
+          >
+            <Input
+              autoFocus
+              value={templateName}
+              placeholder="Template name"
+              aria-label="Template name"
+              onChange={(e) => setTemplateName(e.target.value)}
+              className="h-7 text-xs"
+            />
+            <button
+              type="submit"
+              disabled={!templateName.trim() || saveTemplate.isPending}
+              className="bg-primary text-primary-foreground h-7 shrink-0 rounded px-2 text-xs disabled:opacity-50"
+            >
+              Save
+            </button>
+          </form>
+        )}
 
         {task.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
 

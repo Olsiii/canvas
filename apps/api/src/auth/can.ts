@@ -35,7 +35,10 @@ export type WorkspaceAction =
   | "brain:view"
   | "brain:chat"
   | "brandSettings:view"
-  | "brandSettings:update";
+  | "brandSettings:update"
+  | "taskTemplate:view"
+  | "taskTemplate:create"
+  | "taskTemplate:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -84,6 +87,11 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "brandSettings:view": "guest",
   // Workspace brand is an admin concern (same tier as workspace:manage).
   "brandSettings:update": "admin",
+  "taskTemplate:view": "guest",
+  "taskTemplate:create": "member",
+  // Same reasoning as tag:delete — a template is a shared workspace
+  // resource other members' "new from template" flow depends on.
+  "taskTemplate:delete": "admin",
 };
 
 export interface WorkspaceResource {

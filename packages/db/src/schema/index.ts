@@ -10,3 +10,4 @@ export * from "./custom-fields";
 export * from "./image-brain";
 export * from "./attachments";
 export * from "./scheduling";
+export * from "./task-templates";

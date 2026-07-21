@@ -31,6 +31,16 @@ function ListPage() {
   const [view, setView] = useState<"list" | "board" | "calendar" | "table" | "gantt">("list");
   const [openTaskId, setOpenTaskId] = useState<string | null>(openTask ?? null);
 
+  const utils = trpc.useUtils();
+  const templates = trpc.taskTemplate.list.useQuery({ workspaceId });
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const instantiate = trpc.taskTemplate.instantiate.useMutation({
+    onSuccess: () => {
+      void utils.task.list.invalidate({ listId });
+      setSelectedTemplateId("");
+    },
+  });
+
   // A notification click navigates here via client-side routing, which
   // doesn't remount this component when the user is already on this same
   // list (only the search param changes) — so the initial-state seed above
@@ -65,29 +75,51 @@ function ListPage() {
           </p>
           <h1 className="text-lg font-semibold"># {list.name}</h1>
         </div>
-        <div className="flex gap-1 text-sm">
-          {(
-            [
-              ["list", "List"],
-              ["board", "Board"],
-              ["calendar", "Calendar"],
-              ["table", "Table"],
-              ["gantt", "Gantt"],
-            ] as const
-          ).map(([id, label], i) => (
-            <span key={id} className="contents">
-              {i > 0 && <span className="text-muted-foreground">·</span>}
-              <button
-                type="button"
-                onClick={() => setView(id)}
-                className={
-                  view === id ? "font-medium" : "text-muted-foreground hover:text-foreground"
-                }
-              >
-                {label}
-              </button>
-            </span>
-          ))}
+        <div className="flex items-center gap-3 text-sm">
+          {(templates.data ?? []).length > 0 && (
+            <select
+              value={selectedTemplateId}
+              aria-label="New from template"
+              disabled={instantiate.isPending}
+              onChange={(e) => {
+                const templateId = e.target.value;
+                setSelectedTemplateId(templateId);
+                if (templateId) instantiate.mutate({ templateId, listId });
+              }}
+              className="border-border bg-background h-7 rounded border text-xs"
+            >
+              <option value="">+ From template…</option>
+              {(templates.data ?? []).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="flex gap-1">
+            {(
+              [
+                ["list", "List"],
+                ["board", "Board"],
+                ["calendar", "Calendar"],
+                ["table", "Table"],
+                ["gantt", "Gantt"],
+              ] as const
+            ).map(([id, label], i) => (
+              <span key={id} className="contents">
+                {i > 0 && <span className="text-muted-foreground">·</span>}
+                <button
+                  type="button"
+                  onClick={() => setView(id)}
+                  className={
+                    view === id ? "font-medium" : "text-muted-foreground hover:text-foreground"
+                  }
+                >
+                  {label}
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
       </div>
       {view === "list" ? (

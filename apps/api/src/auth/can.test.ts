@@ -110,4 +110,12 @@ describe("can", () => {
     expect(can(user, "brandSettings:update", { type: "workspace", role: "member" })).toBe(false);
     expect(can(user, "brandSettings:update", { type: "workspace", role: "admin" })).toBe(true);
   });
+
+  it("only allows admins+ to delete task templates, but members can create them", () => {
+    expect(can(user, "taskTemplate:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "taskTemplate:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "taskTemplate:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "taskTemplate:delete", { type: "workspace", role: "member" })).toBe(false);
+    expect(can(user, "taskTemplate:delete", { type: "workspace", role: "admin" })).toBe(true);
+  });
 });

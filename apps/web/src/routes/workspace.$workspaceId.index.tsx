@@ -1,5 +1,6 @@
 import { BrandSettingsPanel } from "@/components/brand-settings-panel";
 import { MembersPanel } from "@/components/members-panel";
+import { TemplatesPanel } from "@/components/templates-panel";
 import { createRoute } from "@tanstack/react-router";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -18,6 +19,7 @@ function WorkspaceHome() {
       </p>
       <BrandSettingsPanel workspaceId={workspaceId} />
       <MembersPanel workspaceId={workspaceId} />
+      <TemplatesPanel workspaceId={workspaceId} />
     </div>
   );
 }

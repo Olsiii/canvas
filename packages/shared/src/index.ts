@@ -30,3 +30,4 @@ export * from "./schemas/brand-settings";
 export * from "./schemas/brain";
 export * from "./schemas/recurrence";
 export * from "./schemas/reminders";
+export * from "./schemas/task-templates";

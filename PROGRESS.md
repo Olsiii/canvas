@@ -765,3 +765,27 @@ Built:
 3. **The e2e spec's own DB lookup was non-deterministic against a reused local dev database.** `db.query.tasks.findFirst({ where: eq(tasks.title, "Weekly standup") })` has no `orderBy` — against CI's always-fresh DB this is harmless (exactly one match), but repeated local runs against the same never-reset Postgres accumulate many same-titled tasks across old runs, so the query could silently grab a stale task from an earlier run and mutate the wrong `recurrence_rules` row. Confirmed by running the identical update logic standalone via `tsx` (worked correctly in isolation) and then diffing `recurrence_rules.next_run_at` before/after the real spec run (unchanged — proving the update landed on a different row than the one actually rendered on screen). Fixed by scoping the lookup through the just-created list (found by name, most-recent) instead of a bare title match.
 
 None of these three were caused by the recurrence/reminder feature logic itself, which worked correctly in isolation the whole time — each was a real, independent gap the new e2e path happened to be the first thing to exercise. Also bumped the reminder-notification assertion's timeout past 30s: `NotificationsBell` polls on a 30s `refetchInterval` (deliberately not WS-pushed, per M1.7), so a shorter wait was racing the poll cadence, not a bug.
+
+### M3.6 — Task templates — done (2026-07-21)
+
+Built:
+
+- `task_templates` table exactly as DATA_MODEL.md's Phase-3+ section specifies it (`id`, `workspace_id` fk, `name`, `payload_json` jsonb) plus `created_at`/`updated_at` per the doc's stated global convention — migration `0018_romantic_magik.sql`.
+- `packages/shared/src/schemas/task-templates.ts`: `taskTemplatePayloadSchema` (title/descriptionJson/priority/tagIds/checklists — `.parse()`'d back at instantiate time, not just trusted `unknown`, since jsonb round-trips are still worth a runtime check) plus the four request schemas.
+- `apps/api/src/trpc/routers/task-template.ts`: `list` (workspace-scoped, `taskTemplate:view`), `createFromTask` (snapshots a task's title/description/priority/tags/checklists into a new template row — the task itself is the only creation path, there's no blank-template form), `delete`, and `instantiate` (creates a new task in a target list from the payload — first list status, tags filtered down to ones that still exist in the workspace since tags are hard-deleted and could have vanished since the template was saved, checklists rebuilt item-by-item).
+- `can.ts` gained `taskTemplate:view/create/delete`, same guest/member/admin tiers as `tag:*` — a template is structurally the same kind of resource (a named, shared, workspace-scoped list) and carries the same blast-radius reasoning for delete.
+- Web: task detail panel gained a "Save as template" toggle (name input, no separate confirm dialog); the list page's toolbar gained a "+ From template…" select (only rendered when the workspace has at least one template) that instantiates directly into the current list; workspace home gained a `TemplatesPanel` (list + delete), alongside the existing Brand Settings / Members panels.
+- Playwright `task-templates.spec.ts`: save a task (with a checklist item + a tag) as a template → browse it from workspace home → instantiate a second task from it in the same list → confirm the new task's priority/checklist/tag all round-tripped → delete the template → confirm it's gone from the picker.
+
+### Decisions
+
+- **`createFromTask` is the only way to create a template — no blank-template authoring form.** ROADMAP's ask is "task templates," and a template only really means something as a captured shape of a real task; a from-scratch template editor would be inventing an authoring surface (fields, live preview) nothing asked for. Revisit if a "build a template without a task" flow is explicitly requested.
+- **The payload snapshots title/descriptionJson/priority/tagIds/checklists — not assignees, custom field values, dates, or subtasks.** Assignees and dates are typically instance-specific (a template used repeatedly usually shouldn't always assign the same person or carry a stale date); custom field values and subtasks would need extra defs/recursion handling for comparatively little payoff at this milestone's scope. Checklists/tags/priority/description are the reusable "shape" of recurring work, which is what a template is for.
+- **Tags absent from the workspace at instantiate time are silently dropped, not errored.** Tags are hard-deleted (M1.8), so a template saved months ago can reference a tag that's since been removed; failing the whole instantiate over one missing tag would be worse than just not attaching it.
+- **No template versioning/editing.** A saved template is immutable except via delete-and-resave; DATA_MODEL.md's `task_templates` row has no revision concept, and nothing in ROADMAP/PRD asks for one.
+
+### Verified
+
+- `pnpm check` and `pnpm test` green across all packages, including a new `can.test.ts` case for the `taskTemplate:*` tiers (19 → matches the `tag:*` case's shape).
+- `pnpm db:generate` reports "No schema changes, nothing to migrate" against the committed migration — no drift.
+- Playwright `task-templates.spec.ts` green; full suite (22 specs, up from 21) run twice in a row cold-start with `CI=true`: 22/22 both times.

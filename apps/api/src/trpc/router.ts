@@ -13,6 +13,7 @@ import { reminderRouter } from "./routers/reminder";
 import { statusRouter } from "./routers/status";
 import { tagRouter } from "./routers/tag";
 import { taskRouter } from "./routers/task";
+import { taskTemplateRouter } from "./routers/task-template";
 import { workspaceRouter } from "./routers/workspace";
 import { publicProcedure, router } from "./trpc";
 
@@ -29,6 +30,7 @@ export const appRouter = router({
   reminder: reminderRouter,
   activity: activityRouter,
   tag: tagRouter,
+  taskTemplate: taskTemplateRouter,
   customField: customFieldRouter,
   attachment: attachmentRouter,
   imageAsset: imageAssetRouter,
