@@ -1,10 +1,9 @@
 import { z } from "zod";
 
-// contextId required for 'task' and 'doc'; omitted for 'global'.
-// 'channel' waits on M4.3.
+// contextId required for 'task', 'doc', and 'channel'; omitted for 'global'.
 export const getOrCreateBrainConversationSchema = z.object({
   workspaceId: z.string().uuid(),
-  contextType: z.enum(["task", "doc", "global"]),
+  contextType: z.enum(["task", "doc", "channel", "global"]),
   contextId: z.string().uuid().optional(),
 });
 

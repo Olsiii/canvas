@@ -2,15 +2,28 @@ import { z } from "zod";
 
 // ARCHITECTURE.md: "server emits { entity: 'task', id, listId, kind:
 // 'updated' }; clients invalidate queries. No payloads over WS in Phase 1."
-export const REALTIME_ENTITIES = ["task", "status"] as const;
+// A discriminated union so each entity carries only the scoping id its
+// invalidation actually needs — M4.3's chat messages scope by channelId,
+// not listId.
 export const REALTIME_KINDS = ["created", "updated", "deleted"] as const;
 
-export const realtimeEventSchema = z.object({
-  entity: z.enum(REALTIME_ENTITIES),
-  id: z.string().uuid(),
-  listId: z.string().uuid(),
-  kind: z.enum(REALTIME_KINDS),
-});
+const kind = z.enum(REALTIME_KINDS);
+
+export const realtimeEventSchema = z.discriminatedUnion("entity", [
+  z.object({ entity: z.literal("task"), id: z.string().uuid(), listId: z.string().uuid(), kind }),
+  z.object({
+    entity: z.literal("status"),
+    id: z.string().uuid(),
+    listId: z.string().uuid(),
+    kind,
+  }),
+  z.object({
+    entity: z.literal("message"),
+    id: z.string().uuid(),
+    channelId: z.string().uuid(),
+    kind,
+  }),
+]);
 
 export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;
 

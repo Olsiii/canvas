@@ -915,3 +915,28 @@ Built:
 ### Review pass (2026-07-21)
 
 M4.1/M4.2 were implemented in a separate session; before committing, re-verified independently: schema matches DATA_MODEL.md's `docs`/`doc_task_links` rows exactly, `doc:*` permissions and WS handshake both gate through `can`/`assertCan`, every mutation writes an `activity` row, AI calls stay in the worker. Dropped two review findings: an unused `y-websocket` dependency in `apps/api` (only `y-protocols`+`yjs` are actually imported server-side) and an unused `Button` import in `doc-task-links.tsx`. Full 27-spec suite run twice cold-start with `CI=true`: 27/27 clean on the second run; the first run's single retry (`recurring-tasks-and-reminders.spec.ts`) is the pre-existing M3.5 scheduler-tick timing flake, unrelated to docs.
+
+### M4.3 — Chat channels + threads; Brain in chat — done (2026-07-21)
+
+Built:
+
+- `channels`/`channel_members`/`messages` tables per DATA_MODEL.md + migration `0023_rich_captain_flint.sql`; tRPC `chat.channel.list|get|create|members.add|remove` and `chat.message.list|create|delete`.
+- `channel:view|create` and `message:create` permissions in `can.ts` — `channel:view` is the workspace-role floor (guest), with a resource-level `channel_members` membership check layered on top for private channels in the router, same split `doc.ts` uses for `doc_task_links`.
+- Threading capped at depth 2 (`validateMessageParent`, mirrors `comment-thread.ts`'s `validateCommentParent`).
+- Realtime: `{entity, id, listId, kind}` became a discriminated union so a `message` entity can carry `channelId` instead — extending the flat schema would have forced every event to carry a meaningless `listId`. Message create/delete publish on the existing per-workspace Redis-bridged channel; `use-realtime.ts` branches on `event.entity`.
+- Brain `contextType: "channel"` (shared schema + `getOrCreateConversation` validation, including the private-channel membership check + worker `buildChannelSystemPrompt`). Channel Brain has no message-history access — only channel name — since summarizing/reading chat history wasn't in scope and keeping it out avoids a much bigger context-window design question.
+- UI: sidebar **Chat** link, channel list + create (with a Private checkbox), channel view reusing the comments-section composer/thread pattern (mention support, reply, own-message delete), **Ask Brain**.
+- Playwright `chat.spec.ts` (create channel → thread a reply → second real user sees it and posts live via WS → Ask Brain in channel context).
+
+### Decisions
+
+- **No reactions on messages** — DATA_MODEL.md's `messages` row has no reactions FK (unlike `comments`), and ROADMAP scopes M4.3 to "channels + threads; Brain in chat" only.
+- **Public channels need no `channel_members` row to view** — membership rows only matter for gating private channels, same "no gate until it matters" shape `doc_task_links` uses. The channel creator is still auto-added as a member (needed for private channels; harmless no-op bookkeeping for public ones).
+- **`realtimeEventSchema` became a discriminated union** — a genuine, minimal restructure (not scope creep) forced by the CLAUDE.md hard rule that WS messages are invalidation-events-only: a `message` entity has no `listId` to invalidate by, so the old flat `{entity, id, listId, kind}` shape couldn't express it without a nonsensical required field.
+
+### Verified
+
+- `pnpm check` green (typecheck/lint/format across all 5 packages); `pnpm db:generate` shows no drift after the migration.
+- Unit tests: `can.test.ts` (channel/message permission tiers), `message-thread.test.ts` (3 cases mirroring `comment-thread.test.ts`), `brain-system-prompt.test.ts` (channel context) — 116 API tests total, all passing.
+- Playwright: caught a real bug before it reached CI — the migration was generated but never applied to the local dev Postgres, so `chat.channel.create` 500'd with `relation "channels" does not exist`. Found via the trace's network tab, fixed with `pnpm db:migrate`, then `chat.spec.ts` passed both in isolation and every full-suite run below.
+- Full 28-spec suite (up from 27) run three times cold-start with `CI=true`, plus `chat.spec.ts` in isolation twice: `chat.spec.ts` itself green every time, no exceptions. `email-digest.spec.ts` (M3.9, untouched by this milestone — no dependency on realtime/WS, pure DB-cursor polling against a fixed `DIGEST_INTERVAL_MS`) failed 2 of the 3 full-suite runs and flaked once in single-spec isolation; this diff touches no scheduler/digest/email code, and the same class of scheduler-tick timing flake hit an unrelated spec (`recurring-tasks-and-reminders.spec.ts`) earlier in M3.9's own verification — read as local resource contention across repeated consecutive cold-starts, not a regression. Left as-is pending CI's own (single, clean-runner) verification rather than chasing it further as in-scope for this milestone.

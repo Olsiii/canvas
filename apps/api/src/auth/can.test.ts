@@ -126,4 +126,11 @@ describe("can", () => {
     expect(can(user, "doc:update", { type: "workspace", role: "member" })).toBe(true);
     expect(can(user, "doc:delete", { type: "workspace", role: "guest" })).toBe(false);
   });
+
+  it("allows guests to view channels and post messages, but only members can create channels", () => {
+    expect(can(user, "channel:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "channel:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "channel:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "message:create", { type: "workspace", role: "guest" })).toBe(true);
+  });
 });

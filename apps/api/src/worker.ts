@@ -144,6 +144,14 @@ async function buildDocSystemPrompt(docId: string): Promise<string> {
   });
 }
 
+async function buildChannelSystemPrompt(channelId: string): Promise<string> {
+  const channel = await db.query.channels.findFirst({
+    where: and(eq(schema.channels.id, channelId), isNull(schema.channels.deletedAt)),
+  });
+  if (!channel) return buildSystemPrompt({ type: "global" });
+  return buildSystemPrompt({ type: "channel", name: channel.name });
+}
+
 const brainWorker = new Worker<BrainJobData>(
   BRAIN_QUEUE_NAME,
   async (job) => {
@@ -159,7 +167,9 @@ const brainWorker = new Worker<BrainJobData>(
         ? await buildTaskSystemPrompt(conversation.contextId)
         : conversation.contextType === "doc" && conversation.contextId
           ? await buildDocSystemPrompt(conversation.contextId)
-          : buildSystemPrompt({ type: "global" });
+          : conversation.contextType === "channel" && conversation.contextId
+            ? await buildChannelSystemPrompt(conversation.contextId)
+            : buildSystemPrompt({ type: "global" });
 
     const chatClient = getChatClient();
     let lastAssistantMessageId: string | null = null;

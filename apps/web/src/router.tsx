@@ -11,6 +11,8 @@ import { timesheetRoute } from "./routes/workspace.$workspaceId.timesheet";
 import { workloadRoute } from "./routes/workspace.$workspaceId.workload";
 import { docsListRoute } from "./routes/workspace.$workspaceId.docs";
 import { docEditorRoute } from "./routes/workspace.$workspaceId.docs.$docId";
+import { chatChannelListRoute } from "./routes/workspace.$workspaceId.chat";
+import { chatChannelRoute } from "./routes/workspace.$workspaceId.chat.$channelId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -26,6 +28,8 @@ const routeTree = rootRoute.addChildren([
     workloadRoute,
     docsListRoute,
     docEditorRoute,
+    chatChannelListRoute,
+    chatChannelRoute,
   ]),
 ]);
 

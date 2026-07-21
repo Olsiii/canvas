@@ -3,6 +3,7 @@ import { attachmentRouter } from "./routers/attachment";
 import { authRouter } from "./routers/auth";
 import { brainRouter } from "./routers/brain";
 import { brandSettingsRouter } from "./routers/brand-settings";
+import { chatRouter } from "./routers/chat";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
 import { customFieldRouter } from "./routers/custom-field";
@@ -42,6 +43,7 @@ export const appRouter = router({
   brandSettings: brandSettingsRouter,
   brain: brainRouter,
   doc: docRouter,
+  chat: chatRouter,
 });
 
 export type AppRouter = typeof appRouter;

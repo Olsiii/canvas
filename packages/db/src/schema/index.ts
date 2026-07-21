@@ -13,3 +13,4 @@ export * from "./scheduling";
 export * from "./task-templates";
 export * from "./time-entries";
 export * from "./docs";
+export * from "./chat";

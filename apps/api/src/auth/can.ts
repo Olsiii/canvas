@@ -42,7 +42,10 @@ export type WorkspaceAction =
   | "doc:view"
   | "doc:create"
   | "doc:update"
-  | "doc:delete";
+  | "doc:delete"
+  | "channel:view"
+  | "channel:create"
+  | "message:create";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -100,6 +103,15 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "doc:create": "member",
   "doc:update": "member",
   "doc:delete": "member",
+  // This is the workspace-role floor only. Private channels add a
+  // resource-level channel_members check on top (see chat.ts's
+  // requireChannelAccess) — the same "role check here, ownership/membership
+  // check in the router" split doc.ts already uses for doc_task_links.
+  "channel:view": "guest",
+  "channel:create": "member",
+  // Same reasoning as comment:create: posting in a channel you can already
+  // see is participation, not a workspace mutation.
+  "message:create": "guest",
 };
 
 export interface WorkspaceResource {

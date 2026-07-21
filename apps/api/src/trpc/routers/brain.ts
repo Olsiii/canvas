@@ -64,6 +64,34 @@ export const brainRouter = router({
         }
       }
 
+      if (input.contextType === "channel") {
+        if (!input.contextId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "contextId is required for channel",
+          });
+        }
+        const channel = await db.query.channels.findFirst({
+          where: and(eq(schema.channels.id, input.contextId), isNull(schema.channels.deletedAt)),
+        });
+        if (!channel) throw new TRPCError({ code: "NOT_FOUND" });
+        if (channel.workspaceId !== input.workspaceId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Channel does not belong to this workspace",
+          });
+        }
+        if (channel.isPrivate) {
+          const membership = await db.query.channelMembers.findFirst({
+            where: and(
+              eq(schema.channelMembers.channelId, channel.id),
+              eq(schema.channelMembers.userId, ctx.user.id),
+            ),
+          });
+          if (!membership) throw new TRPCError({ code: "FORBIDDEN" });
+        }
+      }
+
       const lookup = and(
         eq(schema.brainConversations.workspaceId, input.workspaceId),
         eq(schema.brainConversations.contextType, input.contextType),

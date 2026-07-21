@@ -53,6 +53,15 @@ function WorkspaceShell() {
             )}
             {workspaceId && (
               <Link
+                to="/w/$workspaceId/chat"
+                params={{ workspaceId }}
+                className="text-muted-foreground hover:text-foreground text-xs"
+              >
+                Chat
+              </Link>
+            )}
+            {workspaceId && (
+              <Link
                 to="/w/$workspaceId/workload"
                 params={{ workspaceId }}
                 className="text-muted-foreground hover:text-foreground text-xs"

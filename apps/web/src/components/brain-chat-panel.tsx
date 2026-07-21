@@ -36,7 +36,7 @@ export function BrainChatPanel({
   onImageReady,
 }: {
   workspaceId: string;
-  contextType: "global" | "task" | "doc";
+  contextType: "global" | "task" | "doc" | "channel";
   contextId?: string;
   onClose: () => void;
   /** Doc Brain: insert a finished generation into the collaborative editor. */
@@ -141,7 +141,9 @@ export function BrainChatPanel({
       ? "Brain — this task"
       : contextType === "doc"
         ? "Brain — this doc"
-        : "Brain";
+        : contextType === "channel"
+          ? "Brain — this channel"
+          : "Brain";
 
   const persistedMessages = messages.data ?? [];
   const pendingAlreadyPersisted =

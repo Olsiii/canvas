@@ -15,9 +15,20 @@ export function buildSystemPrompt(
   context:
     | { type: "global" }
     | { type: "task"; title: string; listName: string; descriptionJson: unknown }
-    | { type: "doc"; title: string; linkedTasks: { id: string; title: string }[] },
+    | { type: "doc"; title: string; linkedTasks: { id: string; title: string }[] }
+    | { type: "channel"; name: string },
 ): string {
   if (context.type === "global") return BASE_PROMPT;
+
+  if (context.type === "channel") {
+    return [
+      BASE_PROMPT,
+      "",
+      `You are currently focused on the #${context.name} chat channel.`,
+      "You do not have access to that channel's message history — only what the user tells you in this conversation.",
+      "attach_to_task requires an explicit task_id here, since a channel has no linked tasks.",
+    ].join("\n");
+  }
 
   if (context.type === "doc") {
     const linked =

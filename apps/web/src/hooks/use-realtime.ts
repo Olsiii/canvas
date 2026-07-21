@@ -5,13 +5,13 @@ import { useEffect } from "react";
 const RECONNECT_DELAY_MS = 2000;
 
 /**
- * Live board/list collaboration: the server publishes a bare invalidation
- * event per ARCHITECTURE.md's realtime protocol ({entity, id, listId,
- * kind} — no payload over the wire), and every connected client just
- * refetches whatever query the event touches via TanStack Query. Reconnects
- * on drop with a fixed short delay — without it, a network hiccup would
- * silently and permanently end live updates for the rest of the tab's
- * session, which defeats the point of "live."
+ * Live board/list/chat collaboration: the server publishes a bare
+ * invalidation event per ARCHITECTURE.md's realtime protocol ({entity, id,
+ * ...scoping id, kind} — no payload over the wire), and every connected
+ * client just refetches whatever query the event touches via TanStack
+ * Query. Reconnects on drop with a fixed short delay — without it, a
+ * network hiccup would silently and permanently end live updates for the
+ * rest of the tab's session, which defeats the point of "live."
  */
 export function useRealtime(workspaceId: string | undefined) {
   const utils = trpc.useUtils();
@@ -38,9 +38,13 @@ export function useRealtime(workspaceId: string | undefined) {
         if (!parsed.success) return;
         const event = parsed.data;
 
-        utils.task.list.invalidate({ listId: event.listId });
-        if (event.entity === "task") utils.task.get.invalidate({ taskId: event.id });
-        if (event.entity === "status") utils.status.list.invalidate({ listId: event.listId });
+        if (event.entity === "task" || event.entity === "status") {
+          utils.task.list.invalidate({ listId: event.listId });
+          if (event.entity === "task") utils.task.get.invalidate({ taskId: event.id });
+          if (event.entity === "status") utils.status.list.invalidate({ listId: event.listId });
+        } else if (event.entity === "message") {
+          utils.chat.message.list.invalidate({ channelId: event.channelId });
+        }
       };
 
       socket.onclose = () => {

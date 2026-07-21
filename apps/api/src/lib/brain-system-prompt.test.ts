@@ -43,4 +43,10 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Hero banner");
     expect(prompt).toContain("019f0000-0000-7000-8000-000000000001");
   });
+
+  it("includes the channel name for a channel conversation", () => {
+    const prompt = buildSystemPrompt({ type: "channel", name: "campaigns" });
+    expect(prompt).toContain("#campaigns");
+    expect(prompt).not.toContain("Title:");
+  });
 });
