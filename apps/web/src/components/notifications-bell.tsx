@@ -5,15 +5,22 @@ import { useState } from "react";
 
 const VERB_LABEL: Record<string, string> = {
   "comment.created": "mentioned you in a comment",
+  "reminder.fired": "Reminder",
 };
 
-function commentTaskLink(payload: unknown): { taskId: string; listId: string } | null {
+function taskLink(payload: unknown): { taskId: string; listId: string } | null {
   if (!payload || typeof payload !== "object") return null;
   const p = payload as { taskId?: unknown; listId?: unknown };
   if (typeof p.taskId === "string" && typeof p.listId === "string") {
     return { taskId: p.taskId, listId: p.listId };
   }
   return null;
+}
+
+function reminderNote(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const note = (payload as { note?: unknown }).note;
+  return typeof note === "string" && note ? note : null;
 }
 
 export function NotificationsBell() {
@@ -68,7 +75,11 @@ export function NotificationsBell() {
               <p className="text-muted-foreground p-3 text-xs">No notifications yet.</p>
             )}
             {entries.map((n) => {
-              const link = n.verb === "comment.created" ? commentTaskLink(n.payloadJson) : null;
+              const link =
+                n.verb === "comment.created" || n.verb === "reminder.fired"
+                  ? taskLink(n.payloadJson)
+                  : null;
+              const note = n.verb === "reminder.fired" ? reminderNote(n.payloadJson) : null;
               return (
                 <button
                   key={n.id}
@@ -88,7 +99,15 @@ export function NotificationsBell() {
                     n.readAt ? "" : "bg-muted/50"
                   } hover:bg-muted`}
                 >
-                  <span className="font-medium">{n.actorName}</span> {VERB_LABEL[n.verb] ?? n.verb}
+                  {n.verb === "reminder.fired" ? (
+                    <span className="font-medium">{VERB_LABEL[n.verb]}</span>
+                  ) : (
+                    <>
+                      <span className="font-medium">{n.actorName}</span>{" "}
+                      {VERB_LABEL[n.verb] ?? n.verb}
+                    </>
+                  )}
+                  {note && <div className="mt-0.5">{note}</div>}
                   <div className="text-muted-foreground mt-0.5">
                     {formatRelativeTime(new Date(n.createdAt))}
                   </div>

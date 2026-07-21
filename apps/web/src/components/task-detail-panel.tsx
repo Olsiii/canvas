@@ -1,5 +1,13 @@
 import type { AppRouter } from "@canvas/api";
-import { TASK_DEPENDENCY_KINDS, TASK_PRIORITIES, type TaskDependencyKind } from "@canvas/shared";
+import {
+  presetToRRule,
+  RECURRENCE_PRESET_LABELS,
+  RECURRENCE_PRESETS,
+  TASK_DEPENDENCY_KINDS,
+  TASK_PRIORITIES,
+  type RecurrencePreset,
+  type TaskDependencyKind,
+} from "@canvas/shared";
 import { ActivitySection } from "@/components/activity-section";
 import { AttachmentsSection } from "@/components/attachments-section";
 import { BrainChatPanel } from "@/components/brain-chat-panel";
@@ -27,6 +35,15 @@ const PRIORITY_LABEL: Record<(typeof TASK_PRIORITIES)[number], string> = {
   low: "Low",
 };
 
+// The server stores the resolved RRULE text, not the preset name — this
+// reverses presetToRRule() so the "Repeats" select can show the current
+// selection. Falls back to "" (Never) for any rule that doesn't match one
+// of this milestone's presets exactly (not reachable via this UI, but the
+// column can hold arbitrary RRULE text per DATA_MODEL.md).
+function recurrencePresetFromRule(rrule: string): RecurrencePreset | "" {
+  return RECURRENCE_PRESETS.find((p) => presetToRRule(p) === rrule) ?? "";
+}
+
 export function TaskDetailPanel({
   taskId,
   workspaceId,
@@ -52,6 +69,8 @@ export function TaskDetailPanel({
   const update = trpc.task.update.useMutation({ onSuccess: invalidate });
   const assign = trpc.task.assignees.add.useMutation({ onSuccess: invalidate });
   const unassign = trpc.task.assignees.remove.useMutation({ onSuccess: invalidate });
+  const setRecurrence = trpc.task.recurrence.set.useMutation({ onSuccess: invalidate });
+  const clearRecurrence = trpc.task.recurrence.clear.useMutation({ onSuccess: invalidate });
 
   const [title, setTitle] = useState("");
   const [brainOpen, setBrainOpen] = useState(false);
@@ -170,6 +189,30 @@ export function TaskDetailPanel({
                   className="h-4 w-4"
                 />
               </Field>
+
+              <Field label="Repeats">
+                <select
+                  data-testid="task-recurrence"
+                  value={
+                    task.data.recurrenceRule?.rrule
+                      ? recurrencePresetFromRule(task.data.recurrenceRule.rrule)
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!value) clearRecurrence.mutate({ taskId });
+                    else setRecurrence.mutate({ taskId, preset: value as RecurrencePreset });
+                  }}
+                  className="border-border bg-background h-8 w-full rounded border text-sm"
+                >
+                  <option value="">Never</option>
+                  {RECURRENCE_PRESETS.map((p) => (
+                    <option key={p} value={p}>
+                      {RECURRENCE_PRESET_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
 
             <Field label="Assignees">
@@ -236,6 +279,8 @@ export function TaskDetailPanel({
               statuses={statuses.data ?? []}
               onOpenTask={onOpenTask}
             />
+
+            <RemindersSection taskId={taskId} />
 
             <ChecklistsSection taskId={taskId} />
 
@@ -544,6 +589,92 @@ function DependenciesSection({
           </button>
         </form>
         {error && <p className="text-destructive text-xs">{error}</p>}
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * M3.5. reminder.list returns all of the caller's own undone reminders
+ * (they're personal, not task-scoped server-side — see reminder.ts), so
+ * this filters to the current task client-side; there are never enough of
+ * a single user's reminders for that to matter.
+ */
+function RemindersSection({ taskId }: { taskId: string }) {
+  const utils = trpc.useUtils();
+  const reminders = trpc.reminder.list.useQuery();
+  const invalidate = () => utils.reminder.list.invalidate();
+
+  const [remindAt, setRemindAt] = useState("");
+  const [note, setNote] = useState("");
+  const create = trpc.reminder.create.useMutation({
+    onSuccess: () => {
+      invalidate();
+      setRemindAt("");
+      setNote("");
+    },
+  });
+  const dismiss = trpc.reminder.dismiss.useMutation({ onSuccess: invalidate });
+
+  const taskReminders = (reminders.data ?? []).filter((r) => r.taskId === taskId);
+
+  return (
+    <Section label="Reminders">
+      <div className="space-y-2">
+        {taskReminders.length === 0 && (
+          <p className="text-muted-foreground text-xs">No reminders set.</p>
+        )}
+        {taskReminders.map((r) => (
+          <div
+            key={r.id}
+            className="group border-border flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
+          >
+            <span className="flex-1 truncate">
+              {new Date(r.remindAt).toLocaleString()}
+              {r.note ? ` — ${r.note}` : ""}
+            </span>
+            <button
+              type="button"
+              aria-label="Dismiss reminder"
+              onClick={() => dismiss.mutate({ reminderId: r.id })}
+              className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!remindAt) return;
+            create.mutate({ taskId, remindAt, note: note.trim() || undefined });
+          }}
+        >
+          <Input
+            type="datetime-local"
+            aria-label="Remind me at"
+            data-testid="reminder-remind-at"
+            value={remindAt}
+            onChange={(e) => setRemindAt(e.target.value)}
+            className="h-7 w-auto text-xs"
+          />
+          <Input
+            value={note}
+            placeholder="Note (optional)"
+            aria-label="Reminder note"
+            onChange={(e) => setNote(e.target.value)}
+            className="h-7 text-xs"
+          />
+          <button
+            type="submit"
+            disabled={!remindAt || create.isPending}
+            data-testid="reminder-add"
+            className="bg-primary text-primary-foreground h-7 rounded px-2 text-xs disabled:opacity-50"
+          >
+            Remind me
+          </button>
+        </form>
       </div>
     </Section>
   );

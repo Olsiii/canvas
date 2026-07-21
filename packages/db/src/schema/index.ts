@@ -9,3 +9,4 @@ export * from "./tags";
 export * from "./custom-fields";
 export * from "./image-brain";
 export * from "./attachments";
+export * from "./scheduling";

@@ -4,14 +4,17 @@ import {
   addTaskTagSchema,
   assignTaskSchema,
   bulkUpdateTasksSchema,
+  clearTaskRecurrenceSchema,
   createTaskSchema,
   deleteTaskSchema,
   getTaskSchema,
   listTaskDependenciesSchema,
   listTasksSchema,
+  presetToRRule,
   removeTaskDependencySchema,
   removeTaskTagSchema,
   searchTasksSchema,
+  setTaskRecurrenceSchema,
   unassignTaskSchema,
   updateTaskSchema,
 } from "@canvas/shared";
@@ -21,10 +24,16 @@ import { logActivity } from "../../lib/activity";
 import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { computeNextRunAt } from "../../lib/recurrence";
 import { publish } from "../../lib/realtime";
 import { validateSubtaskParent } from "../../lib/subtask";
 import { buildTaskUpdateFields } from "../../lib/task-update";
-import { requireTask, workspaceIdForList } from "../../lib/task-queries";
+import {
+  firstStatusForList,
+  lastTaskOrderKey,
+  requireTask,
+  workspaceIdForList,
+} from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
 
 async function requireStatusInList(statusId: string, listId: string) {
@@ -33,33 +42,6 @@ async function requireStatusInList(statusId: string, listId: string) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Status does not belong to this list" });
   }
   return status;
-}
-
-async function firstStatusForList(listId: string) {
-  const status = await db.query.statuses.findFirst({
-    where: eq(schema.statuses.listId, listId),
-    orderBy: asc(schema.statuses.orderKey),
-  });
-  if (!status) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "This list has no statuses yet" });
-  }
-  return status;
-}
-
-async function lastTaskOrderKey(listId: string, statusId: string): Promise<string | null> {
-  const [last] = await db
-    .select({ orderKey: schema.tasks.orderKey })
-    .from(schema.tasks)
-    .where(
-      and(
-        eq(schema.tasks.listId, listId),
-        eq(schema.tasks.statusId, statusId),
-        isNull(schema.tasks.deletedAt),
-      ),
-    )
-    .orderBy(desc(schema.tasks.orderKey))
-    .limit(1);
-  return last?.orderKey ?? null;
 }
 
 async function requireWorkspaceMember(workspaceId: string, userId: string) {
@@ -194,7 +176,17 @@ export const taskRouter = router({
     const tags = await getTags(task.id);
     const subtasks = task.parentTaskId ? [] : await getSubtasks(task.id);
     const dependencies = await getTaskDependencies(task.id);
-    return { ...task, assignees, tags, subtasks, dependencies };
+    const recurrenceRule = await db.query.recurrenceRules.findFirst({
+      where: eq(schema.recurrenceRules.taskId, task.id),
+    });
+    return {
+      ...task,
+      assignees,
+      tags,
+      subtasks,
+      dependencies,
+      recurrenceRule: recurrenceRule ?? null,
+    };
   }),
 
   // Workspace-wide (not scoped to one list, unlike `list` above) — the
@@ -263,7 +255,12 @@ export const taskRouter = router({
     if (!task) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.created");
-    publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "created" });
+    await publish(workspaceId, {
+      entity: "task",
+      id: task.id,
+      listId: task.listId,
+      kind: "created",
+    });
     return task;
   }),
 
@@ -306,7 +303,12 @@ export const taskRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.updated");
-    publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+    await publish(workspaceId, {
+      entity: "task",
+      id: task.id,
+      listId: task.listId,
+      kind: "updated",
+    });
     return updated;
   }),
 
@@ -368,7 +370,7 @@ export const taskRouter = router({
           updatedAt,
         })
         .where(eq(schema.tasks.id, row.id));
-      publish(workspaceId, {
+      await publish(workspaceId, {
         entity: "task",
         id: row.id,
         listId: input.listId,
@@ -403,7 +405,12 @@ export const taskRouter = router({
       .where(and(eq(schema.tasks.parentTaskId, task.id), isNull(schema.tasks.deletedAt)));
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.deleted");
-    publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "deleted" });
+    await publish(workspaceId, {
+      entity: "task",
+      id: task.id,
+      listId: task.listId,
+      kind: "deleted",
+    });
     return { id: task.id };
   }),
 
@@ -420,7 +427,12 @@ export const taskRouter = router({
         .onConflictDoNothing();
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.assigned");
-      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
       return getAssignees(task.id);
     }),
 
@@ -439,7 +451,12 @@ export const taskRouter = router({
         );
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.unassigned");
-      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
       return getAssignees(task.id);
     }),
   }),
@@ -457,7 +474,12 @@ export const taskRouter = router({
         .onConflictDoNothing();
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.tagged");
-      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
       return getTags(task.id);
     }),
 
@@ -471,7 +493,12 @@ export const taskRouter = router({
         .where(and(eq(schema.taskTags.taskId, task.id), eq(schema.taskTags.tagId, input.tagId)));
 
       await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.untagged");
-      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
       return getTags(task.id);
     }),
   }),
@@ -517,7 +544,12 @@ export const taskRouter = router({
         dependsOnTaskId: dependsOnTask.id,
         kind: input.kind,
       });
-      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
       return dependency;
     }),
 
@@ -540,8 +572,66 @@ export const taskRouter = router({
         await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.dependency_removed", {
           dependsOnTaskId: dependency.dependsOnTaskId,
         });
-        publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+        await publish(workspaceId, {
+          entity: "task",
+          id: task.id,
+          listId: task.listId,
+          kind: "updated",
+        });
         return { id: dependency.id };
       }),
+  }),
+
+  // Recurring tasks (M3.5). The rule lives on the "template" task; the
+  // scheduler worker (apps/api/src/lib/scheduler.ts) spawns fresh tasks
+  // from it and advances nextRunAt — see PROGRESS.md.
+  recurrence: router({
+    set: protectedProcedure.input(setTaskRecurrenceSchema).mutation(async ({ ctx, input }) => {
+      const task = await requireTask(input.taskId);
+      const workspaceId = await workspaceIdForList(task.listId);
+      await assertCan(ctx.user, workspaceId, "task:update");
+
+      const rrule = presetToRRule(input.preset);
+      const now = new Date();
+      const nextRunAt = computeNextRunAt(rrule, now) ?? now;
+
+      const [rule] = await db
+        .insert(schema.recurrenceRules)
+        .values({ taskId: task.id, rrule, nextRunAt })
+        .onConflictDoUpdate({
+          target: schema.recurrenceRules.taskId,
+          set: { rrule, nextRunAt, updatedAt: now },
+        })
+        .returning();
+      if (!rule) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.recurrence_set", {
+        preset: input.preset,
+      });
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
+      return rule;
+    }),
+
+    clear: protectedProcedure.input(clearTaskRecurrenceSchema).mutation(async ({ ctx, input }) => {
+      const task = await requireTask(input.taskId);
+      const workspaceId = await workspaceIdForList(task.listId);
+      await assertCan(ctx.user, workspaceId, "task:update");
+
+      await db.delete(schema.recurrenceRules).where(eq(schema.recurrenceRules.taskId, task.id));
+
+      await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.recurrence_cleared");
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
+      return { taskId: task.id };
+    }),
   }),
 });

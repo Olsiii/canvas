@@ -21,6 +21,11 @@ const envSchema = z.object({
   // Optional — image adapters stay mocked when unset (same as M2.1 Gemini).
   OPENAI_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  // M3.5: how often the scheduler tick (recurring tasks + reminders) runs.
+  // Overridden to a few seconds in apps/e2e's webServer env so the
+  // recurring-tasks e2e spec doesn't wait a real day/week/month for a
+  // recurrence to become due — see PROGRESS.md.
+  SCHEDULER_TICK_MS: z.coerce.number().default(60_000),
 });
 
 export const env = envSchema.parse(process.env);

@@ -67,7 +67,7 @@ export const statusRouter = router({
     if (!status) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "status", status.id, "status.created");
-    publish(workspaceId, {
+    await publish(workspaceId, {
       entity: "status",
       id: status.id,
       listId: status.listId,
@@ -93,7 +93,7 @@ export const statusRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "status", status.id, "status.updated");
-    publish(workspaceId, {
+    await publish(workspaceId, {
       entity: "status",
       id: status.id,
       listId: status.listId,
@@ -122,7 +122,7 @@ export const statusRouter = router({
     await db.delete(schema.statuses).where(eq(schema.statuses.id, status.id));
 
     await logActivity(workspaceId, ctx.user.id, "status", status.id, "status.deleted");
-    publish(workspaceId, {
+    await publish(workspaceId, {
       entity: "status",
       id: status.id,
       listId: status.listId,

@@ -9,6 +9,7 @@ import { customFieldRouter } from "./routers/custom-field";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
 import { notificationRouter } from "./routers/notification";
+import { reminderRouter } from "./routers/reminder";
 import { statusRouter } from "./routers/status";
 import { tagRouter } from "./routers/tag";
 import { taskRouter } from "./routers/task";
@@ -25,6 +26,7 @@ export const appRouter = router({
   checklist: checklistRouter,
   comment: commentRouter,
   notification: notificationRouter,
+  reminder: reminderRouter,
   activity: activityRouter,
   tag: tagRouter,
   customField: customFieldRouter,

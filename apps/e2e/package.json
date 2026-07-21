@@ -8,6 +8,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint tests playwright.config.ts"
   },
+  "dependencies": {
+    "@canvas/db": "workspace:*",
+    "drizzle-orm": "^0.38.3"
+  },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
     "@types/node": "^22.10.2",

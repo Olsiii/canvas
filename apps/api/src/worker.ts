@@ -9,10 +9,12 @@ import { buildSystemPrompt } from "./lib/brain-system-prompt";
 import { publish as publishBrainEvent } from "./lib/brain-realtime";
 import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
+import { runSchedulerTick } from "./lib/scheduler";
 import { ensureBucketExists } from "./lib/storage";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
+import { scheduleRecurringTick, SCHEDULER_QUEUE_NAME } from "./queues/scheduler-queue";
 
 // A separate process from the API server (`pnpm --filter @canvas/api
 // worker`, wired into the root `pnpm dev` alongside it) — matches
@@ -265,4 +267,23 @@ brainWorker.on("failed", (job, err) => {
   console.error(`[worker] brain job ${job?.id} failed:`, err);
 });
 
-console.log(`[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}"`);
+// M3.5: recurring tasks + reminders. A single repeatable "tick" job rather
+// than a dedicated always-on scheduler process — same BullMQ + Redis
+// infra ARCHITECTURE.md already calls for, no new moving part.
+await scheduleRecurringTick();
+
+const schedulerWorker = new Worker(
+  SCHEDULER_QUEUE_NAME,
+  async () => {
+    await runSchedulerTick();
+  },
+  { connection: redisConnection },
+);
+
+schedulerWorker.on("failed", (job, err) => {
+  console.error(`[worker] scheduler tick ${job?.id} failed:`, err);
+});
+
+console.log(
+  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}"`,
+);

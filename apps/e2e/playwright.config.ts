@@ -24,6 +24,9 @@ export default defineConfig({
       url: "http://localhost:3001/health",
       reuseExistingServer: !isCI,
       timeout: 30_000,
+      // M3.5: a fast scheduler tick so the recurring-task/reminder spec
+      // doesn't wait a real day/week/month for a recurrence to become due.
+      env: { SCHEDULER_TICK_MS: "3000" },
     },
     {
       command: "pnpm --filter @canvas/web dev",
