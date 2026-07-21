@@ -26,6 +26,20 @@ const envSchema = z.object({
   // recurring-tasks e2e spec doesn't wait a real day/week/month for a
   // recurrence to become due — see PROGRESS.md.
   SCHEDULER_TICK_MS: z.coerce.number().default(60_000),
+  // M3.9: SMTP creds for the email digest. Unset in this environment (no
+  // mail server available) — sendEmail() falls back to a mock (logs
+  // instead of sending), same degrade-gracefully precedent as
+  // ANTHROPIC_API_KEY/GOOGLE_CLIENT_ID being unset.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  EMAIL_FROM: z.string().default("Canvas <notifications@canvas.local>"),
+  // How often a user's unread notifications are batched into a digest
+  // email. Overridden to a few seconds in apps/e2e's webServer env, same
+  // idea as SCHEDULER_TICK_MS.
+  DIGEST_INTERVAL_MS: z.coerce.number().default(24 * 60 * 60 * 1000),
 });
 
 export const env = envSchema.parse(process.env);

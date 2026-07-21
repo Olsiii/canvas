@@ -16,6 +16,7 @@ export * from "./recurrence";
 export * from "./time-entries";
 export * from "./week";
 export * from "./workload";
+export * from "./notifications";
 export * from "./brain-context";
 export * from "./schemas/auth";
 export * from "./schemas/workspace";

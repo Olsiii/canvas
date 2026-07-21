@@ -1,6 +1,9 @@
 import { db, schema } from "@canvas/db";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { env } from "../env";
+import { getEmailClient } from "../email";
 import { logActivity } from "./activity";
+import { buildDigestEmail } from "./digest";
 import { nextOrderKey } from "./order";
 import { computeNextRunAt } from "./recurrence";
 import { publish } from "./realtime";
@@ -137,7 +140,54 @@ async function fireDueReminders() {
   }
 }
 
+/**
+ * M3.9: batches each user's unread notifications created since their last
+ * digest into one email, then advances the cursor — whether or not there
+ * was anything to send, so a quiet user doesn't get rechecked in full every
+ * tick forever. `users.lastDigestSentAt` is the cursor (see PROGRESS.md;
+ * not in DATA_MODEL.md's compact `users` row).
+ */
+async function sendDueDigests() {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - env.DIGEST_INTERVAL_MS);
+  const dueUsers = await db.query.users.findMany({
+    where: or(isNull(schema.users.lastDigestSentAt), lte(schema.users.lastDigestSentAt, cutoff)),
+  });
+
+  const emailClient = getEmailClient();
+
+  for (const user of dueUsers) {
+    const since = user.lastDigestSentAt ?? user.createdAt;
+
+    const unread = await db
+      .select({ verb: schema.activity.verb, actorName: schema.users.name })
+      .from(schema.notifications)
+      .innerJoin(schema.activity, eq(schema.activity.id, schema.notifications.activityId))
+      .innerJoin(schema.users, eq(schema.users.id, schema.activity.actorId))
+      .where(
+        and(
+          eq(schema.notifications.userId, user.id),
+          isNull(schema.notifications.readAt),
+          gt(schema.notifications.createdAt, since),
+        ),
+      );
+
+    // Advance the cursor regardless — a user with nothing unread this
+    // period shouldn't be re-queried in full on every future tick either.
+    await db
+      .update(schema.users)
+      .set({ lastDigestSentAt: now })
+      .where(eq(schema.users.id, user.id));
+
+    if (unread.length === 0) continue;
+
+    const { subject, text } = buildDigestEmail(unread, env.WEB_URL);
+    await emailClient.send({ to: user.email, subject, text });
+  }
+}
+
 export async function runSchedulerTick() {
   await spawnDueRecurringTasks();
   await fireDueReminders();
+  await sendDueDigests();
 }

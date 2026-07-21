@@ -141,6 +141,13 @@
       "when": 1784628326032,
       "tag": "0019_bumpy_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784634515269,
+      "tag": "0020_previous_storm",
+      "breakpoints": true
     }
   ]
 }

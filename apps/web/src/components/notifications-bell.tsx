@@ -1,12 +1,8 @@
+import { NOTIFICATION_VERB_LABELS } from "@canvas/shared";
 import { formatRelativeTime } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-
-const VERB_LABEL: Record<string, string> = {
-  "comment.created": "mentioned you in a comment",
-  "reminder.fired": "Reminder",
-};
 
 function taskLink(payload: unknown): { taskId: string; listId: string } | null {
   if (!payload || typeof payload !== "object") return null;
@@ -100,11 +96,11 @@ export function NotificationsBell() {
                   } hover:bg-muted`}
                 >
                   {n.verb === "reminder.fired" ? (
-                    <span className="font-medium">{VERB_LABEL[n.verb]}</span>
+                    <span className="font-medium">{NOTIFICATION_VERB_LABELS[n.verb]}</span>
                   ) : (
                     <>
                       <span className="font-medium">{n.actorName}</span>{" "}
-                      {VERB_LABEL[n.verb] ?? n.verb}
+                      {NOTIFICATION_VERB_LABELS[n.verb] ?? n.verb}
                     </>
                   )}
                   {note && <div className="mt-0.5">{note}</div>}

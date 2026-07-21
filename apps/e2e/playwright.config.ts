@@ -26,7 +26,11 @@ export default defineConfig({
       timeout: 30_000,
       // M3.5: a fast scheduler tick so the recurring-task/reminder spec
       // doesn't wait a real day/week/month for a recurrence to become due.
-      env: { SCHEDULER_TICK_MS: "3000" },
+      // M3.9: same idea for the digest interval — a new user's cursor
+      // starts null (always due on the first tick regardless of this
+      // value), but a short interval also lets the spec observe a second
+      // digest cycle without waiting a real day.
+      env: { SCHEDULER_TICK_MS: "3000", DIGEST_INTERVAL_MS: "3000" },
     },
     {
       command: "pnpm --filter @canvas/web dev",
