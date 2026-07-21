@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TASK_DEPENDENCY_KINDS } from "../dependencies";
 import { TASK_PRIORITIES } from "../priority";
 import { STATUS_KINDS } from "../statuses";
 
@@ -95,8 +96,28 @@ export const unassignTaskSchema = z.object({
   userId: z.string().uuid(),
 });
 
+// Gantt dependency arrows (M3.3).
+export const listTaskDependenciesSchema = z.object({
+  listId: z.string().uuid(),
+});
+
+export const addTaskDependencySchema = z
+  .object({
+    taskId: z.string().uuid(),
+    dependsOnTaskId: z.string().uuid(),
+    kind: z.enum(TASK_DEPENDENCY_KINDS),
+  })
+  .refine((v) => v.taskId !== v.dependsOnTaskId, {
+    message: "A task cannot depend on itself",
+  });
+
+export const removeTaskDependencySchema = z.object({
+  dependencyId: z.string().uuid(),
+});
+
 export type CreateStatusInput = z.infer<typeof createStatusSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type BulkUpdateTasksInput = z.infer<typeof bulkUpdateTasksSchema>;
+export type AddTaskDependencyInput = z.infer<typeof addTaskDependencySchema>;

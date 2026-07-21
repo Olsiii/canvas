@@ -1,0 +1,351 @@
+import type { AppRouter } from "@canvas/api";
+import {
+  TASK_DEPENDENCY_KINDS,
+  buildGanttDays,
+  buildGanttRange,
+  ganttBarOffset,
+  taskDateSpan,
+  type TaskDependencyKind,
+} from "@canvas/shared";
+import { trpc } from "@/lib/trpc";
+import type { inferRouterOutputs } from "@trpc/server";
+import { useMemo, useState } from "react";
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type Task = RouterOutputs["task"]["list"][number];
+type Dependency = RouterOutputs["task"]["dependencies"]["list"][number];
+
+const DAY_WIDTH = 32;
+const ROW_HEIGHT = 36;
+const LABEL_WIDTH = 220;
+
+function today(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * M3.3: a horizontal timeline (one column per day) with a bar per dated
+ * task, plus SVG dependency arrows. Distinct from Calendar (M3.1, a month
+ * grid keyed by a single date) — this is a range view keyed by start→due.
+ */
+export function TaskGanttView({
+  listId,
+  onOpenTask,
+}: {
+  listId: string;
+  onOpenTask: (taskId: string) => void;
+}) {
+  const utils = trpc.useUtils();
+  const tasks = trpc.task.list.useQuery({ listId });
+  const dependencies = trpc.task.dependencies.list.useQuery({ listId });
+
+  const [depTaskId, setDepTaskId] = useState("");
+  const [depOnTaskId, setDepOnTaskId] = useState("");
+  const [depKind, setDepKind] = useState<TaskDependencyKind>("blocks");
+  const [depError, setDepError] = useState<string | null>(null);
+
+  const addDependency = trpc.task.dependencies.add.useMutation({
+    onSuccess: () => {
+      void utils.task.dependencies.list.invalidate({ listId });
+      setDepTaskId("");
+      setDepOnTaskId("");
+      setDepError(null);
+    },
+    onError: (err) => setDepError(err.message),
+  });
+  const removeDependency = trpc.task.dependencies.remove.useMutation({
+    onSuccess: () => void utils.task.dependencies.list.invalidate({ listId }),
+  });
+
+  const allTasks = useMemo(() => tasks.data ?? [], [tasks.data]);
+  const rows = useMemo(
+    () =>
+      allTasks
+        .map((task) => ({ task, span: taskDateSpan(task) }))
+        .filter(
+          (row): row is { task: Task; span: NonNullable<ReturnType<typeof taskDateSpan>> } =>
+            row.span !== null,
+        )
+        .sort((a, b) => (a.span.start < b.span.start ? -1 : a.span.start > b.span.start ? 1 : 0)),
+    [allTasks],
+  );
+  const undated = useMemo(() => allTasks.filter((t) => taskDateSpan(t) === null), [allTasks]);
+
+  const range = useMemo(
+    () =>
+      buildGanttRange(
+        rows.map((r) => r.span),
+        today(),
+      ),
+    [rows],
+  );
+  const days = useMemo(() => buildGanttDays(range), [range]);
+  const rowIndexByTaskId = useMemo(() => new Map(rows.map((r, i) => [r.task.id, i])), [rows]);
+
+  const visibleDeps = useMemo(
+    () =>
+      (dependencies.data ?? []).filter(
+        (d: Dependency) =>
+          rowIndexByTaskId.has(d.taskId) && rowIndexByTaskId.has(d.dependsOnTaskId),
+      ),
+    [dependencies.data, rowIndexByTaskId],
+  );
+
+  function addDependencyRow() {
+    setDepError(null);
+    if (!depTaskId || !depOnTaskId) return;
+    if (depTaskId === depOnTaskId) {
+      setDepError("A task cannot depend on itself");
+      return;
+    }
+    addDependency.mutate({ taskId: depTaskId, dependsOnTaskId: depOnTaskId, kind: depKind });
+  }
+
+  if (tasks.isLoading || dependencies.isLoading) {
+    return <p className="text-muted-foreground p-8 text-sm">Loading…</p>;
+  }
+
+  const gridWidth = days.length * DAY_WIDTH;
+  const gridHeight = Math.max(rows.length, 1) * ROW_HEIGHT;
+  const todayOffset = days.findIndex((d) => d.date === today());
+
+  return (
+    <div data-testid="task-gantt-view" className="space-y-4 px-6 py-4">
+      <div className="border-border bg-muted/40 flex flex-wrap items-end gap-2 rounded-md border px-3 py-2 text-sm">
+        <label className="flex flex-col gap-1 text-xs">
+          Task
+          <select
+            data-testid="gantt-dep-task"
+            value={depTaskId}
+            onChange={(e) => setDepTaskId(e.target.value)}
+            className="border-border bg-background h-7 rounded border text-xs"
+          >
+            <option value="">Select…</option>
+            {allTasks.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Depends on
+          <select
+            data-testid="gantt-dep-on-task"
+            value={depOnTaskId}
+            onChange={(e) => setDepOnTaskId(e.target.value)}
+            className="border-border bg-background h-7 rounded border text-xs"
+          >
+            <option value="">Select…</option>
+            {allTasks.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Kind
+          <select
+            data-testid="gantt-dep-kind"
+            value={depKind}
+            onChange={(e) => setDepKind(e.target.value as TaskDependencyKind)}
+            className="border-border bg-background h-7 rounded border text-xs"
+          >
+            {TASK_DEPENDENCY_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          data-testid="gantt-dep-add"
+          disabled={addDependency.isPending}
+          onClick={addDependencyRow}
+          className="bg-primary text-primary-foreground h-7 rounded px-2 text-xs disabled:opacity-50"
+        >
+          Add dependency
+        </button>
+        {depError && (
+          <p data-testid="gantt-dep-error" className="text-destructive w-full text-xs">
+            {depError}
+          </p>
+        )}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          No dated tasks yet — set a start or due date to place a task on the timeline.
+        </p>
+      ) : (
+        <div className="border-border flex overflow-hidden rounded-md border">
+          <div style={{ width: LABEL_WIDTH }} className="shrink-0">
+            <div style={{ height: 28 }} className="border-border bg-muted border-b" />
+            {rows.map(({ task }) => (
+              <button
+                key={task.id}
+                type="button"
+                data-testid={`gantt-row-label-${task.id}`}
+                onClick={() => onOpenTask(task.id)}
+                style={{ height: ROW_HEIGHT }}
+                className="border-border hover:bg-muted flex w-full items-center truncate border-b px-2 text-left text-xs"
+              >
+                {task.title}
+              </button>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto">
+            <div style={{ width: gridWidth }}>
+              <div className="border-border bg-muted flex border-b" style={{ height: 28 }}>
+                {days.map((d) => (
+                  <div
+                    key={d.date}
+                    style={{ width: DAY_WIDTH }}
+                    className={`text-muted-foreground flex shrink-0 items-center justify-center border-r border-border/50 text-[10px] ${
+                      d.isWeekend ? "bg-muted/70" : ""
+                    }`}
+                  >
+                    {d.isMonthStart ? `${d.day} •` : d.day}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ position: "relative", width: gridWidth, height: gridHeight }}>
+                {todayOffset >= 0 && (
+                  <div
+                    data-testid="gantt-today-line"
+                    style={{
+                      left: todayOffset * DAY_WIDTH,
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      width: 1,
+                    }}
+                    className="bg-primary/60"
+                  />
+                )}
+
+                {rows.map(({ task, span }, i) => {
+                  const offset = ganttBarOffset(span, range);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      data-testid={`gantt-bar-${task.id}`}
+                      onClick={() => onOpenTask(task.id)}
+                      style={{
+                        position: "absolute",
+                        left: offset.left * DAY_WIDTH + 2,
+                        top: i * ROW_HEIGHT + 6,
+                        width: Math.max(offset.width * DAY_WIDTH - 4, 8),
+                        height: ROW_HEIGHT - 12,
+                      }}
+                      className="bg-primary/80 hover:bg-primary rounded text-primary-foreground truncate px-1 text-left text-[10px]"
+                      title={task.title}
+                    >
+                      {task.title}
+                    </button>
+                  );
+                })}
+
+                <svg
+                  data-testid="gantt-dependency-arrows"
+                  width={gridWidth}
+                  height={gridHeight}
+                  style={{ position: "absolute", top: 0, left: 0, pointerEvents: "none" }}
+                >
+                  <defs>
+                    <marker
+                      id="gantt-arrow"
+                      markerWidth="8"
+                      markerHeight="8"
+                      refX="6"
+                      refY="3"
+                      orient="auto"
+                    >
+                      <path d="M0,0 L6,3 L0,6 Z" className="fill-foreground" />
+                    </marker>
+                  </defs>
+                  {visibleDeps.map((dep: Dependency) => {
+                    const fromRow = rows[rowIndexByTaskId.get(dep.dependsOnTaskId)!]!;
+                    const toRow = rows[rowIndexByTaskId.get(dep.taskId)!]!;
+                    const fromOffset = ganttBarOffset(fromRow.span, range);
+                    const toOffset = ganttBarOffset(toRow.span, range);
+                    const x1 = (fromOffset.left + fromOffset.width) * DAY_WIDTH;
+                    const y1 =
+                      rowIndexByTaskId.get(dep.dependsOnTaskId)! * ROW_HEIGHT + ROW_HEIGHT / 2;
+                    const x2 = toOffset.left * DAY_WIDTH;
+                    const y2 = rowIndexByTaskId.get(dep.taskId)! * ROW_HEIGHT + ROW_HEIGHT / 2;
+                    return (
+                      <line
+                        key={dep.id}
+                        data-testid={`gantt-arrow-${dep.id}`}
+                        x1={x1}
+                        y1={y1}
+                        x2={x2}
+                        y2={y2}
+                        className={
+                          dep.kind === "blocks" ? "stroke-destructive" : "stroke-muted-foreground"
+                        }
+                        strokeWidth={1.5}
+                        markerEnd="url(#gantt-arrow)"
+                      />
+                    );
+                  })}
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visibleDeps.length > 0 && (
+        <div data-testid="gantt-dependency-list" className="space-y-1">
+          <p className="text-xs font-medium">Dependencies</p>
+          {visibleDeps.map((dep: Dependency) => {
+            const from = allTasks.find((t) => t.id === dep.taskId);
+            const on = allTasks.find((t) => t.id === dep.dependsOnTaskId);
+            return (
+              <div key={dep.id} className="flex items-center gap-2 text-xs">
+                <span>
+                  {from?.title} <span className="text-muted-foreground">{dep.kind}</span>{" "}
+                  {on?.title}
+                </span>
+                <button
+                  type="button"
+                  data-testid={`gantt-dep-remove-${dep.id}`}
+                  onClick={() => removeDependency.mutate({ dependencyId: dep.id })}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {undated.length > 0 && (
+        <div data-testid="gantt-undated" className="space-y-2">
+          <p className="text-xs font-medium">No date</p>
+          <div className="flex flex-wrap gap-2">
+            {undated.map((task) => (
+              <button
+                key={task.id}
+                type="button"
+                onClick={() => onOpenTask(task.id)}
+                className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
+              >
+                {task.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

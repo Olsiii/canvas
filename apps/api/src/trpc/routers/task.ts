@@ -1,12 +1,15 @@
 import { db, schema } from "@canvas/db";
 import {
+  addTaskDependencySchema,
   addTaskTagSchema,
   assignTaskSchema,
   bulkUpdateTasksSchema,
   createTaskSchema,
   deleteTaskSchema,
   getTaskSchema,
+  listTaskDependenciesSchema,
   listTasksSchema,
+  removeTaskDependencySchema,
   removeTaskTagSchema,
   searchTasksSchema,
   unassignTaskSchema,
@@ -15,6 +18,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { validateTaskDependency } from "../../lib/dependency";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
 import { publish } from "../../lib/realtime";
@@ -419,5 +423,75 @@ export const taskRouter = router({
       publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
       return getTags(task.id);
     }),
+  }),
+
+  // Gantt arrows (M3.3). Same task:view/task:update tiers as
+  // assignees/tags above — a dependency is a relationship between two
+  // tasks the caller can already see/edit, not a distinct permission.
+  dependencies: router({
+    list: protectedProcedure.input(listTaskDependenciesSchema).query(async ({ ctx, input }) => {
+      const workspaceId = await workspaceIdForList(input.listId);
+      await assertCan(ctx.user, workspaceId, "task:view");
+
+      return db
+        .select({
+          id: schema.taskDependencies.id,
+          taskId: schema.taskDependencies.taskId,
+          dependsOnTaskId: schema.taskDependencies.dependsOnTaskId,
+          kind: schema.taskDependencies.kind,
+        })
+        .from(schema.taskDependencies)
+        .innerJoin(schema.tasks, eq(schema.tasks.id, schema.taskDependencies.taskId))
+        .where(and(eq(schema.tasks.listId, input.listId), isNull(schema.tasks.deletedAt)));
+    }),
+
+    add: protectedProcedure.input(addTaskDependencySchema).mutation(async ({ ctx, input }) => {
+      const task = await requireTask(input.taskId);
+      const dependsOnTask = await requireTask(input.dependsOnTaskId);
+      const workspaceId = await workspaceIdForList(task.listId);
+      await assertCan(ctx.user, workspaceId, "task:update");
+
+      const error = validateTaskDependency(task, dependsOnTask);
+      if (error) throw new TRPCError({ code: "BAD_REQUEST", message: error });
+
+      const [dependency] = await db
+        .insert(schema.taskDependencies)
+        .values({ taskId: task.id, dependsOnTaskId: dependsOnTask.id, kind: input.kind })
+        .onConflictDoNothing()
+        .returning();
+      if (!dependency) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "That dependency already exists" });
+      }
+
+      await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.dependency_added", {
+        dependsOnTaskId: dependsOnTask.id,
+        kind: input.kind,
+      });
+      publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+      return dependency;
+    }),
+
+    remove: protectedProcedure
+      .input(removeTaskDependencySchema)
+      .mutation(async ({ ctx, input }) => {
+        const dependency = await db.query.taskDependencies.findFirst({
+          where: eq(schema.taskDependencies.id, input.dependencyId),
+        });
+        if (!dependency) throw new TRPCError({ code: "NOT_FOUND" });
+
+        const task = await requireTask(dependency.taskId);
+        const workspaceId = await workspaceIdForList(task.listId);
+        await assertCan(ctx.user, workspaceId, "task:update");
+
+        await db
+          .delete(schema.taskDependencies)
+          .where(eq(schema.taskDependencies.id, dependency.id));
+
+        await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.dependency_removed", {
+          dependsOnTaskId: dependency.dependsOnTaskId,
+        });
+        publish(workspaceId, { entity: "task", id: task.id, listId: task.listId, kind: "updated" });
+        return { id: dependency.id };
+      }),
   }),
 });

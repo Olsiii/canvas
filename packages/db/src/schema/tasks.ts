@@ -10,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
@@ -101,4 +102,26 @@ export const taskAssignees = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.taskId, table.userId] })],
+);
+
+export const taskDependencyKind = pgEnum("task_dependency_kind", ["blocks", "waiting_on"]);
+
+// Gantt arrows (M3.3). Unlike taskAssignees/taskWatchers, DATA_MODEL.md
+// gives this edge its own `id` (not a composite PK) — kept as specified.
+export const taskDependencies = pgTable(
+  "task_dependencies",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    dependsOnTaskId: uuid("depends_on_task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    kind: taskDependencyKind("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [unique().on(table.taskId, table.dependsOnTaskId)],
 );

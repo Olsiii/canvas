@@ -1,6 +1,7 @@
 import { TaskBoard } from "@/components/task-board";
 import { TaskCalendarView } from "@/components/task-calendar-view";
 import { TaskDetailPanel } from "@/components/task-detail-panel";
+import { TaskGanttView } from "@/components/task-gantt-view";
 import { TaskListView } from "@/components/task-list-view";
 import { TaskTableView } from "@/components/task-table-view";
 import { trpc } from "@/lib/trpc";
@@ -27,7 +28,7 @@ function ListPage() {
   const { workspaceId, listId } = listRoute.useParams();
   const { openTask } = listRoute.useSearch();
   const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
-  const [view, setView] = useState<"list" | "board" | "calendar" | "table">("list");
+  const [view, setView] = useState<"list" | "board" | "calendar" | "table" | "gantt">("list");
   const [openTaskId, setOpenTaskId] = useState<string | null>(openTask ?? null);
 
   // A notification click navigates here via client-side routing, which
@@ -71,6 +72,7 @@ function ListPage() {
               ["board", "Board"],
               ["calendar", "Calendar"],
               ["table", "Table"],
+              ["gantt", "Gantt"],
             ] as const
           ).map(([id, label], i) => (
             <span key={id} className="contents">
@@ -94,8 +96,10 @@ function ListPage() {
         <TaskBoard listId={listId} onOpenTask={setOpenTaskId} />
       ) : view === "calendar" ? (
         <TaskCalendarView listId={listId} onOpenTask={setOpenTaskId} />
-      ) : (
+      ) : view === "table" ? (
         <TaskTableView listId={listId} onOpenTask={setOpenTaskId} />
+      ) : (
+        <TaskGanttView listId={listId} onOpenTask={setOpenTaskId} />
       )}
 
       {openTaskId && (
