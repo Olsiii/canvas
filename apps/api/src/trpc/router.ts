@@ -11,6 +11,7 @@ import { customFieldRouter } from "./routers/custom-field";
 import { dashboardRouter } from "./routers/dashboard";
 import { docRouter } from "./routers/doc";
 import { formRouter } from "./routers/form";
+import { goalRouter } from "./routers/goal";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
 import { notificationRouter } from "./routers/notification";
@@ -50,6 +51,7 @@ export const appRouter = router({
   form: formRouter,
   automation: automationRouter,
   dashboard: dashboardRouter,
+  goal: goalRouter,
 });
 
 export type AppRouter = typeof appRouter;

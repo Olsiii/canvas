@@ -18,3 +18,4 @@ export * from "./annotations";
 export * from "./forms";
 export * from "./automations";
 export * from "./dashboards";
+export * from "./goals";

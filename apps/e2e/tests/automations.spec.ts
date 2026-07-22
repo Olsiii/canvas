@@ -75,7 +75,13 @@ test("M5.1 automations: status → Done runs a tag + comment action, gated by a 
   await page.reload();
   await page.getByRole("button", { name: "Board", exact: true }).click();
   await page.getByRole("button", { name: "Fix the login bug" }).click();
-  await expect(panel.getByText("shipped")).toBeVisible({ timeout: 10_000 });
+  // Not getByText("shipped") — that's a case-insensitive substring match
+  // and also hits "Shipped via automation" below once both actions have
+  // landed. The tag pill's own remove button is the unambiguous check
+  // already used elsewhere for tag presence (tags-and-custom-fields.spec.ts).
+  await expect(panel.getByRole("button", { name: "Remove tag shipped" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(panel.getByText("Comments (1)")).toBeVisible();
   await expect(panel.getByText("Shipped via automation")).toBeVisible();
   await page.getByRole("button", { name: "Close", exact: true }).click();

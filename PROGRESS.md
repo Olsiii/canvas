@@ -1059,3 +1059,26 @@ Built:
 - `pnpm check` green; `pnpm db:generate` shows no drift after the migration.
 - Unit tests: `dashboard-metrics.test.ts` (8 cases) + `computeCompletedAt` (4 cases in `task-update.test.ts`) — 151 API tests total, all passing.
 - Playwright: `dashboards.spec.ts` creates two tasks (one moved to Done, one left Open with 90 minutes of manual time logged), builds a dashboard with `task_counts`/`burndown`/`time_tracked` widgets, and asserts the real counts (Open 1, Done 1, Remaining now 1, Total 1.5h) rather than chart geometry; also removes a widget and reloads to confirm both the dashboard and the remaining widgets persist server-side. Full 33-spec suite (up from 32) run twice cold-start with `CI=true`: 33/33 clean both times, no flakes.
+
+### M5.3 — Goals/OKRs linked to tasks — done (2026-07-22)
+
+Built:
+
+- `goals`/`goal_links` tables per DATA_MODEL.md (`metric_json` jsonb, `due_date`, `goal_links` a plain many-to-many exactly like M4.2's `doc_task_links`) + migration `0028_lean_cardiac.sql`. `goal:view|create|update|delete` at the same tiers as `doc:*`/`form:*` (view guest, create/update/delete member) — a goal is ordinary workspace content, not a financial-reporting surface like `dashboard:*` or a blast-radius concern like `automation:*`.
+- Two metric shapes: `task_completion` (progress derived purely from linked tasks' `completed_at` — no manual updates, direct reuse of M5.2's column) and `numeric` (a manually-tracked `current`/`target`/optional `unit`, editable from the goal's edit form). Pure `computeGoalProgress` (`apps/api/src/lib/goal-progress.ts`, unit tested) clamps numeric progress to [0, 100] since `current` can legitimately overshoot `target`.
+- `goal.links.*` (list/add/remove) mirrors `doc.links.*` (M4.2) call-for-call — same cross-workspace guard, same `task:view` check, same "return the refreshed link list" response shape.
+- UI: sidebar **Goals** link; list+create page (`/goals`, each row showing a `GoalProgressBar`) and an edit page (`/goals/$goalId`) combining the metric-editing form with `GoalTaskLinks` (a close parallel of M4.2's `DocTaskLinks` — kept as its own component rather than a shared abstraction; this is only the second occurrence, and the two wire to entirely different routers). `GoalProgressBar` uses the categorical slot-1 blue for in-progress and the reserved "good" status color + a "✓ Complete" label (never color alone) once a goal hits 100%.
+
+### Decisions
+
+- **No `submissions`-style separate progress-log table** — `goals.metric_json`'s `current` field is the live value; DATA_MODEL.md names no history table, and nothing in ROADMAP.md's "Goals/OKRs linked to tasks" asks for one.
+- **`task_completion` progress is computed on every read, never cached/denormalized** — `goal.get`/`goal.list` both re-derive it from linked tasks' `completed_at` at query time (small N per goal, the same "simplest option, revisit if it doesn't scale" judgment M5.2's `burndown` widget already made for its own full-history task scan).
+
+### Verified
+
+- `pnpm check` green; `pnpm db:generate` shows no drift after the migration.
+- Unit tests: `goal-progress.test.ts` (7 cases: zero-links, partial/full completion, numeric clamping both directions, zero-target guard) — 158 API tests total, all passing.
+- Playwright: `goals.spec.ts` links two tasks (one Done, one not) to a `task_completion` goal and confirms 50%, then creates and updates a `numeric` goal to confirm 40%, then reloads to confirm both persisted. Found and fixed two real test-locator bugs surfaced while chasing what first looked like flakiness (neither was an app bug — confirmed by reproducing the exact same flow manually in-browser, repeatedly, with zero issues):
+  - `goal-task-links.tsx`'s linked-pill testid (`goal-task-link-${taskId}`) shared its prefix with the search box (`goal-task-link-search`) and its result buttons (`goal-task-link-result-*`), so a test locator like `[data-testid^='goal-task-link-']` silently matched those too — a "wait for the link to land" assertion was passing before the link ever actually landed. Renamed the pill's testid to `goal-linked-task-${taskId}` (unambiguous prefix) and fixed the test to match.
+  - The already-committed `automations.spec.ts` (M5.1) had the same class of bug: `panel.getByText("shipped")` is a case-insensitive substring match that also hits "Shipped via automation" once the automation's second action lands, occasionally resolving to 2 elements ("strict mode violation"). Fixed to assert on the tag's own `Remove tag shipped` button, the same unambiguous pattern `tags-and-custom-fields.spec.ts` already established for tag presence.
+- Full 34-spec suite (up from 33) run three times cold-start with `CI=true` after both fixes: 34/34 clean every time, no flakes.

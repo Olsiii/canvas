@@ -20,6 +20,8 @@ import { automationsListRoute } from "./routes/workspace.$workspaceId.automation
 import { automationEditorRoute } from "./routes/workspace.$workspaceId.automations.$automationId";
 import { dashboardsListRoute } from "./routes/workspace.$workspaceId.dashboards";
 import { dashboardEditorRoute } from "./routes/workspace.$workspaceId.dashboards.$dashboardId";
+import { goalsListRoute } from "./routes/workspace.$workspaceId.goals";
+import { goalEditorRoute } from "./routes/workspace.$workspaceId.goals.$goalId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -44,6 +46,8 @@ const routeTree = rootRoute.addChildren([
     automationEditorRoute,
     dashboardsListRoute,
     dashboardEditorRoute,
+    goalsListRoute,
+    goalEditorRoute,
   ]),
 ]);
 

@@ -43,3 +43,4 @@ export * from "./schemas/workload";
 export * from "./schemas/forms";
 export * from "./schemas/automations";
 export * from "./schemas/dashboards";
+export * from "./schemas/goals";

@@ -57,7 +57,11 @@ export type WorkspaceAction =
   | "dashboard:view"
   | "dashboard:create"
   | "dashboard:update"
-  | "dashboard:delete";
+  | "dashboard:delete"
+  | "goal:view"
+  | "goal:create"
+  | "goal:update"
+  | "goal:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -149,6 +153,13 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "dashboard:create": "member",
   "dashboard:update": "member",
   "dashboard:delete": "member",
+  // Same tiers as doc:*/form:* — a goal is ordinary workspace content, not
+  // a financial-reporting surface like dashboard:* (which can show AI
+  // cost) or a blast-radius concern like automation:*.
+  "goal:view": "guest",
+  "goal:create": "member",
+  "goal:update": "member",
+  "goal:delete": "member",
 };
 
 export interface WorkspaceResource {
