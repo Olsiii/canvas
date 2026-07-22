@@ -120,6 +120,11 @@ async function streamAttachment(
   const object = await getObject(key);
   reply.header("Content-Type", object.ContentType ?? attachment.mime);
   reply.header("Cache-Control", "private, max-age=3600");
+  // Video playback (M4.6 clips) needs a known length upfront to report
+  // duration/seek correctly — images/other files get it for free too.
+  if (object.ContentLength !== undefined) {
+    reply.header("Content-Length", String(object.ContentLength));
+  }
   if (kind === "file") {
     reply.header("Content-Disposition", `inline; filename="${attachment.fileName}"`);
   }

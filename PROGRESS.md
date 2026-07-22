@@ -987,3 +987,24 @@ Built:
 - `pnpm check` green; `pnpm db:generate` shows no drift after the migration.
 - Unit tests: `form-submission.test.ts` (9 cases: required/whitespace/select-option validation, title mapping, description rendering with/without optional fields) — 128 API tests total, all passing.
 - Playwright: `forms.spec.ts` builds a form with a custom `select` field, submits it from a completely separate anonymous browser context (no sign-up), and confirms the resulting task lands in the target list with the extra field rendered into its description. Full 30-spec suite (up from 29) run twice cold-start with `CI=true`: 30/30 clean both times, no flakes.
+
+### M4.6 — Clips (video upload + player) — done (2026-07-22) — **Phase 4 complete**
+
+Built:
+
+- No new table: DATA_MODEL.md has no dedicated clips row, and `attachments.mime` already distinguishes video from everything else — a clip is just a `video/*` attachment, reusing M1.9's `/uploads` REST route and `attachments` table exactly as-is. Same "schema already covers it" reasoning as M4.4 reusing `comments` for annotation pins instead of a parallel concept.
+- `ClipsSection` (`apps/web/src/components/clips-section.tsx`): a video-filtered view over the same per-task `attachment.list` query `AttachmentsSection` already renders, with its own `accept="video/*"` upload input and an inline `<video controls>` player per clip (instead of the lightbox/file-link treatment images and other files get). Mounted in the task detail panel right after Attachments.
+- `streamAttachment` (`apps/api/src/routes/attachments.ts`) now forwards `Content-Length` from the S3/MinIO object — needed for `<video>` to report duration/size reliably; a small, universal fix (also benefits image/file downloads) rather than a video-only branch.
+- Playwright `clips.spec.ts` fixture `test-clip.webm` (generated with `ffmpeg -f lavfi -i color=... -c:v libvpx`, checked into `apps/e2e/fixtures/`).
+
+### Decisions
+
+- **No in-browser screen recorder** — PRD.md's own phrasing is "clips (screen recording upload)": the recording happens externally (OS screen recorder, etc.) and the resulting file gets uploaded here. Wiring `getDisplayMedia`/`MediaRecorder` would need real OS screen-capture permission that isn't controllable/deterministic in Playwright's Chromium even with fake-media flags, and PRD's wording doesn't ask for it — simplest option consistent with ARCHITECTURE.md per CLAUDE.md's ambiguity rule.
+- **Inherited the existing 25MB upload cap unchanged** (`apps/api/src/index.ts`'s `MAX_UPLOAD_BYTES`, set in M1.9) rather than raising it for video specifically — the server still buffers a whole upload in memory before writing to S3, so a per-type cap increase is a memory-risk tradeoff outside this milestone's scope, not a forgotten detail.
+- **No HTTP byte-range/seek support** — `streamAttachment` still sends the full object as one stream; scrubbing a long clip would need `Range`/206 handling. Out of scope for a first cut given `Content-Length` alone is enough for the accept bar (a played, persisted, deletable clip); flagged here rather than silently left as a gap.
+
+### Verified
+
+- `pnpm check` green; no schema/migration change (no new table).
+- Playwright: `clips.spec.ts` uploads the fixture, asserts a real `<video>` element loaded metadata from the server (`videoWidth` populates only once it has), reloads to confirm persistence, then deletes it. Full 31-spec suite (up from 30) run twice cold-start with `CI=true`: 31/31 clean on the first run; the second run had one flake on `docs-collab.spec.ts` (untouched by this milestone, retried and passed) — the same pre-existing parallel-load timing flake already noted in M4.3/M4.4.
+- **Phase 4 accept criteria (ROADMAP.md) confirmed complete across M4.1–M4.6**: "two cursors editing one doc" (M4.1's `docs-collab.spec.ts`) and "annotation pins survive version switch" (M4.4's `image-proofing.spec.ts`) both green in the same full-suite runs above.
