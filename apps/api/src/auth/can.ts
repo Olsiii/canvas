@@ -49,7 +49,11 @@ export type WorkspaceAction =
   | "form:view"
   | "form:create"
   | "form:update"
-  | "form:delete";
+  | "form:delete"
+  | "automation:view"
+  | "automation:create"
+  | "automation:update"
+  | "automation:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -124,6 +128,14 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "form:create": "member",
   "form:update": "member",
   "form:delete": "member",
+  // Admin tier, unlike form:*/doc:* — an automation runs unattended against
+  // every matching task in the workspace and can generate billable AI
+  // usage (generate_image), same blast-radius reasoning as
+  // brandSettings:update.
+  "automation:view": "member",
+  "automation:create": "admin",
+  "automation:update": "admin",
+  "automation:delete": "admin",
 };
 
 export interface WorkspaceResource {

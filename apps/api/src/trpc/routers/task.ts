@@ -21,6 +21,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { runAutomationsForTrigger } from "../../lib/automation-runner";
 import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
@@ -255,6 +256,11 @@ export const taskRouter = router({
     if (!task) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.created");
+    // Runs before publish() so that by the time the realtime "task
+    // updated" invalidation reaches any open client, an automation's own
+    // side effects (tag/comment/priority) have already landed — there's no
+    // second event to catch a client up if it refetched mid-run.
+    await runAutomationsForTrigger(workspaceId, { type: "task_created" }, task);
     await publish(workspaceId, {
       entity: "task",
       id: task.id,
@@ -270,9 +276,11 @@ export const taskRouter = router({
     await assertCan(ctx.user, workspaceId, "task:update");
 
     let statusId: string | undefined;
+    let newStatusKind: string | undefined;
     if (input.statusId !== undefined && input.statusId !== task.statusId) {
       const status = await requireStatusInList(input.statusId, task.listId);
       statusId = status.id;
+      newStatusKind = status.kind;
     }
 
     // An explicit orderKey (e.g. from a board drag-and-drop drop) wins; a
@@ -303,6 +311,13 @@ export const taskRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.updated");
+    if (newStatusKind !== undefined) {
+      await runAutomationsForTrigger(
+        workspaceId,
+        { type: "task_status_changed", toStatusKind: newStatusKind },
+        updated,
+      );
+    }
     await publish(workspaceId, {
       entity: "task",
       id: task.id,
@@ -316,12 +331,19 @@ export const taskRouter = router({
     const workspaceId = await workspaceIdForList(input.listId);
     await assertCan(ctx.user, workspaceId, "task:update");
 
+    let newStatusKind: string | undefined;
     if (input.statusId !== undefined) {
-      await requireStatusInList(input.statusId, input.listId);
+      const status = await requireStatusInList(input.statusId, input.listId);
+      newStatusKind = status.kind;
     }
 
     const rows = await db
-      .select({ id: schema.tasks.id, statusId: schema.tasks.statusId })
+      .select({
+        id: schema.tasks.id,
+        statusId: schema.tasks.statusId,
+        title: schema.tasks.title,
+        priority: schema.tasks.priority,
+      })
       .from(schema.tasks)
       .where(
         and(
@@ -354,14 +376,12 @@ export const taskRouter = router({
     const updatedAt = new Date();
     for (const row of rows) {
       const orderKey = orderKeyByTaskId?.get(row.id);
+      const statusChanged = input.statusId !== undefined && row.statusId !== input.statusId;
       await db
         .update(schema.tasks)
         .set({
           ...buildTaskUpdateFields({
-            statusId:
-              input.statusId !== undefined && row.statusId !== input.statusId
-                ? input.statusId
-                : undefined,
+            statusId: statusChanged ? input.statusId : undefined,
             orderKey,
             priority: input.priority,
             startDate: input.startDate,
@@ -370,6 +390,18 @@ export const taskRouter = router({
           updatedAt,
         })
         .where(eq(schema.tasks.id, row.id));
+      if (statusChanged && newStatusKind !== undefined) {
+        await runAutomationsForTrigger(
+          workspaceId,
+          { type: "task_status_changed", toStatusKind: newStatusKind },
+          {
+            id: row.id,
+            listId: input.listId,
+            title: row.title,
+            priority: input.priority !== undefined ? input.priority : row.priority,
+          },
+        );
+      }
       await publish(workspaceId, {
         entity: "task",
         id: row.id,

@@ -16,6 +16,8 @@ import { chatChannelListRoute } from "./routes/workspace.$workspaceId.chat";
 import { chatChannelRoute } from "./routes/workspace.$workspaceId.chat.$channelId";
 import { formsListRoute } from "./routes/workspace.$workspaceId.forms";
 import { formEditorRoute } from "./routes/workspace.$workspaceId.forms.$formId";
+import { automationsListRoute } from "./routes/workspace.$workspaceId.automations";
+import { automationEditorRoute } from "./routes/workspace.$workspaceId.automations.$automationId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -36,6 +38,8 @@ const routeTree = rootRoute.addChildren([
     chatChannelRoute,
     formsListRoute,
     formEditorRoute,
+    automationsListRoute,
+    automationEditorRoute,
   ]),
 ]);
 

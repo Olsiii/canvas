@@ -183,6 +183,13 @@
       "when": 1784707577380,
       "tag": "0025_stiff_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784710864965,
+      "tag": "0026_outgoing_jigsaw",
+      "breakpoints": true
     }
   ]
 }

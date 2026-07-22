@@ -1,6 +1,7 @@
 import { activityRouter } from "./routers/activity";
 import { attachmentRouter } from "./routers/attachment";
 import { authRouter } from "./routers/auth";
+import { automationRouter } from "./routers/automation";
 import { brainRouter } from "./routers/brain";
 import { brandSettingsRouter } from "./routers/brand-settings";
 import { chatRouter } from "./routers/chat";
@@ -46,6 +47,7 @@ export const appRouter = router({
   doc: docRouter,
   chat: chatRouter,
   form: formRouter,
+  automation: automationRouter,
 });
 
 export type AppRouter = typeof appRouter;
