@@ -36,6 +36,7 @@ import {
   requireTask,
   workspaceIdForList,
 } from "../../lib/task-queries";
+import { triggerWebhooksForEvent } from "../../lib/webhook-runner";
 import { protectedProcedure, router } from "../trpc";
 
 async function requireStatusInList(statusId: string, listId: string) {
@@ -263,6 +264,11 @@ export const taskRouter = router({
     // side effects (tag/comment/priority) have already landed — there's no
     // second event to catch a client up if it refetched mid-run.
     await runAutomationsForTrigger(workspaceId, { type: "task_created" }, task);
+    await triggerWebhooksForEvent(workspaceId, "task.created", {
+      taskId: task.id,
+      title: task.title,
+      listId: task.listId,
+    });
     await publish(workspaceId, {
       entity: "task",
       id: task.id,
@@ -322,6 +328,12 @@ export const taskRouter = router({
         { type: "task_status_changed", toStatusKind: newStatusKind },
         updated,
       );
+      await triggerWebhooksForEvent(workspaceId, "task.status_changed", {
+        taskId: updated.id,
+        title: updated.title,
+        listId: updated.listId,
+        statusKind: newStatusKind,
+      });
     }
     await publish(workspaceId, {
       entity: "task",
@@ -411,6 +423,12 @@ export const taskRouter = router({
             priority: input.priority !== undefined ? input.priority : row.priority,
           },
         );
+        await triggerWebhooksForEvent(workspaceId, "task.status_changed", {
+          taskId: row.id,
+          title: row.title,
+          listId: input.listId,
+          statusKind: newStatusKind,
+        });
       }
       await publish(workspaceId, {
         entity: "task",

@@ -11,10 +11,12 @@ import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
 import { runSchedulerTick } from "./lib/scheduler";
 import { ensureBucketExists } from "./lib/storage";
+import { signWebhookPayload } from "./lib/webhook-signature";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
 import { scheduleRecurringTick, SCHEDULER_QUEUE_NAME } from "./queues/scheduler-queue";
+import { WEBHOOK_QUEUE_NAME, type WebhookJobData } from "./queues/webhook-queue";
 
 // A separate process from the API server (`pnpm --filter @canvas/api
 // worker`, wired into the root `pnpm dev` alongside it) — matches
@@ -315,6 +317,41 @@ schedulerWorker.on("failed", (job, err) => {
   console.error(`[worker] scheduler tick ${job?.id} failed:`, err);
 });
 
+// M5.4 webhooks: signs and POSTs the payload, retried by BullMQ's own
+// attempts/backoff (see webhook-queue.ts) on a non-2xx response or a
+// network/timeout error — no delivery-log table exists to record attempts
+// in (DATA_MODEL.md's webhooks row doesn't have one), so failures surface
+// only via this worker's own logs for now.
+const WEBHOOK_DELIVERY_TIMEOUT_MS = 10_000;
+
+const webhookWorker = new Worker<WebhookJobData>(
+  WEBHOOK_QUEUE_NAME,
+  async (job) => {
+    const { url, secret, event, payload } = job.data;
+    const body = JSON.stringify(payload);
+    const signature = signWebhookPayload(secret, body);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Canvas-Event": event,
+        "X-Canvas-Signature": signature,
+      },
+      body,
+      signal: AbortSignal.timeout(WEBHOOK_DELIVERY_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(`Webhook delivery to ${url} failed with status ${response.status}`);
+    }
+  },
+  { connection: redisConnection },
+);
+
+webhookWorker.on("failed", (job, err) => {
+  console.error(`[worker] webhook delivery ${job?.id} failed:`, err);
+});
+
 console.log(
-  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}"`,
+  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}"`,
 );

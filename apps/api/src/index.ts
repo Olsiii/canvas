@@ -6,6 +6,7 @@ import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
 import Fastify from "fastify";
 import { env } from "./env";
 import { ensureBucketExists } from "./lib/storage";
+import { registerApiV1Routes } from "./routes/api-v1";
 import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBrainRealtimeRoutes } from "./routes/brain-realtime";
@@ -40,6 +41,7 @@ await app.register(fastifyTRPCPlugin, {
 });
 
 registerAuthRoutes(app);
+registerApiV1Routes(app);
 registerAttachmentRoutes(app);
 registerImageAssetRoutes(app);
 registerRealtimeRoutes(app);

@@ -1,4 +1,5 @@
 import { activityRouter } from "./routers/activity";
+import { apiKeyRouter } from "./routers/api-key";
 import { attachmentRouter } from "./routers/attachment";
 import { authRouter } from "./routers/auth";
 import { automationRouter } from "./routers/automation";
@@ -21,6 +22,7 @@ import { tagRouter } from "./routers/tag";
 import { taskRouter } from "./routers/task";
 import { taskTemplateRouter } from "./routers/task-template";
 import { timeEntryRouter } from "./routers/time-entry";
+import { webhookRouter } from "./routers/webhook";
 import { workloadRouter } from "./routers/workload";
 import { workspaceRouter } from "./routers/workspace";
 import { publicProcedure, router } from "./trpc";
@@ -52,6 +54,8 @@ export const appRouter = router({
   automation: automationRouter,
   dashboard: dashboardRouter,
   goal: goalRouter,
+  apiKey: apiKeyRouter,
+  webhook: webhookRouter,
 });
 
 export type AppRouter = typeof appRouter;

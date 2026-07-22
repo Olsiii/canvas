@@ -61,7 +61,13 @@ export type WorkspaceAction =
   | "goal:view"
   | "goal:create"
   | "goal:update"
-  | "goal:delete";
+  | "goal:delete"
+  | "apiKey:view"
+  | "apiKey:create"
+  | "apiKey:delete"
+  | "webhook:view"
+  | "webhook:create"
+  | "webhook:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -160,6 +166,17 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "goal:create": "member",
   "goal:update": "member",
   "goal:delete": "member",
+  // Admin tier — an API key grants ongoing programmatic access to the
+  // whole workspace (scoped only by its creator's own role, see
+  // schema/api-platform.ts), and a webhook forwards event data plus a
+  // signing secret to an arbitrary external URL. Both are credential-
+  // shaped, same blast-radius tier as automation:create.
+  "apiKey:view": "admin",
+  "apiKey:create": "admin",
+  "apiKey:delete": "admin",
+  "webhook:view": "admin",
+  "webhook:create": "admin",
+  "webhook:delete": "admin",
 };
 
 export interface WorkspaceResource {
