@@ -963,3 +963,27 @@ Built:
 - `pnpm check` green; `pnpm db:generate` shows no drift after the migration; `pnpm db:migrate` applied locally this time _before_ running Playwright (M4.3 caught this exact gap once already — see above).
 - Unit tests: `image-critique.test.ts` (3 cases for `mockCritiqueImage`), `tools.test.ts` updated for the 5th tool, `can.test.ts` unchanged (no new actions) — 120 API tests total, all passing.
 - Playwright: first isolated run of `image-proofing.spec.ts` failed on a real bug in the test itself — it assumed branching a new image version auto-follows the new tip (mirroring generate's behavior), but hit a genuine pre-existing race in `GenerationPanel`'s polling (`refetchInterval` can stop as soon as `versions.length` hits the target even if that same poll's `currentVersionId` hasn't caught up yet, since the asset row and versions array are read as two separate queries). Fixed by explicitly clicking the new version's thumbnail after branching, matching the existing conservative pattern `generation-ux.spec.ts` already uses — not by touching the underlying component, since that race is pre-existing and out of this milestone's scope. Full 29-spec suite (up from 28) run twice cold-start with `CI=true`: `image-proofing.spec.ts` green both times; one unrelated flake (`docs-collab.spec.ts`, untouched by this milestone) on the first run, passed on retry — consistent with the parallel-load flakiness already noted for M4.3.
+
+### M4.5 — Forms → task intake — done (2026-07-22)
+
+Built:
+
+- `forms` table per DATA_MODEL.md (`workspace_id`/`list_id` fk, `schema_json` jsonb, `public_token` uniq) + migration `0025_stiff_power_pack.sql`. `name`/`createdBy`/timestamps added beyond the compact listing — same reasoning as docs' `created_at`/`updated_at`: a builder needs a display name, and a public submission has no session user to attribute the resulting task to.
+- `form:view|create|update|delete` permissions (same tiers as `doc:*` — ordinary workspace content, not a shared cross-cutting resource like a tag/template).
+- tRPC `form.list|get|create|update|delete` (protected, workspace-scoped) plus `form.getPublic|submitPublic` (`publicProcedure` — no session, so they never call `assertCan`/`can`; only `name`+`fields` are exposed, never `workspaceId`/`listId`).
+- `schema_json.fields`: an array of `{id, label, type: short_text|long_text|select, required, options?}`; a field with id `"title"` always exists and maps straight to the created task's title (`packages/shared/src/schemas/forms.ts`'s `formSchemaSchema` enforces both that and unique ids). Every other answered field becomes a `"Label: value"` TipTap paragraph in the task's description (`apps/api/src/lib/form-submission.ts`'s pure `buildTaskFromSubmission`/`validateFormSubmission`, unit tested).
+- `submitPublic` creates the task with `createdBy: form.createdBy` and logs activity/publishes the realtime `task` event the same way M3.5's scheduler attributes a spawned recurring task to `template.createdBy` — a public submitter has no user row to attribute it to instead.
+- UI: sidebar **Forms** link; `FormFieldsEditor` (shared builder component — pins the title field's label as always-editable/non-removable, lets a builder add short_text/long_text/select fields); workspace-side list + create (`/forms`) and edit page with a copyable public link (`/forms/$formId`); a fully public, unauthenticated intake page at top-level route `/forms/$publicToken`.
+- Playwright `forms.spec.ts`.
+
+### Decisions
+
+- **Point of attribution for a form-created task is `form.createdBy`, not a nullable `createdBy`** — changing `tasks.createdBy` to nullable to accommodate anonymous submitters would ripple into every other reader of that column; attributing to whoever built the intake form (mirroring M3.5's `recurrenceRules`→scheduler pattern) needed no schema change elsewhere.
+- **No `submissions` table** — DATA_MODEL.md's `forms` row has no such table, and a submission's only lasting effect is the task it creates; the task itself (plus its `task.created_from_form` activity row carrying `formId`) is the record of the submission, avoiding an entity DATA_MODEL never asked for.
+- **Public token is a second `uuidv7()`, not the form's own id** — same unguessable-URL pattern M0.2's invite links already established (an invite's secret is `invite.id` itself); kept as a distinct column because DATA_MODEL.md explicitly lists `public_token` as its own uniq field, not reusing `id`.
+
+### Verified
+
+- `pnpm check` green; `pnpm db:generate` shows no drift after the migration.
+- Unit tests: `form-submission.test.ts` (9 cases: required/whitespace/select-option validation, title mapping, description rendering with/without optional fields) — 128 API tests total, all passing.
+- Playwright: `forms.spec.ts` builds a form with a custom `select` field, submits it from a completely separate anonymous browser context (no sign-up), and confirms the resulting task lands in the target list with the extra field rendered into its description. Full 30-spec suite (up from 29) run twice cold-start with `CI=true`: 30/30 clean both times, no flakes.

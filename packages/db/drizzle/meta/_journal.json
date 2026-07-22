@@ -176,6 +176,13 @@
       "when": 1784643086124,
       "tag": "0024_brave_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784707577380,
+      "tag": "0025_stiff_power_pack",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { indexRoute } from "./routes/index";
 import { inviteRoute } from "./routes/invite.$inviteId";
 import { loginRoute } from "./routes/login";
 import { signupRoute } from "./routes/signup";
+import { publicFormRoute } from "./routes/forms.$publicToken";
 import { workspaceShellRoute } from "./routes/workspace.$workspaceId";
 import { workspaceHomeRoute } from "./routes/workspace.$workspaceId.index";
 import { listRoute } from "./routes/workspace.$workspaceId.list.$listId";
@@ -13,6 +14,8 @@ import { docsListRoute } from "./routes/workspace.$workspaceId.docs";
 import { docEditorRoute } from "./routes/workspace.$workspaceId.docs.$docId";
 import { chatChannelListRoute } from "./routes/workspace.$workspaceId.chat";
 import { chatChannelRoute } from "./routes/workspace.$workspaceId.chat.$channelId";
+import { formsListRoute } from "./routes/workspace.$workspaceId.forms";
+import { formEditorRoute } from "./routes/workspace.$workspaceId.forms.$formId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -21,6 +24,7 @@ const routeTree = rootRoute.addChildren([
   signupRoute,
   newWorkspaceRoute,
   inviteRoute,
+  publicFormRoute,
   workspaceShellRoute.addChildren([
     workspaceHomeRoute,
     listRoute,
@@ -30,6 +34,8 @@ const routeTree = rootRoute.addChildren([
     docEditorRoute,
     chatChannelListRoute,
     chatChannelRoute,
+    formsListRoute,
+    formEditorRoute,
   ]),
 ]);
 

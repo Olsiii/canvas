@@ -45,7 +45,11 @@ export type WorkspaceAction =
   | "doc:delete"
   | "channel:view"
   | "channel:create"
-  | "message:create";
+  | "message:create"
+  | "form:view"
+  | "form:create"
+  | "form:update"
+  | "form:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -112,6 +116,14 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // Same reasoning as comment:create: posting in a channel you can already
   // see is participation, not a workspace mutation.
   "message:create": "guest",
+  // Same tiers as doc:* — a form is ordinary workspace content, not a
+  // shared cross-cutting resource like a tag or template. (Public,
+  // unauthenticated submission goes through form.submitPublic, which has
+  // no session user and so never calls `can` at all.)
+  "form:view": "guest",
+  "form:create": "member",
+  "form:update": "member",
+  "form:delete": "member",
 };
 
 export interface WorkspaceResource {

@@ -8,6 +8,7 @@ import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
 import { customFieldRouter } from "./routers/custom-field";
 import { docRouter } from "./routers/doc";
+import { formRouter } from "./routers/form";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
 import { notificationRouter } from "./routers/notification";
@@ -44,6 +45,7 @@ export const appRouter = router({
   brain: brainRouter,
   doc: docRouter,
   chat: chatRouter,
+  form: formRouter,
 });
 
 export type AppRouter = typeof appRouter;
