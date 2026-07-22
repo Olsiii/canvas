@@ -1,0 +1,101 @@
+import { DashboardWidget } from "@/components/dashboard-widget";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { trpc } from "@/lib/trpc";
+import { WIDGET_TYPES, type WidgetType } from "@canvas/shared";
+import { createRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { workspaceShellRoute } from "./workspace.$workspaceId";
+
+export const dashboardEditorRoute = createRoute({
+  getParentRoute: () => workspaceShellRoute,
+  path: "/dashboards/$dashboardId",
+  component: DashboardEditorPage,
+});
+
+const WIDGET_TYPE_LABELS: Record<WidgetType, string> = {
+  task_counts: "Task counts",
+  burndown: "Burndown",
+  time_tracked: "Time tracked",
+  ai_usage_cost: "AI usage cost",
+};
+
+const HAS_DAYS_CONFIG = new Set<WidgetType>(["burndown", "time_tracked", "ai_usage_cost"]);
+
+function DashboardEditorPage() {
+  const { dashboardId } = dashboardEditorRoute.useParams();
+  const utils = trpc.useUtils();
+  const dashboard = trpc.dashboard.get.useQuery({ dashboardId });
+
+  const [widgetType, setWidgetType] = useState<WidgetType>("task_counts");
+  const [days, setDays] = useState(14);
+
+  const invalidate = () => utils.dashboard.get.invalidate({ dashboardId });
+  const addWidget = trpc.dashboard.widget.add.useMutation({ onSuccess: invalidate });
+
+  function handleAddWidget() {
+    const config: Parameters<typeof addWidget.mutate>[0]["config"] = HAS_DAYS_CONFIG.has(widgetType)
+      ? { type: widgetType as "burndown" | "time_tracked" | "ai_usage_cost", days }
+      : { type: "task_counts" };
+    addWidget.mutate({ dashboardId, config });
+  }
+
+  if (dashboard.isLoading || !dashboard.data) {
+    return <p className="text-muted-foreground p-6 text-sm">Loading…</p>;
+  }
+
+  return (
+    <div className="space-y-4 p-6" data-testid="dashboard-editor-page">
+      <h1 className="text-lg font-semibold">{dashboard.data.name}</h1>
+
+      <div className="border-border flex flex-wrap items-center gap-2 rounded-md border p-3">
+        <select
+          value={widgetType}
+          onChange={(e) => setWidgetType(e.target.value as WidgetType)}
+          className="border-border bg-background h-8 rounded border text-sm"
+          data-testid="widget-type-select"
+        >
+          {WIDGET_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {WIDGET_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
+        {HAS_DAYS_CONFIG.has(widgetType) && (
+          <label className="flex items-center gap-1 text-xs">
+            Days
+            <Input
+              type="number"
+              min={7}
+              max={90}
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="h-8 w-16 text-sm"
+            />
+          </label>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          onClick={handleAddWidget}
+          disabled={addWidget.isPending}
+          data-testid="add-widget"
+        >
+          Add widget
+        </Button>
+      </div>
+
+      {dashboard.data.widgets.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          No widgets yet. Add one above to chart tasks, time, or AI usage.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2" data-testid="widget-grid">
+          {dashboard.data.widgets.map((widget) => (
+            <DashboardWidget key={widget.id} widget={widget} onRemoved={invalidate} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

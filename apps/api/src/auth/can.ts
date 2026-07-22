@@ -53,7 +53,11 @@ export type WorkspaceAction =
   | "automation:view"
   | "automation:create"
   | "automation:update"
-  | "automation:delete";
+  | "automation:delete"
+  | "dashboard:view"
+  | "dashboard:create"
+  | "dashboard:update"
+  | "dashboard:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -136,6 +140,15 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "automation:create": "admin",
   "automation:update": "admin",
   "automation:delete": "admin",
+  // Member tier, not guest — a dashboard can surface AI usage cost (a
+  // financial figure), a step up in sensitivity from ordinary task content
+  // that guest-tier views (workload, docs, forms) show. Not admin-only like
+  // automations: a dashboard is read-only reporting with no side effects on
+  // other members' data, closer in blast radius to a doc than an automation.
+  "dashboard:view": "member",
+  "dashboard:create": "member",
+  "dashboard:update": "member",
+  "dashboard:delete": "member",
 };
 
 export interface WorkspaceResource {

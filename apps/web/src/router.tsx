@@ -18,6 +18,8 @@ import { formsListRoute } from "./routes/workspace.$workspaceId.forms";
 import { formEditorRoute } from "./routes/workspace.$workspaceId.forms.$formId";
 import { automationsListRoute } from "./routes/workspace.$workspaceId.automations";
 import { automationEditorRoute } from "./routes/workspace.$workspaceId.automations.$automationId";
+import { dashboardsListRoute } from "./routes/workspace.$workspaceId.dashboards";
+import { dashboardEditorRoute } from "./routes/workspace.$workspaceId.dashboards.$dashboardId";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -40,6 +42,8 @@ const routeTree = rootRoute.addChildren([
     formEditorRoute,
     automationsListRoute,
     automationEditorRoute,
+    dashboardsListRoute,
+    dashboardEditorRoute,
   ]),
 ]);
 

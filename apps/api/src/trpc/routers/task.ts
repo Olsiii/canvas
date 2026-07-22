@@ -17,6 +17,7 @@ import {
   setTaskRecurrenceSchema,
   unassignTaskSchema,
   updateTaskSchema,
+  type StatusKind,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -28,7 +29,7 @@ import { assertCan } from "../../lib/permissions";
 import { computeNextRunAt } from "../../lib/recurrence";
 import { publish } from "../../lib/realtime";
 import { validateSubtaskParent } from "../../lib/subtask";
-import { buildTaskUpdateFields } from "../../lib/task-update";
+import { buildTaskUpdateFields, computeCompletedAt } from "../../lib/task-update";
 import {
   firstStatusForList,
   lastTaskOrderKey,
@@ -251,6 +252,7 @@ export const taskRouter = router({
         statusId: status.id,
         orderKey: nextOrderKey(lastKey),
         createdBy: ctx.user.id,
+        completedAt: computeCompletedAt(status.kind, null, new Date()),
       })
       .returning();
     if (!task) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -276,11 +278,13 @@ export const taskRouter = router({
     await assertCan(ctx.user, workspaceId, "task:update");
 
     let statusId: string | undefined;
-    let newStatusKind: string | undefined;
+    let newStatusKind: StatusKind | undefined;
+    let completedAt: Date | null | undefined;
     if (input.statusId !== undefined && input.statusId !== task.statusId) {
       const status = await requireStatusInList(input.statusId, task.listId);
       statusId = status.id;
       newStatusKind = status.kind;
+      completedAt = computeCompletedAt(status.kind, task.completedAt, new Date());
     }
 
     // An explicit orderKey (e.g. from a board drag-and-drop drop) wins; a
@@ -303,6 +307,7 @@ export const taskRouter = router({
           startDate: input.startDate,
           dueDate: input.dueDate,
           isMilestone: input.isMilestone,
+          completedAt,
         }),
         updatedAt: new Date(),
       })
@@ -331,7 +336,7 @@ export const taskRouter = router({
     const workspaceId = await workspaceIdForList(input.listId);
     await assertCan(ctx.user, workspaceId, "task:update");
 
-    let newStatusKind: string | undefined;
+    let newStatusKind: StatusKind | undefined;
     if (input.statusId !== undefined) {
       const status = await requireStatusInList(input.statusId, input.listId);
       newStatusKind = status.kind;
@@ -343,6 +348,7 @@ export const taskRouter = router({
         statusId: schema.tasks.statusId,
         title: schema.tasks.title,
         priority: schema.tasks.priority,
+        completedAt: schema.tasks.completedAt,
       })
       .from(schema.tasks)
       .where(
@@ -386,6 +392,10 @@ export const taskRouter = router({
             priority: input.priority,
             startDate: input.startDate,
             dueDate: input.dueDate,
+            completedAt:
+              statusChanged && newStatusKind !== undefined
+                ? computeCompletedAt(newStatusKind, row.completedAt, updatedAt)
+                : undefined,
           }),
           updatedAt,
         })

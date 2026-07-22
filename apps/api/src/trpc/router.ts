@@ -8,6 +8,7 @@ import { chatRouter } from "./routers/chat";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
 import { customFieldRouter } from "./routers/custom-field";
+import { dashboardRouter } from "./routers/dashboard";
 import { docRouter } from "./routers/doc";
 import { formRouter } from "./routers/form";
 import { hierarchyRouter } from "./routers/hierarchy";
@@ -48,6 +49,7 @@ export const appRouter = router({
   chat: chatRouter,
   form: formRouter,
   automation: automationRouter,
+  dashboard: dashboardRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -86,6 +86,12 @@ export const tasks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // M5.2: not in DATA_MODEL.md's tasks row — set (or cleared) whenever a
+    // status change flips the task's status kind into/out of "done"/"closed"
+    // (see task.ts's create/update/bulkUpdate). Burndown has no other way to
+    // ask "was this task still open on day X" — the same "milestone" precedent
+    // above (a real UI need, not in the compact row) applies here too.
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     // DATA_MODEL.md: "FTS: generated tsvector on tasks.title + description
     // (GIN)". Title weighted above description (a title match ranks higher).
     searchVector: tsvector("search_vector").generatedAlwaysAs(

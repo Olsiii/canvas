@@ -1,5 +1,23 @@
-import type { TaskPriority } from "@canvas/shared";
+import type { StatusKind, TaskPriority } from "@canvas/shared";
 import { extractPlainText } from "./plain-text";
+
+const COMPLETE_STATUS_KINDS = new Set<StatusKind>(["done", "closed"]);
+
+/**
+ * A status change into "done"/"closed" completes a task (for burndown);
+ * moving back out to "open"/"active" un-completes it. Preserves an
+ * already-set `completedAt` across a lateral move between two "complete"
+ * kinds (e.g. done -> closed) rather than resetting the timestamp to now.
+ * `now` is a parameter, not `new Date()` internally, for the same
+ * testability reason `computeNextRunAt` takes one (see recurrence.ts).
+ */
+export function computeCompletedAt(
+  newStatusKind: StatusKind,
+  existingCompletedAt: Date | null,
+  now: Date,
+): Date | null {
+  return COMPLETE_STATUS_KINDS.has(newStatusKind) ? (existingCompletedAt ?? now) : null;
+}
 
 /**
  * Builds the Drizzle `.set()` fields for a task update. Each field is
@@ -17,11 +35,13 @@ export function buildTaskUpdateFields(input: {
   startDate?: string | null;
   dueDate?: string | null;
   isMilestone?: boolean;
+  completedAt?: Date | null;
 }) {
   return {
     ...(input.title !== undefined ? { title: input.title } : {}),
     ...(input.statusId !== undefined ? { statusId: input.statusId } : {}),
     ...(input.orderKey !== undefined ? { orderKey: input.orderKey } : {}),
+    ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
     ...(input.descriptionJson !== undefined
       ? {
           descriptionJson: input.descriptionJson,

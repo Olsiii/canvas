@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskUpdateFields } from "./task-update";
+import { buildTaskUpdateFields, computeCompletedAt } from "./task-update";
 
 describe("buildTaskUpdateFields", () => {
   it("includes only the fields actually provided", () => {
@@ -69,5 +69,29 @@ describe("buildTaskUpdateFields", () => {
       descriptionJson: null,
       descriptionText: null,
     });
+  });
+});
+
+describe("computeCompletedAt", () => {
+  const now = new Date("2026-07-22T12:00:00Z");
+
+  it("sets completedAt to now when moving into a done/closed kind for the first time", () => {
+    expect(computeCompletedAt("done", null, now)).toEqual(now);
+    expect(computeCompletedAt("closed", null, now)).toEqual(now);
+  });
+
+  it("clears completedAt when moving back to open/active", () => {
+    const was = new Date("2026-07-01T00:00:00Z");
+    expect(computeCompletedAt("open", was, now)).toBeNull();
+    expect(computeCompletedAt("active", was, now)).toBeNull();
+  });
+
+  it("preserves an existing completedAt across a lateral move between done and closed", () => {
+    const was = new Date("2026-07-01T00:00:00Z");
+    expect(computeCompletedAt("closed", was, now)).toEqual(was);
+  });
+
+  it("stays null moving between open and active", () => {
+    expect(computeCompletedAt("active", null, now)).toBeNull();
   });
 });
