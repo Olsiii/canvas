@@ -16,6 +16,16 @@ function colorForName(name: string) {
 }
 
 function docsWsBaseUrl() {
+  // Vite's dev-server `/ws` proxy is prone to wedging under concurrent WS
+  // churn (multiple docs' sockets opening/closing across parallel e2e
+  // workers) — traced via server-side timing logs showing the API/DB side
+  // consistently resolving in single-digit ms even under full-suite load,
+  // which points the remaining multi-second stalls at the proxy hop
+  // itself. In dev, connect straight to the API, bypassing that hop —
+  // matches vite.config.ts's own hardcoded `localhost:3001` proxy targets,
+  // the existing convention for this port everywhere else in dev. Same-
+  // origin in production, where no such proxy sits in between.
+  if (import.meta.env.DEV) return "ws://localhost:3001/ws/docs";
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${protocol}//${window.location.host}/ws/docs`;
 }

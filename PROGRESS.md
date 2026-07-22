@@ -1106,3 +1106,17 @@ Built:
 - `pnpm check` green; `pnpm db:generate` shows no drift after the migration.
 - Unit tests: `api-key.test.ts` (5), `webhook-signature.test.ts` (5), `rate-limit.test.ts` (5) — 173 API tests total, all passing.
 - Playwright: `api-platform.spec.ts` creates an API key and a webhook through the UI, uses the key to create a task via `POST /api/v1/tasks` (asserting 401 for an invalid key too), confirms the API-created task shows up in the real UI, then moves it to Done through the UI and asserts a real local HTTP server received a `task.status_changed` delivery with a valid HMAC signature and the right payload. Full 35-spec suite (up from 34) run twice cold-start with `CI=true`: 35/35 clean both times, no flakes.
+
+### Fix — M4.1 docs collaborative-editing flake (2026-07-22)
+
+`docs-collab.spec.ts` (and, once traced, `docs-brain.spec.ts` too) had been intermittently timing out waiting for `doc-sync-status` to read "Synced" instead of "Connecting…" ever since M4.1 shipped — a known flake, never previously root-caused.
+
+- **Diagnosis**: added temporary timing instrumentation at every async step of the server-side path (WS route handshake, `getOrCreateRoom`, the DB read in `loadYdoc`, the SyncStep1 send, and raw `pg.Pool` connection-count stats) and ran the full suite repeatedly against a manually-started dev server so stdout could be captured directly. Every server-side step consistently resolved in single-digit milliseconds, including during full-suite parallel runs where the flake reproduced. Since the server side was never slow, the multi-second-to-15-second stall had to be happening in the one hop the server-side logs can't see: Vite's dev-only `/ws` proxy, which a pre-existing code comment already flagged as prone to wedging under concurrent WS churn (Strict Mode's mount/unmount/remount opening and closing sockets across parallel Playwright workers).
+- **Fix**: `docsWsBaseUrl()` in `doc-collaborative-editor.tsx` now connects directly to `ws://localhost:3001/ws/docs` in dev (`import.meta.env.DEV`), bypassing the Vite proxy entirely, instead of going through `window.location.host` (which resolves to the proxied dev port). Production is untouched — same-origin relative WS URL, no proxy in front of it there. Confirmed safe: cookies are scoped by domain not port, so session auth still works cross-port in dev; and `@fastify/websocket` upgrades aren't subject to fetch/XHR CORS preflight, and this route doesn't check `Origin` anyway.
+- All temporary instrumentation was reverted; the only functional diff is the one function above.
+
+### Verified
+
+- `pnpm check` green (no changes to instrumented files remain).
+- `docs-collab.spec.ts` + `docs-brain.spec.ts` run in isolation: 2/2 passed.
+- Full 35-spec suite run twice cold-start with `CI=true`: 35/35 clean both times, no flakes.
