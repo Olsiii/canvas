@@ -15,6 +15,7 @@ import { formRouter } from "./routers/form";
 import { goalRouter } from "./routers/goal";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
+import { importRouter } from "./routers/import";
 import { notificationRouter } from "./routers/notification";
 import { reminderRouter } from "./routers/reminder";
 import { statusRouter } from "./routers/status";
@@ -56,6 +57,7 @@ export const appRouter = router({
   goal: goalRouter,
   apiKey: apiKeyRouter,
   webhook: webhookRouter,
+  import: importRouter,
 });
 
 export type AppRouter = typeof appRouter;

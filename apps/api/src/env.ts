@@ -40,6 +40,10 @@ const envSchema = z.object({
   // email. Overridden to a few seconds in apps/e2e's webServer env, same
   // idea as SCHEDULER_TICK_MS.
   DIGEST_INTERVAL_MS: z.coerce.number().default(24 * 60 * 60 * 1000),
+  // M5.5: overridden in apps/e2e's webServer env to point at a local mock
+  // server so the ClickUp importer spec never calls the real ClickUp API,
+  // same testability-seam idea as SCHEDULER_TICK_MS/DIGEST_INTERVAL_MS.
+  CLICKUP_API_BASE_URL: z.string().default("https://api.clickup.com/api/v2"),
 });
 
 export const env = envSchema.parse(process.env);

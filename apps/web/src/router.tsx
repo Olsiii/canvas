@@ -23,6 +23,7 @@ import { dashboardEditorRoute } from "./routes/workspace.$workspaceId.dashboards
 import { goalsListRoute } from "./routes/workspace.$workspaceId.goals";
 import { goalEditorRoute } from "./routes/workspace.$workspaceId.goals.$goalId";
 import { developerRoute } from "./routes/workspace.$workspaceId.developer";
+import { importRoute } from "./routes/workspace.$workspaceId.import";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -50,6 +51,7 @@ const routeTree = rootRoute.addChildren([
     goalsListRoute,
     goalEditorRoute,
     developerRoute,
+    importRoute,
   ]),
 ]);
 

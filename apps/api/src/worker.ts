@@ -9,12 +9,14 @@ import { buildSystemPrompt } from "./lib/brain-system-prompt";
 import { publish as publishBrainEvent } from "./lib/brain-realtime";
 import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
+import { runClickUpImport, runCsvImport } from "./lib/import-runner";
 import { runSchedulerTick } from "./lib/scheduler";
 import { ensureBucketExists } from "./lib/storage";
 import { signWebhookPayload } from "./lib/webhook-signature";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
+import { IMPORT_QUEUE_NAME, type ImportJobData } from "./queues/import-queue";
 import { scheduleRecurringTick, SCHEDULER_QUEUE_NAME } from "./queues/scheduler-queue";
 import { WEBHOOK_QUEUE_NAME, type WebhookJobData } from "./queues/webhook-queue";
 
@@ -352,6 +354,30 @@ webhookWorker.on("failed", (job, err) => {
   console.error(`[worker] webhook delivery ${job?.id} failed:`, err);
 });
 
+// M5.5 importers: runClickUpImport/runCsvImport each own their own
+// try/catch and write status="failed" + the error message onto the
+// `imports` row themselves (see import-runner.ts), so a bad ClickUp token
+// or malformed CSV row shows up in the import history UI rather than as a
+// bare BullMQ job failure — this handler never throws, and the queue's
+// own `attempts: 1` (see import-queue.ts) means a partially-applied
+// import is never silently retried and duplicated.
+const importWorker = new Worker<ImportJobData>(
+  IMPORT_QUEUE_NAME,
+  async (job) => {
+    const { importId, apiToken } = job.data;
+    if (apiToken) {
+      await runClickUpImport(importId, apiToken);
+    } else {
+      await runCsvImport(importId);
+    }
+  },
+  { connection: redisConnection },
+);
+
+importWorker.on("failed", (job, err) => {
+  console.error(`[worker] import ${job?.data.importId} failed:`, err);
+});
+
 console.log(
-  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}"`,
+  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}"`,
 );

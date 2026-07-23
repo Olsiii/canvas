@@ -67,7 +67,8 @@ export type WorkspaceAction =
   | "apiKey:delete"
   | "webhook:view"
   | "webhook:create"
-  | "webhook:delete";
+  | "webhook:delete"
+  | "import:run";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -177,6 +178,11 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "webhook:view": "admin",
   "webhook:create": "admin",
   "webhook:delete": "admin",
+  // Admin tier — an import can bulk-create an entire workspace's worth of
+  // spaces/lists/tasks in one run and, for the ClickUp path, hands the
+  // server a third-party API token. Same blast-radius reasoning as
+  // apiKey:create/webhook:create.
+  "import:run": "admin",
 };
 
 export interface WorkspaceResource {

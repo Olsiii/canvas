@@ -46,3 +46,4 @@ export * from "./schemas/dashboards";
 export * from "./schemas/goals";
 export * from "./schemas/api-keys";
 export * from "./schemas/webhooks";
+export * from "./schemas/imports";
