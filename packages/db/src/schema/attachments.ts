@@ -1,10 +1,16 @@
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { comments } from "./comments";
 import { imageAssets } from "./image-brain";
 import { tasks } from "./tasks";
 import { workspaces } from "./workspaces";
+
+// M5.6: an attachment linked in from Google Drive (picker/paste-link, see
+// PROGRESS.md decisions) has no S3 object of its own — `fileKey`/
+// `sizeBytes` stay null for it, `externalUrl` holds the Drive file's link
+// instead. "upload" is every attachment from before this milestone.
+export const attachmentSource = pgEnum("attachment_source", ["upload", "google_drive"]);
 
 // DATA_MODEL.md's `attachments` row has no `deleted_at` (unlike `tasks`/
 // `comments`) — hard delete, same precedent as M1.6's checklists/M1.8's
@@ -36,10 +42,14 @@ export const attachments = pgTable("attachments", {
   // tool), same "schema supports it, nothing sets it yet" precedent as
   // M1.8's workspace-wide custom field defs.
   imageAssetId: uuid("image_asset_id").references(() => imageAssets.id),
-  fileKey: text("file_key").notNull(),
+  source: attachmentSource("source").notNull().default("upload"),
+  // Nullable, unlike the rest of M1.9's original columns — only a
+  // "google_drive" source attachment (no S3 object) leaves these null.
+  fileKey: text("file_key"),
   fileName: text("file_name").notNull(),
   mime: text("mime").notNull(),
-  sizeBytes: integer("size_bytes").notNull(),
+  sizeBytes: integer("size_bytes"),
+  externalUrl: text("external_url"),
   thumbKey: text("thumb_key"),
   blurhash: text("blurhash"),
   width: integer("width"),

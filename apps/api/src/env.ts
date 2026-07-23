@@ -44,6 +44,10 @@ const envSchema = z.object({
   // server so the ClickUp importer spec never calls the real ClickUp API,
   // same testability-seam idea as SCHEDULER_TICK_MS/DIGEST_INTERVAL_MS.
   CLICKUP_API_BASE_URL: z.string().default("https://api.clickup.com/api/v2"),
+  // M5.6: overridden in apps/e2e's webServer env to point at a local mock
+  // server so the GitHub PR-link spec never calls the real GitHub API,
+  // same testability-seam idea as CLICKUP_API_BASE_URL.
+  GITHUB_API_BASE_URL: z.string().default("https://api.github.com"),
 });
 
 export const env = envSchema.parse(process.env);

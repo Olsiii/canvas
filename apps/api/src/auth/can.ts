@@ -68,7 +68,10 @@ export type WorkspaceAction =
   | "webhook:view"
   | "webhook:create"
   | "webhook:delete"
-  | "import:run";
+  | "import:run"
+  | "prLink:view"
+  | "prLink:create"
+  | "prLink:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -183,6 +186,11 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // server a third-party API token. Same blast-radius reasoning as
   // apiKey:create/webhook:create.
   "import:run": "admin",
+  // Same tiers as attachment:* — linking a PR to a task is a task edit,
+  // not a workspace-wide credential or bulk-mutation concern.
+  "prLink:view": "guest",
+  "prLink:create": "member",
+  "prLink:delete": "member",
 };
 
 export interface WorkspaceResource {

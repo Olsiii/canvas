@@ -8,6 +8,7 @@ import {
 } from "@canvas/shared";
 import { eq } from "drizzle-orm";
 import { imageQueue } from "../queues/image-queue";
+import { slackQueue } from "../queues/slack-queue";
 import { logActivity } from "./activity";
 import {
   evaluateConditions,
@@ -115,6 +116,19 @@ async function executeAction(
         kind: "generate",
       });
       return { assetId: asset.id, prompt };
+    }
+
+    case "slack_notify": {
+      // Never fetch() inline here — same "never block the request handler
+      // on an external call" rule M5.4's webhook delivery follows (this
+      // action runs synchronously inside task.create/update's request
+      // handler via runAutomationsForTrigger). The queued job is
+      // fire-and-forget from this action's point of view: a failed Slack
+      // delivery doesn't mark the automation run itself as an error, same
+      // as generate_image above only reports "queued", not "delivered".
+      const text = interpolatePrompt(action.message, { title: ctx.task.title });
+      await slackQueue.add("notify", { webhookUrl: action.webhookUrl, text });
+      return { queued: true };
     }
   }
 }

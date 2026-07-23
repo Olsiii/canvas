@@ -12,10 +12,20 @@ export interface ActionDraft {
   tagId: string;
   text: string;
   prompt: string;
+  webhookUrl: string;
+  message: string;
 }
 
 export function newActionDraft(): ActionDraft {
-  return { type: "post_comment", priority: "normal", tagId: "", text: "", prompt: "" };
+  return {
+    type: "post_comment",
+    priority: "normal",
+    tagId: "",
+    text: "",
+    prompt: "",
+    webhookUrl: "",
+    message: "",
+  };
 }
 
 const ACTION_TYPE_LABELS: Record<AutomationActionType, string> = {
@@ -23,6 +33,7 @@ const ACTION_TYPE_LABELS: Record<AutomationActionType, string> = {
   add_tag: "Add tag",
   post_comment: "Post comment",
   generate_image: "Generate image",
+  slack_notify: "Notify Slack",
 };
 
 export function AutomationActionsEditor({
@@ -112,6 +123,25 @@ export function AutomationActionsEditor({
             />
           )}
 
+          {action.type === "slack_notify" && (
+            <>
+              <Input
+                value={action.webhookUrl}
+                onChange={(e) => update(i, { webhookUrl: e.target.value })}
+                placeholder="Slack Incoming Webhook URL"
+                className="h-8 flex-1 text-sm"
+                data-testid={`automation-action-webhook-url-${i}`}
+              />
+              <Input
+                value={action.message}
+                onChange={(e) => update(i, { message: e.target.value })}
+                placeholder="Message, e.g. {{title}} shipped"
+                className="h-8 flex-1 text-sm"
+                data-testid={`automation-action-message-${i}`}
+              />
+            </>
+          )}
+
           <Button
             type="button"
             variant="ghost"
@@ -149,6 +179,8 @@ export function toAutomationActions(drafts: ActionDraft[]) {
         return { type: "post_comment" as const, text: d.text };
       case "generate_image":
         return { type: "generate_image" as const, prompt: d.prompt };
+      case "slack_notify":
+        return { type: "slack_notify" as const, webhookUrl: d.webhookUrl, message: d.message };
     }
   });
 }

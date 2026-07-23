@@ -26,6 +26,17 @@ export const automationActionSchema = z.discriminatedUnion("type", [
   // {{title}} is substituted with the triggering task's title (see
   // apps/api/src/lib/automation-engine.ts's interpolatePrompt).
   z.object({ type: z.literal("generate_image"), prompt: z.string().trim().min(1).max(500) }),
+  // M5.6: posts `message` (also {{title}}-interpolated) as a Slack
+  // Incoming Webhook payload. The webhook URL lives inline on the action
+  // itself, not in a separate per-workspace integrations table — same
+  // "every action is a self-contained config blob" shape add_tag/
+  // post_comment/generate_image already use, and DATA_MODEL.md names no
+  // such table. See PROGRESS.md (M5.6 decisions).
+  z.object({
+    type: z.literal("slack_notify"),
+    webhookUrl: z.string().trim().url(),
+    message: z.string().trim().min(1).max(500),
+  }),
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;
 export type AutomationActionType = AutomationAction["type"];

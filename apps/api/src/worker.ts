@@ -18,6 +18,7 @@ import { redisConnection } from "./queues/connection";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
 import { IMPORT_QUEUE_NAME, type ImportJobData } from "./queues/import-queue";
 import { scheduleRecurringTick, SCHEDULER_QUEUE_NAME } from "./queues/scheduler-queue";
+import { SLACK_QUEUE_NAME, type SlackJobData } from "./queues/slack-queue";
 import { WEBHOOK_QUEUE_NAME, type WebhookJobData } from "./queues/webhook-queue";
 
 // A separate process from the API server (`pnpm --filter @canvas/api
@@ -378,6 +379,33 @@ importWorker.on("failed", (job, err) => {
   console.error(`[worker] import ${job?.data.importId} failed:`, err);
 });
 
+// M5.6 integrations: Slack notify. A Slack Incoming Webhook expects a bare
+// `{text}` JSON body (no signature, unlike M5.4's own webhooks — Slack's
+// own endpoint, not one of ours), delivered off the request path for the
+// same reason webhookWorker above is.
+const SLACK_DELIVERY_TIMEOUT_MS = 10_000;
+
+const slackWorker = new Worker<SlackJobData>(
+  SLACK_QUEUE_NAME,
+  async (job) => {
+    const { webhookUrl, text } = job.data;
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(SLACK_DELIVERY_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(`Slack delivery to ${webhookUrl} failed with status ${response.status}`);
+    }
+  },
+  { connection: redisConnection },
+);
+
+slackWorker.on("failed", (job, err) => {
+  console.error(`[worker] slack delivery ${job?.id} failed:`, err);
+});
+
 console.log(
-  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}"`,
+  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}", "${SLACK_QUEUE_NAME}"`,
 );

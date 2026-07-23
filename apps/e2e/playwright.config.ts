@@ -34,10 +34,13 @@ export default defineConfig({
       // imports spec itself starts on this fixed port (before it triggers
       // an import), instead of ever calling the real ClickUp API — same
       // testability-seam idea as SCHEDULER_TICK_MS/DIGEST_INTERVAL_MS.
+      // M5.6: same idea for the GitHub PR-link fetch — the integrations
+      // spec starts its own mock server on this fixed port.
       env: {
         SCHEDULER_TICK_MS: "3000",
         DIGEST_INTERVAL_MS: "3000",
         CLICKUP_API_BASE_URL: "http://127.0.0.1:4010",
+        GITHUB_API_BASE_URL: "http://127.0.0.1:4011",
       },
     },
     {

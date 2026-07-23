@@ -32,6 +32,8 @@ function draftFromAction(action: ReturnType<typeof automationActionSchema.parse>
     tagId: action.type === "add_tag" ? action.tagId : "",
     text: action.type === "post_comment" ? action.text : "",
     prompt: action.type === "generate_image" ? action.prompt : "",
+    webhookUrl: action.type === "slack_notify" ? action.webhookUrl : "",
+    message: action.type === "slack_notify" ? action.message : "",
   };
 }
 

@@ -15,8 +15,12 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// "google_drive" attachments never have a generated thumb/blurhash (see
+// schema/attachments.ts) — even one with an image mimeType goes in the
+// plain files list, not the BlurhashThumb grid, since there's no
+// /uploads/:id/thumb to load for it.
 function isImage(a: Attachment) {
-  return a.mime.startsWith("image/");
+  return a.source === "upload" && a.mime.startsWith("image/");
 }
 
 export function AttachmentsSection({ taskId }: { taskId: string }) {
@@ -29,6 +33,24 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // M5.6 "Google Drive picker": the always-available paste-link path (see
+  // PROGRESS.md — the real Picker widget needs frontend-exposed Google
+  // OAuth/API-key plumbing this repo doesn't have configured).
+  const [driveOpen, setDriveOpen] = useState(false);
+  const [driveUrl, setDriveUrl] = useState("");
+  const [driveName, setDriveName] = useState("");
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const attachDrive = trpc.attachment.attachExternal.useMutation({
+    onSuccess: () => {
+      invalidate();
+      setDriveUrl("");
+      setDriveName("");
+      setDriveError(null);
+      setDriveOpen(false);
+    },
+    onError: (err) => setDriveError(err.message),
+  });
 
   const all = attachments.data ?? [];
   const images = all.filter(isImage);
@@ -89,15 +111,15 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
                 className="group border-border flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
               >
                 <a
-                  href={`/uploads/${a.id}`}
+                  href={a.source === "google_drive" ? (a.externalUrl ?? "#") : `/uploads/${a.id}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex-1 truncate hover:underline"
                 >
-                  📎 {a.fileName}
+                  {a.source === "google_drive" ? "📁" : "📎"} {a.fileName}
                 </a>
                 <span className="text-muted-foreground shrink-0 text-xs">
-                  {formatBytes(a.sizeBytes)}
+                  {a.source === "google_drive" ? "Drive" : formatBytes(a.sizeBytes ?? 0)}
                 </span>
                 <button
                   type="button"
@@ -123,8 +145,58 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
             className="text-muted-foreground text-xs"
           />
           {uploading && <span className="text-muted-foreground text-xs">Uploading…</span>}
+          <button
+            type="button"
+            data-testid="attach-drive-toggle"
+            onClick={() => setDriveOpen((o) => !o)}
+            className="text-muted-foreground hover:text-foreground text-xs"
+          >
+            📁 Attach from Google Drive
+          </button>
         </div>
         {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+
+        {driveOpen && (
+          <form
+            className="border-border bg-muted/40 flex flex-wrap items-center gap-2 rounded-md border p-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (driveUrl.trim() && driveName.trim()) {
+                attachDrive.mutate({
+                  taskId,
+                  url: driveUrl.trim(),
+                  fileName: driveName.trim(),
+                });
+              }
+            }}
+          >
+            <input
+              value={driveUrl}
+              placeholder="Drive share link (drive.google.com/file/d/…)"
+              aria-label="Google Drive share link"
+              data-testid="attach-drive-url"
+              onChange={(e) => setDriveUrl(e.target.value)}
+              className="border-border bg-background h-7 flex-1 min-w-40 rounded border px-2 text-xs"
+            />
+            <input
+              value={driveName}
+              placeholder="File name"
+              aria-label="Google Drive file name"
+              data-testid="attach-drive-name"
+              onChange={(e) => setDriveName(e.target.value)}
+              className="border-border bg-background h-7 w-32 rounded border px-2 text-xs"
+            />
+            <button
+              type="submit"
+              disabled={!driveUrl.trim() || !driveName.trim() || attachDrive.isPending}
+              data-testid="attach-drive-submit"
+              className="bg-primary text-primary-foreground h-7 shrink-0 rounded px-2 text-xs disabled:opacity-50"
+            >
+              Attach
+            </button>
+          </form>
+        )}
+        {driveError && <p className="text-xs text-red-500">{driveError}</p>}
       </div>
 
       {lightboxIndex !== null && (

@@ -17,6 +17,7 @@ import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
 import { importRouter } from "./routers/import";
 import { notificationRouter } from "./routers/notification";
+import { prLinkRouter } from "./routers/pr-link";
 import { reminderRouter } from "./routers/reminder";
 import { statusRouter } from "./routers/status";
 import { tagRouter } from "./routers/tag";
@@ -58,6 +59,7 @@ export const appRouter = router({
   apiKey: apiKeyRouter,
   webhook: webhookRouter,
   import: importRouter,
+  prLink: prLinkRouter,
 });
 
 export type AppRouter = typeof appRouter;
