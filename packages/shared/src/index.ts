@@ -48,3 +48,4 @@ export * from "./schemas/api-keys";
 export * from "./schemas/webhooks";
 export * from "./schemas/imports";
 export * from "./schemas/pr-links";
+export * from "./schemas/sso";

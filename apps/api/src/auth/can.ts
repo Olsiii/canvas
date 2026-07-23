@@ -71,7 +71,12 @@ export type WorkspaceAction =
   | "import:run"
   | "prLink:view"
   | "prLink:create"
-  | "prLink:delete";
+  | "prLink:delete"
+  | "sso:view"
+  | "sso:update"
+  | "scimToken:view"
+  | "scimToken:create"
+  | "scimToken:delete";
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -191,6 +196,18 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "prLink:view": "guest",
   "prLink:create": "member",
   "prLink:delete": "member",
+  // Owner tier for the mutating actions — enabling/editing SSO changes how
+  // *every* member of the workspace authenticates, and a SCIM token is a
+  // standing grant for an external system to add/remove members. Bigger
+  // blast radius than an admin-tier credential like an API key or webhook
+  // (those only grant what their creator could already do); this changes
+  // who can get in at all. Viewing the current config is lower-risk,
+  // admin tier, same as apiKey:view/webhook:view.
+  "sso:view": "admin",
+  "sso:update": "owner",
+  "scimToken:view": "admin",
+  "scimToken:create": "owner",
+  "scimToken:delete": "owner",
 };
 
 export interface WorkspaceResource {

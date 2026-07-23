@@ -1,11 +1,10 @@
-import { db, schema } from "@canvas/db";
-import { eq } from "drizzle-orm";
 import { generateCodeVerifier, generateState, OAuth2RequestError } from "arctic";
 import type { FastifyInstance } from "fastify";
 import { setSessionCookie } from "../auth/cookies";
 import { fetchGoogleUserInfo, getGoogleClient } from "../auth/google";
 import { createSession } from "../auth/session";
 import { env } from "../env";
+import { findOrCreateUserByEmail } from "../lib/user-provisioning";
 
 const OAUTH_STATE_COOKIE = "canvas_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "canvas_oauth_verifier";
@@ -56,24 +55,11 @@ export function registerAuthRoutes(app: FastifyInstance) {
       try {
         const tokens = await google.validateAuthorizationCode(code, codeVerifier);
         const googleUser = await fetchGoogleUserInfo(tokens.accessToken());
-
-        let user = await db.query.users.findFirst({
-          where: eq(schema.users.email, googleUser.email),
-        });
-
-        if (!user) {
-          const [created] = await db
-            .insert(schema.users)
-            .values({
-              email: googleUser.email,
-              name: googleUser.name,
-              avatarUrl: googleUser.picture ?? null,
-              passwordHash: null,
-            })
-            .returning();
-          user = created;
-        }
-        if (!user) throw new Error("Failed to create user");
+        const user = await findOrCreateUserByEmail(
+          googleUser.email,
+          googleUser.name,
+          googleUser.picture ?? null,
+        );
 
         const session = await createSession(user.id);
         setSessionCookie(reply, session.id);

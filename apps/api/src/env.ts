@@ -2,6 +2,11 @@ import { z } from "zod";
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().default(3001),
+  // Phase 6: this API server's own externally-reachable origin, used to
+  // build SAML ACS/metadata URLs (routes/saml.ts) — the one thing this app
+  // hadn't needed to know about itself before (GOOGLE_REDIRECT_URI is the
+  // same idea but single-purpose/hardcoded to that one callback path).
+  API_URL: z.string().default("http://localhost:3001"),
   DATABASE_URL: z.string().default("postgres://canvas:canvas@localhost:5432/canvas"),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   WEB_URL: z.string().default("http://localhost:5183"),

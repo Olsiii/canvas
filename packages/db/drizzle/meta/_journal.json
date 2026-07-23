@@ -225,6 +225,13 @@
       "when": 1784793733335,
       "tag": "0031_wooden_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784797268635,
+      "tag": "0032_modern_smasher",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,8 @@ import { importRouter } from "./routers/import";
 import { notificationRouter } from "./routers/notification";
 import { prLinkRouter } from "./routers/pr-link";
 import { reminderRouter } from "./routers/reminder";
+import { scimTokenRouter } from "./routers/scim-token";
+import { ssoRouter } from "./routers/sso";
 import { statusRouter } from "./routers/status";
 import { tagRouter } from "./routers/tag";
 import { taskRouter } from "./routers/task";
@@ -60,6 +62,8 @@ export const appRouter = router({
   webhook: webhookRouter,
   import: importRouter,
   prLink: prLinkRouter,
+  sso: ssoRouter,
+  scimToken: scimTokenRouter,
 });
 
 export type AppRouter = typeof appRouter;

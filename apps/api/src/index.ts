@@ -1,5 +1,6 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import formbody from "@fastify/formbody";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
@@ -15,6 +16,8 @@ import { registerImageAssetRealtimeRoutes } from "./routes/image-asset-realtime"
 import { registerImageAssetRoutes } from "./routes/image-assets";
 import { registerImportRoutes } from "./routes/imports";
 import { registerRealtimeRoutes } from "./routes/realtime";
+import { registerSamlRoutes } from "./routes/saml";
+import { registerScimRoutes } from "./routes/scim";
 import { createContext } from "./trpc/context";
 import { appRouter } from "./trpc/router";
 
@@ -35,6 +38,10 @@ await app.register(cors, { origin: env.WEB_URL, credentials: true });
 await app.register(cookie);
 await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
 await app.register(websocket);
+// SAML's HTTP-POST binding delivers SAMLResponse as a browser-submitted
+// application/x-www-form-urlencoded form (routes/saml.ts) — Fastify has no
+// built-in parser for that content type, unlike JSON.
+await app.register(formbody);
 
 await app.register(fastifyTRPCPlugin, {
   prefix: "/trpc",
@@ -46,6 +53,8 @@ registerApiV1Routes(app);
 registerAttachmentRoutes(app);
 registerImageAssetRoutes(app);
 registerImportRoutes(app);
+registerSamlRoutes(app);
+registerScimRoutes(app);
 registerRealtimeRoutes(app);
 registerBrainRealtimeRoutes(app);
 registerImageAssetRealtimeRoutes(app);
