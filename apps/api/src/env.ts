@@ -1,4 +1,13 @@
+import { config } from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
+
+// Explicit absolute path, not a bare config() call — turbo/tsx run this
+// package's scripts (dev/worker) with apps/api as cwd, not the repo root
+// where .env actually lives, so dotenv's default cwd-relative lookup would
+// silently find nothing and every var would fall back to its default.
+config({ path: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../.env") });
 
 const envSchema = z.object({
   API_PORT: z.coerce.number().default(3001),
