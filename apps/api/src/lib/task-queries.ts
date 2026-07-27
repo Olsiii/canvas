@@ -22,6 +22,18 @@ export async function workspaceIdForTask(taskId: string) {
   return workspaceIdForList(task.listId);
 }
 
+// Phase 6: per-space permission overrides. Cheaper than workspaceIdForList
+// (no join to spaces needed) since lists already carry their own spaceId.
+export async function spaceIdForList(listId: string) {
+  const list = await requireList(listId);
+  return list.spaceId;
+}
+
+export async function spaceIdForTask(taskId: string) {
+  const task = await requireTask(taskId);
+  return spaceIdForList(task.listId);
+}
+
 // Extracted from trpc/routers/task.ts (M1.2) so the scheduler worker (M3.5:
 // spawning a recurring task) can place a new task the same way task.create
 // does, without duplicating the logic.

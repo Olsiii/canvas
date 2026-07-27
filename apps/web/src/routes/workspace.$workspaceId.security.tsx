@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { MEMBERSHIP_ROLES, type MembershipRole } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
+import { ShieldCheck } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -17,7 +18,17 @@ function SecurityPage() {
 
   return (
     <div className="max-w-2xl space-y-8 p-6" data-testid="security-page">
-      <h1 className="text-lg font-semibold">Security</h1>
+      <div className="flex items-center gap-2">
+        <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
+          <ShieldCheck className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <h1 className="text-lg font-semibold">Security</h1>
+          <p className="text-muted-foreground text-xs">
+            Single sign-on and automatic user provisioning for this workspace.
+          </p>
+        </div>
+      </div>
       <SsoSection workspaceId={workspaceId} />
       <ScimSection workspaceId={workspaceId} />
     </div>
@@ -75,10 +86,14 @@ function SsoSection({ workspaceId }: { workspaceId: string }) {
 
   return (
     <section className="space-y-3" data-testid="sso-section">
-      <h2 className="text-sm font-semibold">SAML single sign-on</h2>
+      <h2 className="text-sm font-semibold">Single sign-on</h2>
       <p className="text-muted-foreground text-xs">
-        Configure one identity provider for this workspace. Give your IdP this service provider
-        entity id / metadata URL:
+        Connect your company's login system (like Okta or Google Workspace) so people sign in here
+        with the account they already use for work — no separate Canvas password.
+      </p>
+      <p className="text-muted-foreground text-xs">
+        Technical detail: configure one SAML identity provider for this workspace. Give your IdP
+        this service provider entity id / metadata URL:
       </p>
       <Input readOnly value={data.data?.spEntityId ?? ""} className="h-8 font-mono text-xs" />
 
@@ -190,11 +205,14 @@ function ScimSection({ workspaceId }: { workspaceId: string }) {
 
   return (
     <section className="space-y-3" data-testid="scim-section">
-      <h2 className="text-sm font-semibold">SCIM provisioning</h2>
+      <h2 className="text-sm font-semibold">Automatic member sync</h2>
       <p className="text-muted-foreground text-xs">
-        Point your IdP&apos;s SCIM connector at this base URL, with a token below as its bearer
-        credential — new members are auto-provisioned, and deactivating a user in your IdP removes
-        them from this workspace.
+        Keep this workspace's members in sync with your company directory automatically — add
+        someone there and they're added here; deactivate them there and they lose access here.
+      </p>
+      <p className="text-muted-foreground text-xs">
+        Technical detail: point your IdP&apos;s SCIM connector at this base URL, with a token below
+        as its bearer credential.
       </p>
       <Input
         readOnly

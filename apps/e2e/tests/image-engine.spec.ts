@@ -7,11 +7,14 @@ test("M2.7: pick image engine, generate, see auto alt-text/tags", async ({ page 
   await signUp(page, "Engine Tester");
   await createWorkspaceAndOpen(page, "Engine Workspace");
 
-  const engineSelect = page.getByTestId("brand-image-engine");
-  await engineSelect.selectOption({ label: "Generation quality" });
-  await page.getByRole("button", { name: "Save brand" }).click();
-  await expect(page.getByText("Brand settings saved.")).toBeVisible();
+  await page.getByRole("link", { name: "Brand Kits", exact: true }).click();
+  await page.getByTestId("brand-kit-new").click();
+  await page.getByTestId("brand-kit-name").fill("Studio Default");
+  await page.getByTestId("brand-kit-image-engine").selectOption({ label: "Generation quality" });
+  await page.getByTestId("brand-kit-save").click();
+  await expect(page.getByText("Studio Default")).toBeVisible();
 
+  await page.getByRole("link", { name: "Home", exact: true }).click();
   await createSpaceAndList(page, "Creative", "Campaigns");
   await page.getByRole("button", { name: "Board", exact: true }).click();
   const todoColumn = page.getByTestId("status-column-To Do");

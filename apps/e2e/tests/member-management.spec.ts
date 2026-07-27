@@ -8,7 +8,7 @@ test("invite a member with a role, change their role, then remove them", async (
   await signUp(page, "Nia Owner");
   await createWorkspaceAndOpen(page, "Ops Workspace");
 
-  await page.getByRole("link", { name: "← All workspaces" }).click();
+  await page.getByRole("link", { name: "All workspaces" }).click();
   const bobEmail = `bob-${Date.now()}@example.com`;
   const inviteLink = await inviteAndGetLink(page, bobEmail, "admin");
 
@@ -25,10 +25,12 @@ test("invite a member with a role, change their role, then remove them", async (
   await expect(bobPage.getByRole("link", { name: "Open" })).toBeVisible();
   await bobContext.close();
 
-  // back on Nia's side: open the workspace and confirm the members panel
+  // back on Nia's side: open the workspace and confirm the members panel.
+  // Scoped to the member list rows, since the sidebar's own user footer also
+  // shows the signed-in user's name ("Nia Owner").
   await page.getByRole("link", { name: "Open" }).click();
-  await expect(page.getByText("Nia Owner")).toBeVisible();
-  await expect(page.getByText("Bob Admin")).toBeVisible();
+  await expect(page.getByRole("listitem").getByText("Nia Owner")).toBeVisible();
+  await expect(page.getByRole("listitem").getByText("Bob Admin")).toBeVisible();
   await expect(page.getByLabel("Role for Bob Admin")).toHaveValue("admin");
 
   // demote Bob to guest

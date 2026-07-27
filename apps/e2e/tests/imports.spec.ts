@@ -77,7 +77,7 @@ test("M5.5 importers: ClickUp API import brings in spaces/folders/lists/tasks", 
 
     const spaceRow = page.locator("div.group", { hasText: "Marketing" }).first();
     await expect(spaceRow).toBeVisible();
-    const listLink = page.getByRole("link", { name: "# Launch" });
+    const listLink = page.getByRole("link", { name: "Launch" });
     await expect(listLink).toBeVisible();
     await listLink.click();
 
@@ -122,7 +122,7 @@ test("M5.5 importers: a Trello-style CSV import creates a space, list, and tasks
 
   const spaceRow = page.locator("div.group", { hasText: "Board Import" }).first();
   await expect(spaceRow).toBeVisible();
-  const listLink = page.getByRole("link", { name: "# Sprint Board" });
+  const listLink = page.getByRole("link", { name: "Sprint Board" });
   await expect(listLink).toBeVisible();
   await listLink.click();
 

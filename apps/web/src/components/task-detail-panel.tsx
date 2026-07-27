@@ -310,61 +310,66 @@ export function TaskDetailPanel({
               />
             </Field>
 
-            {!task.data.parentTaskId && (
-              <SubtasksSection
+            <DetailGroup label="Work">
+              {!task.data.parentTaskId && (
+                <SubtasksSection
+                  taskId={taskId}
+                  listId={task.data.listId}
+                  subtasks={task.data.subtasks}
+                  statuses={statuses.data ?? []}
+                  onChanged={invalidate}
+                  onOpenTask={onOpenTask}
+                />
+              )}
+
+              <DependenciesSection
                 taskId={taskId}
                 listId={task.data.listId}
-                subtasks={task.data.subtasks}
+                dependencies={task.data.dependencies}
                 statuses={statuses.data ?? []}
-                onChanged={invalidate}
                 onOpenTask={onOpenTask}
               />
-            )}
 
-            <DependenciesSection
-              taskId={taskId}
-              listId={task.data.listId}
-              dependencies={task.data.dependencies}
-              statuses={statuses.data ?? []}
-              onOpenTask={onOpenTask}
-            />
+              <RemindersSection taskId={taskId} />
 
-            <RemindersSection taskId={taskId} />
+              <TimeTrackingSection taskId={taskId} />
 
-            <TimeTrackingSection taskId={taskId} />
+              <ChecklistsSection taskId={taskId} />
 
-            <ChecklistsSection taskId={taskId} />
+              <AttachmentsSection taskId={taskId} />
 
-            <AttachmentsSection taskId={taskId} />
+              <ClipsSection taskId={taskId} />
 
-            <ClipsSection taskId={taskId} />
+              <PrLinksSection taskId={taskId} />
 
-            <PrLinksSection taskId={taskId} />
+              <Section label="Generate image">
+                <GenerationPanel
+                  workspaceId={workspaceId}
+                  taskId={taskId}
+                  listId={listId}
+                  onAskBrain={() => setBrainOpen(true)}
+                />
+              </Section>
 
-            <Section label="Generate image">
-              <GenerationPanel
-                workspaceId={workspaceId}
+              <TagsSection
                 taskId={taskId}
-                onAskBrain={() => setBrainOpen(true)}
+                workspaceId={workspaceId}
+                tags={task.data.tags}
+                onChanged={invalidate}
               />
-            </Section>
 
-            <TagsSection
-              taskId={taskId}
-              workspaceId={workspaceId}
-              tags={task.data.tags}
-              onChanged={invalidate}
-            />
+              <CustomFieldsSection
+                taskId={taskId}
+                workspaceId={workspaceId}
+                listId={task.data.listId}
+              />
+            </DetailGroup>
 
-            <CustomFieldsSection
-              taskId={taskId}
-              workspaceId={workspaceId}
-              listId={task.data.listId}
-            />
+            <DetailGroup label="Discussion">
+              <CommentsSection taskId={taskId} workspaceId={workspaceId} />
 
-            <CommentsSection taskId={taskId} workspaceId={workspaceId} />
-
-            <ActivitySection taskId={taskId} />
+              <ActivitySection taskId={taskId} />
+            </DetailGroup>
           </div>
         )}
       </div>
@@ -376,6 +381,30 @@ export function TaskDetailPanel({
           onClose={() => setBrainOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+// Groups the panel's less-frequently-touched sections under a collapsible,
+// labeled header — defaults open so nothing already relying on these fields
+// being visible (tests, deep links) changes behavior; it just gives the
+// panel a way to collapse past the core fields instead of one flat scroll.
+function DetailGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="border-border border-t pt-4">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 text-xs font-semibold tracking-wide uppercase"
+      >
+        <span className={open ? "rotate-90" : ""} aria-hidden>
+          ▸
+        </span>
+        {label}
+      </button>
+      {open && <div className="mt-4 space-y-6">{children}</div>}
     </div>
   );
 }
@@ -568,7 +597,9 @@ function DependenciesSection({
         ) : (
           <span className="flex-1 truncate">{dep.task.title}</span>
         )}
-        <span className="text-muted-foreground shrink-0 text-xs">{dep.kind}</span>
+        <span className="text-muted-foreground shrink-0 text-xs">
+          {dep.kind === "blocks" ? "Blocks" : "Waiting on"}
+        </span>
         {notDone && (
           <span className="text-destructive shrink-0 text-xs" title="Not done yet">
             ●
@@ -635,7 +666,7 @@ function DependenciesSection({
           >
             {TASK_DEPENDENCY_KINDS.map((k) => (
               <option key={k} value={k}>
-                {k}
+                {k === "blocks" ? "Blocks" : "Waiting on"}
               </option>
             ))}
           </select>

@@ -1,16 +1,23 @@
 import { BrainChatPanel } from "@/components/brain-chat-panel";
-import {
-  DocCollaborativeEditor,
-  insertImageVersionIntoEditor,
-} from "@/components/doc-collaborative-editor";
+import { insertImageVersionIntoEditor } from "@/components/doc-image-insert";
 import { DocTaskLinks } from "@/components/doc-task-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link } from "@tanstack/react-router";
 import type { Editor } from "@tiptap/react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
+
+// Lazy: this is the one component that pulls in Yjs/y-websocket and the
+// TipTap collaboration extensions — real weight (see PROGRESS.md's
+// performance-hardening decisions) worth deferring until someone actually
+// opens a doc, rather than shipping it in the app's main bundle.
+const DocCollaborativeEditor = lazy(() =>
+  import("@/components/doc-collaborative-editor").then((m) => ({
+    default: m.DocCollaborativeEditor,
+  })),
+);
 
 export const docEditorRoute = createRoute({
   getParentRoute: () => workspaceShellRoute,
@@ -97,13 +104,15 @@ function DocEditorPage() {
 
       <DocTaskLinks docId={docId} workspaceId={workspaceId} />
 
-      <DocCollaborativeEditor
-        docId={docId}
-        userName={me.data?.name ?? me.data?.email ?? "Someone"}
-        onEditorReady={(editor) => {
-          editorRef.current = editor;
-        }}
-      />
+      <Suspense fallback={<p className="text-muted-foreground p-6 text-sm">Loading editor…</p>}>
+        <DocCollaborativeEditor
+          docId={docId}
+          userName={me.data?.name ?? me.data?.email ?? "Someone"}
+          onEditorReady={(editor) => {
+            editorRef.current = editor;
+          }}
+        />
+      </Suspense>
 
       {brainOpen && (
         <BrainChatPanel

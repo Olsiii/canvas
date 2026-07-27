@@ -11,7 +11,9 @@ workspaces       (id, name, slug uniq, plan text default 'internal', created_at)
 memberships      (id, workspace_id fk, user_id fk, role enum('owner','admin','member','guest'),
                   uniq(workspace_id, user_id))
 
-spaces           (id, workspace_id fk, name, icon, order_key, deleted_at)
+spaces           (id, workspace_id fk, name, icon, order_key,
+                  brand_kit_id fk brand_settings null,                     -- overrides workspace default kit
+                  deleted_at)
 folders          (id, space_id fk, name, order_key, deleted_at)          -- optional layer
 lists            (id, space_id fk, folder_id fk null, name, order_key, deleted_at)
 
@@ -55,7 +57,9 @@ notifications    (id, user_id fk, activity_id fk, read_at null)
 ## Image Brain
 
 ```sql
-brand_settings   (id, workspace_id fk uniq, palette_json jsonb, tone text,
+brand_settings   (id, workspace_id fk, name text default 'Default',        -- "brand kits": many per workspace
+                  is_default boolean default false,                       -- workspace's fallback kit
+                  palette_json jsonb, tone text,
                   logo_asset_id fk null, guidelines text)
 
 image_assets     (id, workspace_id fk, created_by fk,

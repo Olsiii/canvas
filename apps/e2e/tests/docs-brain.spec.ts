@@ -17,6 +17,7 @@ test("M4.2 docs: link task, Brain generates inline image", async ({ page }) => {
 
   await page.getByRole("link", { name: "Docs", exact: true }).click();
   await expect(page.getByTestId("docs-list-page")).toBeVisible();
+  await page.getByTestId("docs-new").click();
   await page.getByTestId("docs-new-title").fill("Campaign brief");
   await page.getByTestId("docs-create").click();
   await expect(page.getByTestId("doc-editor-page")).toBeVisible({ timeout: 15_000 });

@@ -189,12 +189,3 @@ export function DocCollaborativeEditor({
     </div>
   );
 }
-
-export function insertImageVersionIntoEditor(editor: Editor, versionId: string) {
-  editor
-    .chain()
-    .focus("end")
-    .setImage({ src: `/image-versions/${versionId}` })
-    .createParagraphNear()
-    .run();
-}

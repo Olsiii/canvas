@@ -78,7 +78,7 @@ test("M5.4 public REST API + webhooks: an API key creates a task, and a webhook 
 
     // The API-created task shows up in the real UI — proves activity/
     // automations/realtime all fired the same way a UI-created task's would.
-    await page.getByRole("link", { name: "# Sprint" }).click();
+    await page.getByRole("link", { name: "Sprint" }).click();
     await page.getByRole("button", { name: "Board", exact: true }).click();
     await expect(page.getByRole("button", { name: "Created via API" })).toBeVisible({
       timeout: 10_000,

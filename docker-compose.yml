@@ -2,7 +2,11 @@ name: canvas-app
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 is a drop-in Postgres 16 image with the
+    # pgvector extension binary preinstalled (Phase 6: semantic + visual
+    # search) — `CREATE EXTENSION vector` still has to run per-database,
+    # done by the embeddings migration itself, not here.
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: canvas

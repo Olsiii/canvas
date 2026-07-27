@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STYLE_PRESETS } from "./style-presets";
 import { editImageAssetSchema, generateImageAssetSchema } from "./schemas/image-assets";
-import { upsertBrandSettingsSchema } from "./schemas/brand-settings";
+import { createBrandKitSchema } from "./schemas/brand-kit";
 
 describe("generateImageAssetSchema", () => {
   it("defaults n to 1 and size to square", () => {
@@ -65,10 +65,11 @@ describe("style presets", () => {
   });
 });
 
-describe("upsertBrandSettingsSchema", () => {
+describe("createBrandKitSchema", () => {
   it("accepts hex palette colors", () => {
-    const parsed = upsertBrandSettingsSchema.parse({
+    const parsed = createBrandKitSchema.parse({
       workspaceId: "01900000-0000-7000-8000-000000000001",
+      name: "Acme Corp",
       palette: ["#112233", "#aabbcc"],
     });
     expect(parsed.palette).toHaveLength(2);
@@ -76,8 +77,9 @@ describe("upsertBrandSettingsSchema", () => {
 
   it("rejects invalid hex", () => {
     expect(() =>
-      upsertBrandSettingsSchema.parse({
+      createBrandKitSchema.parse({
         workspaceId: "01900000-0000-7000-8000-000000000001",
+        name: "Acme Corp",
         palette: ["red"],
       }),
     ).toThrow();

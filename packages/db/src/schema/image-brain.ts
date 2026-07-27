@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   index,
   integer,
   jsonb,
@@ -18,7 +19,7 @@ import { workspaces } from "./workspaces";
 
 export const imageOrigin = pgEnum("image_origin", ["upload", "generation"]);
 export const imageVersionSource = pgEnum("image_version_source", ["upload", "generate", "edit"]);
-export const aiUsageKind = pgEnum("ai_usage_kind", ["generate", "edit", "chat", "vision"]);
+export const aiUsageKind = pgEnum("ai_usage_kind", ["generate", "edit", "chat", "vision", "embed"]);
 export const brainContextType = pgEnum("brain_context_type", ["task", "doc", "channel", "global"]);
 export const brainMessageRole = pgEnum("brain_message_role", ["user", "assistant", "tool"]);
 
@@ -29,70 +30,83 @@ export const brainMessageRole = pgEnum("brain_message_role", ["user", "assistant
 // evaluating — so each can name the other `const` even though one is
 // declared textually below the other, the same pattern tasks.ts already
 // uses for its own self-referencing parentTaskId.
-export const imageAssets = pgTable("image_assets", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  origin: imageOrigin("origin").notNull(),
-  currentVersionId: uuid("current_version_id").references((): AnyPgColumn => imageVersions.id),
-  altText: text("alt_text"),
-  tagsJson: jsonb("tags_json").$type<string[]>(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-});
+export const imageAssets = pgTable(
+  "image_assets",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    origin: imageOrigin("origin").notNull(),
+    currentVersionId: uuid("current_version_id").references((): AnyPgColumn => imageVersions.id),
+    altText: text("alt_text"),
+    tagsJson: jsonb("tags_json").$type<string[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [index("image_assets_workspace_id_idx").on(table.workspaceId)],
+);
 
-export const imageVersions = pgTable("image_versions", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  assetId: uuid("asset_id")
-    .notNull()
-    .references(() => imageAssets.id, { onDelete: "cascade" }),
-  // A tree, not a list — every edit branches from the version it edited.
-  // See ARCHITECTURE.md §3.2 ("branch from any node").
-  parentVersionId: uuid("parent_version_id").references((): AnyPgColumn => imageVersions.id),
-  source: imageVersionSource("source").notNull(),
-  prompt: text("prompt"),
-  instruction: text("instruction"),
-  provider: text("provider").notNull(),
-  model: text("model").notNull(),
-  fileKey: text("file_key").notNull(),
-  thumbKey: text("thumb_key"),
-  blurhash: text("blurhash"),
-  width: integer("width").notNull(),
-  height: integer("height").notNull(),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const imageVersions = pgTable(
+  "image_versions",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => imageAssets.id, { onDelete: "cascade" }),
+    // A tree, not a list — every edit branches from the version it edited.
+    // See ARCHITECTURE.md §3.2 ("branch from any node").
+    parentVersionId: uuid("parent_version_id").references((): AnyPgColumn => imageVersions.id),
+    source: imageVersionSource("source").notNull(),
+    prompt: text("prompt"),
+    instruction: text("instruction"),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    fileKey: text("file_key").notNull(),
+    thumbKey: text("thumb_key"),
+    blurhash: text("blurhash"),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("image_versions_asset_id_idx").on(table.assetId)],
+);
 
 // Append-only metering log (no deletedAt/updatedAt — same shape as
 // `activity`). CLAUDE.md hard rule: "Every AI call writes an ai_usage row."
-export const aiUsage = pgTable("ai_usage", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  kind: aiUsageKind("kind").notNull(),
-  provider: text("provider").notNull(),
-  model: text("model").notNull(),
-  credits: integer("credits").notNull(),
-  costUsdEst: numeric("cost_usd_est", { precision: 10, scale: 4 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: aiUsageKind("kind").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    credits: integer("credits").notNull(),
+    costUsdEst: numeric("cost_usd_est", { precision: 10, scale: 4 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Dashboard AI-usage-cost widget queries by workspaceId + a date range.
+  (table) => [index("ai_usage_workspace_id_idx").on(table.workspaceId)],
+);
 
 // DATA_MODEL.md: "One brain_conversation per context (task, doc, channel, or
 // global)". M2.2 only ever creates 'task'/'global' conversations (Docs is
@@ -127,6 +141,13 @@ export const brainConversations = pgTable(
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Optional: when set, this conversation's system prompt includes the
+    // kit's palette/tone/guidelines (see worker.ts's buildSystemPrompt call)
+    // — same "explicit choice, not auto-resolved from space" model the
+    // Generate panel's brandKitId override uses.
+    brandKitId: uuid("brand_kit_id").references((): AnyPgColumn => brandSettings.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -164,17 +185,20 @@ export const brainMessages = pgTable(
   ],
 );
 
-// One row per workspace (unique workspace_id). Palette/tone/guidelines feed
-// Generation UX (M2.4) and Brain system context. logo_asset_id is optional
-// and may point at a Brain image_asset used as the brand mark.
+// Many rows per workspace ("brand kits" — e.g. one per client). Palette/
+// tone/guidelines feed Generation UX (M2.4) and Brain system context.
+// logo_asset_id is optional and may point at a Brain image_asset used as
+// the brand mark. is_default marks the workspace's fallback kit, used
+// whenever a space has no brand_kit_id of its own (see spaces table).
 export const brandSettings = pgTable("brand_settings", {
   id: uuid("id")
     .primaryKey()
     .$defaultFn(() => uuidv7()),
   workspaceId: uuid("workspace_id")
     .notNull()
-    .unique()
     .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull().default("Default"),
+  isDefault: boolean("is_default").notNull().default(false),
   paletteJson: jsonb("palette_json").$type<string[]>().notNull().default([]),
   tone: text("tone"),
   logoAssetId: uuid("logo_asset_id").references((): AnyPgColumn => imageAssets.id, {

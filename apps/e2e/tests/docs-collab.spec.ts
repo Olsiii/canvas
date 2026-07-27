@@ -16,12 +16,13 @@ test("M4.1 docs: two users see each other's collaborative edits", async ({ page,
 
   await page.getByRole("link", { name: "Docs", exact: true }).click();
   await expect(page.getByTestId("docs-list-page")).toBeVisible();
+  await page.getByTestId("docs-new").click();
   await page.getByTestId("docs-new-title").fill("Shared brief");
   await page.getByTestId("docs-create").click();
   await expect(page.getByTestId("doc-editor-page")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("doc-sync-status")).toHaveText("Synced", { timeout: 15_000 });
 
-  await page.getByRole("link", { name: "← All workspaces" }).click();
+  await page.getByRole("link", { name: "All workspaces" }).click();
   const bobEmail = uniqueEmail("bob-docs");
   const inviteLink = await inviteAndGetLink(page, bobEmail);
 

@@ -1,10 +1,11 @@
 import { activityRouter } from "./routers/activity";
+import { aiUsageRouter } from "./routers/ai-usage";
 import { apiKeyRouter } from "./routers/api-key";
 import { attachmentRouter } from "./routers/attachment";
 import { authRouter } from "./routers/auth";
 import { automationRouter } from "./routers/automation";
 import { brainRouter } from "./routers/brain";
-import { brandSettingsRouter } from "./routers/brand-settings";
+import { brandKitRouter } from "./routers/brand-kit";
 import { chatRouter } from "./routers/chat";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
@@ -19,7 +20,9 @@ import { importRouter } from "./routers/import";
 import { notificationRouter } from "./routers/notification";
 import { prLinkRouter } from "./routers/pr-link";
 import { reminderRouter } from "./routers/reminder";
+import { roleRouter } from "./routers/role";
 import { scimTokenRouter } from "./routers/scim-token";
+import { searchRouter } from "./routers/search";
 import { ssoRouter } from "./routers/sso";
 import { statusRouter } from "./routers/status";
 import { tagRouter } from "./routers/tag";
@@ -50,7 +53,7 @@ export const appRouter = router({
   customField: customFieldRouter,
   attachment: attachmentRouter,
   imageAsset: imageAssetRouter,
-  brandSettings: brandSettingsRouter,
+  brandKit: brandKitRouter,
   brain: brainRouter,
   doc: docRouter,
   chat: chatRouter,
@@ -64,6 +67,9 @@ export const appRouter = router({
   prLink: prLinkRouter,
   sso: ssoRouter,
   scimToken: scimTokenRouter,
+  role: roleRouter,
+  search: searchRouter,
+  aiUsage: aiUsageRouter,
 });
 
 export type AppRouter = typeof appRouter;

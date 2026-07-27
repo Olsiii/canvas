@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useBrainStream } from "@/hooks/use-brain-stream";
 import { trpc } from "@/lib/trpc";
+import { Loader2, Send, Sparkles, Wrench, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 function messageText(contentJson: unknown): string {
@@ -50,9 +51,16 @@ export function BrainChatPanel({
   const [streamError, setStreamError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [statusLine, setStatusLine] = useState<string | null>(null);
+  const [brandKitId, setBrandKitId] = useState<string | null>(null);
+
+  const brandKits = trpc.brandKit.list.useQuery({ workspaceId });
+  const setBrandKit = trpc.brain.setBrandKit.useMutation();
 
   const getOrCreate = trpc.brain.getOrCreateConversation.useMutation({
-    onSuccess: (conversation) => setConversationId(conversation.id),
+    onSuccess: (conversation) => {
+      setConversationId(conversation.id);
+      setBrandKitId(conversation.brandKitId);
+    },
   });
 
   useEffect(() => {
@@ -115,6 +123,14 @@ export function BrainChatPanel({
     },
   });
 
+  function handleBrandKitChange(value: string) {
+    const nextBrandKitId = value || null;
+    setBrandKitId(nextBrandKitId);
+    if (conversationId) {
+      setBrandKit.mutate({ conversationId, brandKitId: nextBrandKitId });
+    }
+  }
+
   async function handleSend(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
@@ -163,24 +179,61 @@ export function BrainChatPanel({
       />
       <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-muted-foreground hover:text-foreground text-sm"
-          >
-            ✕ Close
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="bg-accent-soft text-accent flex h-8 w-8 items-center justify-center rounded-md">
+              <Sparkles className="h-4 w-4" aria-hidden />
+            </span>
+            <h2 className="text-sm font-semibold">{title}</h2>
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
         </div>
+
+        {(brandKits.data?.length ?? 0) > 0 && (
+          <div className="border-border flex items-center gap-2 border-b px-4 py-2 text-xs">
+            <label htmlFor="brain-brand-kit" className="text-muted-foreground shrink-0">
+              Brand
+            </label>
+            <select
+              id="brain-brand-kit"
+              data-testid="brain-brand-kit"
+              value={brandKitId ?? ""}
+              disabled={!conversationId}
+              onChange={(e) => handleBrandKitChange(e.target.value)}
+              className="border-border bg-background h-7 flex-1 rounded border px-1.5 text-xs"
+            >
+              <option value="">None</option>
+              {brandKits.data?.map((kit) => (
+                <option key={kit.id} value={kit.id}>
+                  {kit.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
           {getOrCreate.isPending && !conversationId && (
-            <p className="text-muted-foreground text-sm">Opening conversation…</p>
+            <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              Opening conversation…
+            </p>
           )}
           {getOrCreate.isError && (
-            <p className="text-destructive text-sm">Could not open Brain chat.</p>
+            <p className="text-status-critical text-sm">Could not open Brain chat.</p>
           )}
+
+          {persistedMessages.length === 0 &&
+            !getOrCreate.isPending &&
+            !showPending &&
+            !streamingText &&
+            !sending && (
+              <p className="text-muted-foreground py-8 text-center text-sm">
+                Ask Brain anything about this {contextType === "global" ? "workspace" : contextType}
+                .
+              </p>
+            )}
 
           {persistedMessages.map((m) => {
             if (m.role === "tool") {
@@ -188,8 +241,9 @@ export function BrainChatPanel({
                 <div
                   key={m.id}
                   data-testid="brain-message-tool"
-                  className="text-muted-foreground mr-6 text-xs italic"
+                  className="text-muted-foreground mr-6 flex items-center gap-1.5 text-xs italic"
                 >
+                  <Wrench className="h-3 w-3 shrink-0" aria-hidden />
                   {toolResultLabel(m.contentJson)}
                 </div>
               );
@@ -205,16 +259,20 @@ export function BrainChatPanel({
                 data-testid={`brain-message-${m.role}`}
                 className={
                   m.role === "user"
-                    ? "bg-muted ml-6 rounded-md px-3 py-2 text-sm"
-                    : "border-border mr-6 rounded-md border px-3 py-2 text-sm"
+                    ? "bg-accent-soft ml-6 rounded-md px-3 py-2 text-sm"
+                    : "border-border bg-card mr-6 rounded-md border px-3 py-2 text-sm"
                 }
               >
-                <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wide">
+                <p className="text-muted-foreground mb-1 flex items-center gap-1 text-[10px] font-semibold tracking-wide uppercase">
+                  {m.role !== "user" && <Sparkles className="h-2.5 w-2.5" aria-hidden />}
                   {m.role === "user" ? "You" : "Brain"}
                 </p>
                 {text && <p className="whitespace-pre-wrap">{text}</p>}
                 {tools.length > 0 && (
-                  <p className="text-muted-foreground mt-1 text-xs">Used {tools.join(", ")}</p>
+                  <p className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
+                    <Wrench className="h-3 w-3" aria-hidden />
+                    Used {tools.join(", ")}
+                  </p>
                 )}
               </div>
             );
@@ -223,9 +281,11 @@ export function BrainChatPanel({
           {showPending && (
             <div
               data-testid="brain-message-user-pending"
-              className="bg-muted ml-6 rounded-md px-3 py-2 text-sm opacity-80"
+              className="bg-accent-soft ml-6 rounded-md px-3 py-2 text-sm opacity-80"
             >
-              <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wide">You</p>
+              <p className="text-muted-foreground mb-1 text-[10px] font-semibold tracking-wide uppercase">
+                You
+              </p>
               <p className="whitespace-pre-wrap">{pendingUserText}</p>
             </div>
           )}
@@ -233,13 +293,18 @@ export function BrainChatPanel({
           {(streamingText || (sending && !streamingText) || statusLine) && (
             <div
               data-testid="brain-message-assistant-streaming"
-              className="border-border mr-6 rounded-md border px-3 py-2 text-sm"
+              className="border-border bg-card mr-6 rounded-md border px-3 py-2 text-sm"
             >
-              <p className="text-muted-foreground mb-1 text-[10px] uppercase tracking-wide">
+              <p className="text-muted-foreground mb-1 flex items-center gap-1 text-[10px] font-semibold tracking-wide uppercase">
+                <Sparkles className="h-2.5 w-2.5" aria-hidden />
                 Brain
               </p>
               {statusLine && (
-                <p data-testid="brain-status-line" className="text-muted-foreground mb-1 text-xs">
+                <p
+                  data-testid="brain-status-line"
+                  className="text-accent mb-1 flex items-center gap-1.5 text-xs"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
                   {statusLine}
                 </p>
               )}
@@ -250,7 +315,7 @@ export function BrainChatPanel({
           )}
 
           {streamError && (
-            <p className="text-destructive text-sm" role="alert">
+            <p className="text-status-critical text-sm" role="alert">
               {streamError}
             </p>
           )}
@@ -268,7 +333,7 @@ export function BrainChatPanel({
             placeholder="Ask Brain…"
             rows={3}
             disabled={!conversationId || sending}
-            className="border-border focus-visible:ring-primary mb-2 w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+            className="border-border focus-visible:ring-accent mb-2 w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -277,7 +342,17 @@ export function BrainChatPanel({
             }}
           />
           <div className="flex justify-end">
-            <Button type="submit" size="sm" disabled={!conversationId || sending || !draft.trim()}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!conversationId || sending || !draft.trim()}
+              className="gap-1.5"
+            >
+              {sending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Send className="h-3.5 w-3.5" aria-hidden />
+              )}
               Send
             </Button>
           </div>

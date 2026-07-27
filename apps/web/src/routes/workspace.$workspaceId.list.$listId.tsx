@@ -5,7 +5,7 @@ import { TaskGanttView } from "@/components/task-gantt-view";
 import { TaskListView } from "@/components/task-list-view";
 import { TaskTableView } from "@/components/task-table-view";
 import { trpc } from "@/lib/trpc";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
@@ -27,6 +27,7 @@ export const listRoute = createRoute({
 function ListPage() {
   const { workspaceId, listId } = listRoute.useParams();
   const { openTask } = listRoute.useSearch();
+  const navigate = useNavigate({ from: listRoute.fullPath });
   const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
   const [view, setView] = useState<"list" | "board" | "calendar" | "table" | "gantt">("list");
   const [openTaskId, setOpenTaskId] = useState<string | null>(openTask ?? null);
@@ -138,7 +139,13 @@ function ListPage() {
         <TaskDetailPanel
           taskId={openTaskId}
           workspaceId={workspaceId}
-          onClose={() => setOpenTaskId(null)}
+          onClose={() => {
+            setOpenTaskId(null);
+            // Clear `openTask` so a reload doesn't resurrect the panel via
+            // the effect above — the search param is only meant as a
+            // one-time deep link from a notification.
+            if (openTask) void navigate({ search: { openTask: undefined } });
+          }}
           onOpenTask={setOpenTaskId}
         />
       )}

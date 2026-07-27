@@ -27,7 +27,11 @@ async function sourceUrlForVersion(versionId: string): Promise<string> {
 // image-jobs or brain-jobs worker still satisfies CLAUDE.md's "AI calls
 // run in BullMQ workers" rule.
 export async function processImageJob(data: ImageJobData): Promise<ProcessImageJobResult> {
-  const engine = await getImageEngineForWorkspace(data.workspaceId);
+  const engine = await getImageEngineForWorkspace({
+    workspaceId: data.workspaceId,
+    spaceId: data.spaceId,
+    brandKitId: data.kind === "generate" ? data.brandKitId : undefined,
+  });
 
   const generated =
     data.kind === "generate"

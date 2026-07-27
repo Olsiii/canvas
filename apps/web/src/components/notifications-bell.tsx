@@ -2,7 +2,17 @@ import { NOTIFICATION_VERB_LABELS } from "@canvas/shared";
 import { formatRelativeTime } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+// Verbs whose payloadJson carries {taskId, listId} — clicking navigates
+// straight to the task. message.created's payload shape (channelId, no
+// task) is different and isn't wired to a click-through yet.
+const TASK_LINK_VERBS = new Set([
+  "comment.created",
+  "reminder.fired",
+  "task.assigned",
+  "task.priority_urgent",
+]);
 
 function taskLink(payload: unknown): { taskId: string; listId: string } | null {
   if (!payload || typeof payload !== "object") return null;
@@ -21,6 +31,7 @@ function reminderNote(payload: unknown): string | null {
 
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const utils = trpc.useUtils();
   const navigate = useNavigate();
   const notifications = trpc.notification.list.useQuery(undefined, {
@@ -36,8 +47,19 @@ export function NotificationsBell() {
   const entries = notifications.data ?? [];
   const unreadCount = entries.filter((n) => !n.readAt).length;
 
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -71,10 +93,7 @@ export function NotificationsBell() {
               <p className="text-muted-foreground p-3 text-xs">No notifications yet.</p>
             )}
             {entries.map((n) => {
-              const link =
-                n.verb === "comment.created" || n.verb === "reminder.fired"
-                  ? taskLink(n.payloadJson)
-                  : null;
+              const link = TASK_LINK_VERBS.has(n.verb) ? taskLink(n.payloadJson) : null;
               const note = n.verb === "reminder.fired" ? reminderNote(n.payloadJson) : null;
               return (
                 <button
@@ -100,7 +119,7 @@ export function NotificationsBell() {
                   ) : (
                     <>
                       <span className="font-medium">{n.actorName}</span>{" "}
-                      {NOTIFICATION_VERB_LABELS[n.verb] ?? n.verb}
+                      {NOTIFICATION_VERB_LABELS[n.verb] ?? "sent you an update"}
                     </>
                   )}
                   {note && <div className="mt-0.5">{note}</div>}

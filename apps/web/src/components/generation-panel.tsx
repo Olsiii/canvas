@@ -8,27 +8,42 @@ import {
   type StylePreset,
 } from "@canvas/shared";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageProofing } from "@/components/image-proofing";
 import { VersionCompare } from "@/components/version-compare";
 import { VersionTreeSidebar } from "@/components/version-tree-sidebar";
 import { useImageAssetJob } from "@/hooks/use-image-asset-job";
 import { trpc } from "@/lib/trpc";
+import { CheckCircle2, GitBranch, Loader2, Paperclip, Sparkles, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 export function GenerationPanel({
   workspaceId,
   taskId,
+  listId,
   onAskBrain,
   onClose,
 }: {
   workspaceId: string;
   taskId?: string;
+  /** The list generation was triggered from, if any — used to resolve the
+   * space's own brand kit (see Brand Kits' space assignments) ahead of the
+   * workspace default. */
+  listId?: string;
   /** M4.4: opens the caller's task-context Brain panel for an image critique. */
   onAskBrain?: () => void;
   onClose?: () => void;
 }) {
   const utils = trpc.useUtils();
-  const brand = trpc.brandSettings.get.useQuery({ workspaceId });
+  const tree = trpc.hierarchy.tree.useQuery({ workspaceId });
+  const spaceId = listId ? tree.data?.lists.find((l) => l.id === listId)?.spaceId : undefined;
+  const brandKits = trpc.brandKit.list.useQuery({ workspaceId });
+  const [brandKitId, setBrandKitId] = useState("");
+  const brand = trpc.brandKit.getEffective.useQuery({
+    workspaceId,
+    spaceId,
+    brandKitId: brandKitId || undefined,
+  });
 
   const [prompt, setPrompt] = useState("");
   const [size, setSize] = useState<AspectPreset>("square");
@@ -127,6 +142,8 @@ export function GenerationPanel({
         style: style || undefined,
         n,
         useBrandPalette,
+        spaceId,
+        brandKitId: brandKitId || undefined,
       });
       setAssetId(created.id);
     } catch {
@@ -177,124 +194,163 @@ export function GenerationPanel({
               ? `Working ${versions.length}/${Math.max(targetVersionCount, versions.length)}…`
               : null;
 
+  const statusTone =
+    jobStatus === "error"
+      ? "text-status-critical"
+      : jobStatus === "done"
+        ? "text-status-good"
+        : "text-accent";
+
   return (
     <div data-testid="generation-panel" className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Generate image</h3>
+        <div className="flex items-center gap-2">
+          <span className="bg-accent-soft text-accent flex h-8 w-8 items-center justify-center rounded-md">
+            <Wand2 className="h-4 w-4" aria-hidden />
+          </span>
+          <h3 className="text-sm font-semibold">Generate image</h3>
+        </div>
         {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground text-xs"
-          >
-            Close
-          </button>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
         )}
       </div>
 
-      <form onSubmit={handleGenerate} className="space-y-3">
-        <div>
-          <label htmlFor="gen-prompt" className="mb-1 block text-xs font-medium">
-            Prompt
-          </label>
-          <textarea
-            id="gen-prompt"
-            data-testid="generation-prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={3}
-            placeholder="Describe the image…"
-            className="border-border focus-visible:ring-primary w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
+      <Card>
+        <CardContent className="space-y-3 pt-4">
           <div>
-            <label htmlFor="gen-size" className="mb-1 block text-xs font-medium">
-              Aspect
+            <label htmlFor="gen-prompt" className="mb-1 block text-xs font-medium">
+              Prompt
             </label>
-            <select
-              id="gen-size"
-              data-testid="generation-size"
-              value={size}
-              onChange={(e) => setSize(e.target.value as AspectPreset)}
-              className="border-border bg-background h-8 w-full rounded border text-sm"
-            >
-              {ASPECT_PRESETS.map((p) => (
-                <option key={p} value={p}>
-                  {ASPECT_PRESET_LABELS[p]}
-                </option>
-              ))}
-            </select>
+            <textarea
+              id="gen-prompt"
+              data-testid="generation-prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={3}
+              placeholder="Describe the image you want…"
+              className="border-border focus-visible:ring-accent w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2"
+            />
           </div>
-          <div>
-            <label htmlFor="gen-style" className="mb-1 block text-xs font-medium">
-              Style
-            </label>
-            <select
-              id="gen-style"
-              data-testid="generation-style"
-              value={style}
-              onChange={(e) => setStyle(e.target.value as StylePreset | "")}
-              className="border-border bg-background h-8 w-full rounded border text-sm"
-            >
-              <option value="">Any</option>
-              {STYLE_PRESETS.map((p) => (
-                <option key={p} value={p}>
-                  {STYLE_PRESET_LABELS[p]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="gen-n" className="mb-1 block text-xs font-medium">
-              Variants
-            </label>
-            <select
-              id="gen-n"
-              data-testid="generation-n"
-              value={n}
-              onChange={(e) => setN(Number(e.target.value))}
-              className="border-border bg-background h-8 w-full rounded border text-sm"
-            >
-              {[1, 2, 3, 4].map((count) => (
-                <option key={count} value={count}>
-                  {count}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="gen-size" className="mb-1 block text-xs font-medium">
+                Aspect ratio
+              </label>
+              <select
+                id="gen-size"
+                data-testid="generation-size"
+                value={size}
+                onChange={(e) => setSize(e.target.value as AspectPreset)}
+                className="border-border bg-background h-8 w-full rounded border text-sm"
+              >
+                {ASPECT_PRESETS.map((p) => (
+                  <option key={p} value={p}>
+                    {ASPECT_PRESET_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="gen-style" className="mb-1 block text-xs font-medium">
+                Style
+              </label>
+              <select
+                id="gen-style"
+                data-testid="generation-style"
+                value={style}
+                onChange={(e) => setStyle(e.target.value as StylePreset | "")}
+                className="border-border bg-background h-8 w-full rounded border text-sm"
+              >
+                <option value="">Any style</option>
+                {STYLE_PRESETS.map((p) => (
+                  <option key={p} value={p}>
+                    {STYLE_PRESET_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="flex items-end pb-1">
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                data-testid="generation-use-brand"
-                checked={useBrandPalette}
-                onChange={(e) => setUseBrandPalette(e.target.checked)}
-              />
-              Use brand palette
-              {(brand.data?.paletteJson?.length ?? 0) === 0 && (
-                <span className="text-muted-foreground">(none set yet)</span>
-              )}
-            </label>
-          </div>
-        </div>
 
-        <Button
-          type="submit"
-          size="sm"
-          disabled={!prompt.trim() || generate.isPending}
-          data-testid="generation-submit"
-        >
-          {generate.isPending ? "Starting…" : "Generate"}
-        </Button>
-      </form>
+          {(brandKits.data?.length ?? 0) > 0 && (
+            <div>
+              <label htmlFor="gen-brand-kit" className="mb-1 block text-xs font-medium">
+                Brand kit
+              </label>
+              <select
+                id="gen-brand-kit"
+                data-testid="generation-brand-kit"
+                value={brandKitId}
+                onChange={(e) => setBrandKitId(e.target.value)}
+                className="border-border bg-background h-8 w-full rounded border text-sm"
+              >
+                <option value="">Auto (workspace/space default)</option>
+                {brandKits.data?.map((kit) => (
+                  <option key={kit.id} value={kit.id}>
+                    {kit.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="gen-n" className="mb-1 block text-xs font-medium">
+                How many versions to create
+              </label>
+              <select
+                id="gen-n"
+                data-testid="generation-n"
+                value={n}
+                onChange={(e) => setN(Number(e.target.value))}
+                className="border-border bg-background h-8 w-full rounded border text-sm"
+              >
+                {[1, 2, 3, 4].map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  data-testid="generation-use-brand"
+                  checked={useBrandPalette}
+                  onChange={(e) => setUseBrandPalette(e.target.checked)}
+                />
+                Use brand colors
+                {(brand.data?.paletteJson?.length ?? 0) === 0 && (
+                  <span className="text-muted-foreground">(none set yet)</span>
+                )}
+              </label>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={handleGenerate}
+            size="sm"
+            disabled={!prompt.trim() || generate.isPending}
+            data-testid="generation-submit"
+            className="w-full gap-1.5"
+          >
+            {generate.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {generate.isPending ? "Starting…" : "Generate"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {error && (
-        <p className="text-destructive text-sm" role="alert">
+        <p className="text-status-critical text-sm" role="alert">
           {error}
         </p>
       )}
@@ -303,14 +359,21 @@ export function GenerationPanel({
         <p
           data-testid="generation-job-status"
           data-status={jobStatus === "idle" && waiting ? "generating" : jobStatus}
-          className="text-muted-foreground text-sm"
+          className={`flex items-center gap-1.5 text-sm font-medium ${statusTone}`}
         >
+          {jobStatus === "done" ? (
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+          ) : jobStatus === "error" ? (
+            <X className="h-3.5 w-3.5" aria-hidden />
+          ) : (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          )}
           {statusLabel}
         </p>
       )}
 
       {ready && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <VersionTreeSidebar
             roots={treeRoots}
             selectedVersionId={selectedVersionId}
@@ -322,21 +385,21 @@ export function GenerationPanel({
             }}
           />
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="generation-promote"
-              disabled={!assetId || !selectedVersionId || isCurrentSelected || promote.isPending}
-              onClick={() => {
-                if (!assetId || !selectedVersionId) return;
-                promote.mutate({ assetId, versionId: selectedVersionId });
-              }}
-            >
-              {isCurrentSelected ? "Current version" : "Set as current"}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="generation-promote"
+            disabled={!assetId || !selectedVersionId || isCurrentSelected || promote.isPending}
+            className="gap-1.5"
+            onClick={() => {
+              if (!assetId || !selectedVersionId) return;
+              promote.mutate({ assetId, versionId: selectedVersionId });
+            }}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            {isCurrentSelected ? "Current version" : "Set as current"}
+          </Button>
 
           {selectedVersionId && compareVersionId && compareVersionId !== selectedVersionId && (
             <VersionCompare
@@ -350,30 +413,49 @@ export function GenerationPanel({
             <ImageProofing versionId={selectedVersionId} taskId={taskId} onAskBrain={onAskBrain} />
           )}
 
-          <form onSubmit={handleEdit} className="space-y-2 border-t border-border pt-3">
-            <label htmlFor="gen-edit" className="mb-1 block text-xs font-medium">
-              Branch from selected
-            </label>
-            <textarea
-              id="gen-edit"
-              data-testid="generation-edit-instruction"
-              value={editInstruction}
-              onChange={(e) => setEditInstruction(e.target.value)}
-              rows={2}
-              placeholder="Describe the change…"
-              disabled={!selectedVersionId || edit.isPending}
-              className="border-border focus-visible:ring-primary w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              variant="outline"
-              disabled={!selectedVersionId || !editInstruction.trim() || edit.isPending || busy}
-              data-testid="generation-edit-submit"
-            >
-              {edit.isPending ? "Starting branch…" : "Branch / edit"}
-            </Button>
-          </form>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1.5">
+                <GitBranch className="h-4 w-4" aria-hidden />
+                Edit the selected version
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <textarea
+                id="gen-edit"
+                aria-label="Describe the change"
+                data-testid="generation-edit-instruction"
+                value={editInstruction}
+                onChange={(e) => setEditInstruction(e.target.value)}
+                rows={2}
+                placeholder="Describe the change you want, e.g. make the background darker…"
+                disabled={!selectedVersionId || edit.isPending}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleEdit(e);
+                  }
+                }}
+                className="border-border focus-visible:ring-accent w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+              />
+              <Button
+                type="button"
+                onClick={handleEdit}
+                size="sm"
+                variant="outline"
+                disabled={!selectedVersionId || !editInstruction.trim() || edit.isPending || busy}
+                data-testid="generation-edit-submit"
+                className="gap-1.5"
+              >
+                {edit.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                ) : (
+                  <GitBranch className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {edit.isPending ? "Starting…" : "Create edited version"}
+              </Button>
+            </CardContent>
+          </Card>
 
           {taskId && asset.data?.currentVersionId && (
             <Button
@@ -382,30 +464,35 @@ export function GenerationPanel({
               variant="outline"
               data-testid="generation-attach"
               disabled={attach.isPending || busy}
+              className="gap-1.5"
               onClick={() => {
                 if (!assetId) return;
                 attach.mutate({ assetId, taskId });
               }}
             >
-              {attach.isSuccess ? "Attached to task" : "Attach current to task"}
+              {attach.isSuccess ? (
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <Paperclip className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {attach.isSuccess ? "Attached to task" : "Attach current version to task"}
             </Button>
           )}
 
           {asset.data?.altText && (
-            <div
-              data-testid="generation-understanding"
-              className="border-border space-y-1 border-t pt-3"
-            >
-              <p className="text-xs font-medium">Auto description</p>
-              <p data-testid="generation-alt-text" className="text-muted-foreground text-sm">
-                {asset.data.altText}
-              </p>
-              {Array.isArray(asset.data.tagsJson) && asset.data.tagsJson.length > 0 && (
-                <p data-testid="generation-tags" className="text-muted-foreground text-xs">
-                  Tags: {asset.data.tagsJson.join(", ")}
+            <Card data-testid="generation-understanding">
+              <CardContent className="space-y-1 pt-4">
+                <p className="text-xs font-medium">What Brain sees in this image</p>
+                <p data-testid="generation-alt-text" className="text-muted-foreground text-sm">
+                  {asset.data.altText}
                 </p>
-              )}
-            </div>
+                {Array.isArray(asset.data.tagsJson) && asset.data.tagsJson.length > 0 && (
+                  <p data-testid="generation-tags" className="text-muted-foreground text-xs">
+                    Tags: {asset.data.tagsJson.join(", ")}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           )}
         </div>
       )}

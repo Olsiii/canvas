@@ -1,9 +1,11 @@
 import { DashboardWidget } from "@/components/dashboard-widget";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { WIDGET_TYPES, type WidgetType } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
+import { LayoutGrid, Plus } from "lucide-react";
 import { useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -15,12 +17,19 @@ export const dashboardEditorRoute = createRoute({
 
 const WIDGET_TYPE_LABELS: Record<WidgetType, string> = {
   task_counts: "Task counts",
-  burndown: "Burndown",
+  burndown: "Tasks remaining over time",
   time_tracked: "Time tracked",
   ai_usage_cost: "AI usage cost",
+  assignee_breakdown: "Open tasks by assignee",
+  priority_breakdown: "Open tasks by priority",
 };
 
 const HAS_DAYS_CONFIG = new Set<WidgetType>(["burndown", "time_tracked", "ai_usage_cost"]);
+const NO_CONFIG_TYPES = new Set<WidgetType>([
+  "task_counts",
+  "assignee_breakdown",
+  "priority_breakdown",
+]);
 
 function DashboardEditorPage() {
   const { dashboardId } = dashboardEditorRoute.useParams();
@@ -36,7 +45,9 @@ function DashboardEditorPage() {
   function handleAddWidget() {
     const config: Parameters<typeof addWidget.mutate>[0]["config"] = HAS_DAYS_CONFIG.has(widgetType)
       ? { type: widgetType as "burndown" | "time_tracked" | "ai_usage_cost", days }
-      : { type: "task_counts" };
+      : NO_CONFIG_TYPES.has(widgetType)
+        ? { type: widgetType as "task_counts" | "assignee_breakdown" | "priority_breakdown" }
+        : { type: "task_counts" };
     addWidget.mutate({ dashboardId, config });
   }
 
@@ -45,10 +56,15 @@ function DashboardEditorPage() {
   }
 
   return (
-    <div className="space-y-4 p-6" data-testid="dashboard-editor-page">
-      <h1 className="text-lg font-semibold">{dashboard.data.name}</h1>
+    <div className="space-y-6 p-6" data-testid="dashboard-editor-page">
+      <div className="flex items-center gap-2">
+        <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
+          <LayoutGrid className="h-5 w-5" aria-hidden />
+        </span>
+        <h1 className="text-lg font-semibold">{dashboard.data.name}</h1>
+      </div>
 
-      <div className="border-border flex flex-wrap items-center gap-2 rounded-md border p-3">
+      <Card className="flex flex-wrap items-center gap-2 p-3">
         <select
           value={widgetType}
           onChange={(e) => setWidgetType(e.target.value as WidgetType)}
@@ -80,15 +96,17 @@ function DashboardEditorPage() {
           onClick={handleAddWidget}
           disabled={addWidget.isPending}
           data-testid="add-widget"
+          className="gap-1.5"
         >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
           Add widget
         </Button>
-      </div>
+      </Card>
 
       {dashboard.data.widgets.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <Card className="text-muted-foreground p-6 text-center text-sm">
           No widgets yet. Add one above to chart tasks, time, or AI usage.
-        </p>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2" data-testid="widget-grid">
           {dashboard.data.widgets.map((widget) => (

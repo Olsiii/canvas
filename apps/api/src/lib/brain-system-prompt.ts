@@ -6,19 +6,39 @@ const BASE_PROMPT = [
   "Prefer calling tools rather than claiming you created or attached something without doing so.",
 ].join(" ");
 
+export type BrandContext = {
+  name: string;
+  palette: string[];
+  tone: string | null;
+  guidelines: string | null;
+};
+
+function brandLines(brand: BrandContext | null | undefined): string[] {
+  if (!brand) return [];
+  const lines = [
+    "",
+    `A brand kit ("${brand.name}") is attached to this conversation — follow it for any image generation/editing and any brand-related question:`,
+  ];
+  if (brand.palette.length > 0) lines.push(`Palette: ${brand.palette.join(", ")}`);
+  if (brand.tone) lines.push(`Tone: ${brand.tone}`);
+  if (brand.guidelines) lines.push(`Guidelines: ${brand.guidelines}`);
+  return lines;
+}
+
 // Pure — takes already-fetched rows rather than doing its own DB I/O, so
 // it's unit-testable without a database. ARCHITECTURE.md §3.3: "Context
 // injection: task title/description, list name, brand settings... prepended
-// as system context." `brand_settings` doesn't exist yet (M2.4), so this is
-// just task/list context for now.
+// as system context." `brand` is an explicit choice made in the Brain panel
+// (see brain.setBrandKit), applied on top of any context type below.
 export function buildSystemPrompt(
   context:
     | { type: "global" }
     | { type: "task"; title: string; listName: string; descriptionJson: unknown }
     | { type: "doc"; title: string; linkedTasks: { id: string; title: string }[] }
     | { type: "channel"; name: string },
+  brand?: BrandContext | null,
 ): string {
-  if (context.type === "global") return BASE_PROMPT;
+  if (context.type === "global") return [BASE_PROMPT, ...brandLines(brand)].join("\n");
 
   if (context.type === "channel") {
     return [
@@ -27,6 +47,7 @@ export function buildSystemPrompt(
       `You are currently focused on the #${context.name} chat channel.`,
       "You do not have access to that channel's message history — only what the user tells you in this conversation.",
       "attach_to_task requires an explicit task_id here, since a channel has no linked tasks.",
+      ...brandLines(brand),
     ].join("\n");
   }
 
@@ -43,6 +64,7 @@ export function buildSystemPrompt(
       "Linked tasks (use these ids with attach_to_task when relevant):",
       linked,
       "When you generate_image in this doc context, the client inserts the result into the doc automatically.",
+      ...brandLines(brand),
     ].join("\n");
   }
 
@@ -54,5 +76,6 @@ export function buildSystemPrompt(
     `Title: ${context.title}`,
     `List: ${context.listName}`,
     `Description: ${description || "(no description)"}`,
+    ...brandLines(brand),
   ].join("\n");
 }

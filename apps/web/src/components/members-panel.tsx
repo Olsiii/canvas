@@ -16,6 +16,7 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
   const canManage = myRole === "owner" || myRole === "admin";
 
   const members = trpc.workspace.members.useQuery({ workspaceId });
+  const customRoles = trpc.role.list.useQuery({ workspaceId }, { enabled: canManage });
   // Also invalidate listMine: a role change can target the current user
   // themselves (e.g. self-demotion), and canManage above is derived from
   // listMine — without this it stays stale (still showing management
@@ -26,6 +27,7 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
   };
   const updateRole = trpc.workspace.updateMemberRole.useMutation({ onSuccess: invalidate });
   const removeMember = trpc.workspace.removeMember.useMutation({ onSuccess: invalidate });
+  const assignCustomRole = trpc.role.assignToMember.useMutation({ onSuccess: invalidate });
 
   return (
     <div className="w-full max-w-md space-y-2 p-6">
@@ -57,6 +59,27 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
                     </option>
                   ))}
                 </select>
+                {(customRoles.data?.length ?? 0) > 0 && (
+                  <select
+                    value={m.customRoleId ?? ""}
+                    aria-label={`Custom role for ${m.name}`}
+                    onChange={(e) =>
+                      assignCustomRole.mutate({
+                        workspaceId,
+                        userId: m.userId,
+                        customRoleId: e.target.value || null,
+                      })
+                    }
+                    className="border-border bg-background h-7 rounded border text-xs"
+                  >
+                    <option value="">No custom role</option>
+                    {customRoles.data?.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   type="button"
                   aria-label={`Remove ${m.name}`}
@@ -67,7 +90,9 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
                 </button>
               </div>
             ) : (
-              <span className="text-muted-foreground shrink-0 text-xs uppercase">{m.role}</span>
+              <span className="text-muted-foreground shrink-0 text-xs uppercase">
+                {m.customRoleName ?? m.role}
+              </span>
             )}
           </li>
         ))}

@@ -11,6 +11,7 @@ import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { validateCommentParent } from "../../lib/comment-thread";
 import { extractMentionedUserIds } from "../../lib/mentions";
+import { notifyUsers } from "../../lib/notify";
 import { assertCan } from "../../lib/permissions";
 import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
@@ -142,11 +143,10 @@ export const commentRouter = router({
             inArray(schema.memberships.userId, mentionedUserIds),
           ),
         );
-      if (members.length > 0) {
-        await db
-          .insert(schema.notifications)
-          .values(members.map((m) => ({ userId: m.userId, activityId: activityRow.id })));
-      }
+      await notifyUsers(
+        activityRow.id,
+        members.map((m) => m.userId),
+      );
     }
 
     return comment;

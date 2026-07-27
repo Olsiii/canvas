@@ -53,9 +53,9 @@ test("M4.5 forms: build an intake form, submit it anonymously, and see the task 
 
   // Back as the workspace member: the anonymous submission became a real
   // task in the target list.
-  await page.getByRole("link", { name: "← All workspaces" }).click();
+  await page.getByRole("link", { name: "All workspaces" }).click();
   await page.getByRole("link", { name: "Open" }).click();
-  await page.getByRole("link", { name: "# Bug Reports" }).click();
+  await page.getByRole("link", { name: "Bug Reports" }).click();
   await expect(page.getByRole("heading", { name: "# Bug Reports" })).toBeVisible();
 
   // Board view's card is a single button that opens the detail panel; list

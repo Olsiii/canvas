@@ -30,20 +30,24 @@ const tsvector = customType<{ data: string }>({
 export const statusKind = pgEnum("status_kind", ["open", "active", "done", "closed"]);
 export const taskPriority = pgEnum("task_priority", ["urgent", "high", "normal", "low"]);
 
-export const statuses = pgTable("statuses", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  listId: uuid("list_id")
-    .notNull()
-    .references(() => lists.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  color: text("color").notNull(),
-  kind: statusKind("kind").notNull(),
-  orderKey: text("order_key").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const statuses = pgTable(
+  "statuses",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    listId: uuid("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull(),
+    kind: statusKind("kind").notNull(),
+    orderKey: text("order_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("statuses_list_id_idx").on(table.listId)],
+);
 
 // Deliberately not cascading on statusId: deleting a status must not silently
 // delete every task in it. See PROGRESS.md (M1.2 decisions).
@@ -98,7 +102,16 @@ export const tasks = pgTable(
       sql`setweight(to_tsvector('english', coalesce(title, '')), 'A') || setweight(to_tsvector('english', coalesce(description_text, '')), 'B')`,
     ),
   },
-  (table) => [index("tasks_search_vector_idx").using("gin", table.searchVector)],
+  (table) => [
+    index("tasks_search_vector_idx").using("gin", table.searchVector),
+    // Phase 6 performance hardening: neither is auto-indexed by Postgres
+    // (only the primary key is), and every list/board/table/calendar/gantt
+    // view query filters by listId; parentTaskId backs subtask lookups,
+    // statusId backs per-status task counts (dashboard-metrics.ts).
+    index("tasks_list_id_idx").on(table.listId),
+    index("tasks_status_id_idx").on(table.statusId),
+    index("tasks_parent_task_id_idx").on(table.parentTaskId),
+  ],
 );
 
 export const taskAssignees = pgTable(
@@ -112,7 +125,13 @@ export const taskAssignees = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.taskId, table.userId] })],
+  (table) => [
+    primaryKey({ columns: [table.taskId, table.userId] }),
+    // The composite PK's leading column (taskId) already serves "who's
+    // assigned to task X"; "which tasks is user X assigned" (workload.ts)
+    // needs its own index since userId isn't the PK's leading column.
+    index("task_assignees_user_id_idx").on(table.userId),
+  ],
 );
 
 export const taskDependencyKind = pgEnum("task_dependency_kind", ["blocks", "waiting_on"]);
@@ -134,5 +153,11 @@ export const taskDependencies = pgTable(
     kind: taskDependencyKind("kind").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [unique().on(table.taskId, table.dependsOnTaskId)],
+  (table) => [
+    unique().on(table.taskId, table.dependsOnTaskId),
+    // The unique constraint's leading column (taskId) covers "X depends
+    // on..."; the reverse direction ("what depends on X", the "blocking"
+    // half of getTaskDependencies/Gantt arrows) needs its own index.
+    index("task_dependencies_depends_on_idx").on(table.dependsOnTaskId),
+  ],
 );

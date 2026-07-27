@@ -10,6 +10,7 @@ export const inviteMemberSchema = z.object({
   workspaceId: z.string().uuid(),
   email: emailSchema,
   role: z.enum(MEMBERSHIP_ROLES).exclude(["owner"]),
+  customRoleId: z.string().uuid().optional(),
 });
 
 export const acceptInviteSchema = z.object({

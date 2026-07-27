@@ -29,3 +29,13 @@ export function estimateChatCostUsd(inputChars: number, outputChars: number): st
     outputTokens * OPUS_OUTPUT_USD_PER_TOKEN
   ).toFixed(4);
 }
+
+// Rough placeholder (same caveat as ESTIMATED_COST_PER_IMAGE_USD above) —
+// text-embedding-004-class models price roughly two orders of magnitude
+// below chat-completion tokens; input-only, no output tokens to price.
+const EMBEDDING_INPUT_USD_PER_TOKEN = 0.02 / 1_000_000;
+
+export function estimateEmbedCostUsd(inputChars: number): string {
+  const inputTokens = inputChars / CHARS_PER_TOKEN_ESTIMATE;
+  return (inputTokens * EMBEDDING_INPUT_USD_PER_TOKEN).toFixed(4);
+}

@@ -20,6 +20,21 @@ export function computeCompletedAt(
 }
 
 /**
+ * True only on the transition into "urgent" — not "stayed urgent across an
+ * unrelated edit" (e.g. someone just changing the title of an already-
+ * urgent task shouldn't re-broadcast to the whole workspace every time).
+ * `newPriority` is `undefined` when the update didn't touch priority at
+ * all, same "omitted vs. explicitly cleared" convention `buildTaskUpdateFields`
+ * already uses.
+ */
+export function becameUrgent(
+  oldPriority: TaskPriority | null,
+  newPriority: TaskPriority | null | undefined,
+): boolean {
+  return newPriority === "urgent" && oldPriority !== "urgent";
+}
+
+/**
  * Builds the Drizzle `.set()` fields for a task update. Each field is
  * independently optional — a caller changing only `orderKey` (e.g. a
  * same-column drag reorder) must not silently drop that change just because

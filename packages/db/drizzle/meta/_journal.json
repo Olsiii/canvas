@@ -232,6 +232,55 @@
       "when": 1784797268635,
       "tag": "0032_modern_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784881598789,
+      "tag": "0033_useful_leper_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784883137285,
+      "tag": "0034_crazy_ezekiel",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784885969251,
+      "tag": "0035_classy_the_twelve",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784892733089,
+      "tag": "0036_strong_vampiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785141356599,
+      "tag": "0037_loud_the_professor",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1785151727578,
+      "tag": "0038_clever_angel",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785154633450,
+      "tag": "0039_rare_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

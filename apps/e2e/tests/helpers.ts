@@ -47,7 +47,7 @@ export async function createSpaceAndList(page: Page, spaceName: string, listName
   await page.getByPlaceholder("List name").fill(listName);
   await page.keyboard.press("Enter");
 
-  const listLink = page.getByRole("link", { name: `# ${listName}` });
+  const listLink = page.getByRole("link", { name: listName });
   await expect(listLink).toBeVisible();
   await listLink.click();
   await expect(page.getByRole("heading", { name: `# ${listName}` })).toBeVisible();

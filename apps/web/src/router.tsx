@@ -12,19 +12,22 @@ import { timesheetRoute } from "./routes/workspace.$workspaceId.timesheet";
 import { workloadRoute } from "./routes/workspace.$workspaceId.workload";
 import { docsListRoute } from "./routes/workspace.$workspaceId.docs";
 import { docEditorRoute } from "./routes/workspace.$workspaceId.docs.$docId";
-import { chatChannelListRoute } from "./routes/workspace.$workspaceId.chat";
+import { chatChannelListRoute, chatIndexRoute } from "./routes/workspace.$workspaceId.chat";
 import { chatChannelRoute } from "./routes/workspace.$workspaceId.chat.$channelId";
 import { formsListRoute } from "./routes/workspace.$workspaceId.forms";
 import { formEditorRoute } from "./routes/workspace.$workspaceId.forms.$formId";
 import { automationsListRoute } from "./routes/workspace.$workspaceId.automations";
 import { automationEditorRoute } from "./routes/workspace.$workspaceId.automations.$automationId";
+import { brandKitsRoute } from "./routes/workspace.$workspaceId.brand-kits";
 import { dashboardsListRoute } from "./routes/workspace.$workspaceId.dashboards";
 import { dashboardEditorRoute } from "./routes/workspace.$workspaceId.dashboards.$dashboardId";
 import { goalsListRoute } from "./routes/workspace.$workspaceId.goals";
 import { goalEditorRoute } from "./routes/workspace.$workspaceId.goals.$goalId";
 import { developerRoute } from "./routes/workspace.$workspaceId.developer";
 import { importRoute } from "./routes/workspace.$workspaceId.import";
+import { rolesRoute } from "./routes/workspace.$workspaceId.roles";
 import { securityRoute } from "./routes/workspace.$workspaceId.security";
+import { semanticSearchRoute } from "./routes/workspace.$workspaceId.semantic-search";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
@@ -41,8 +44,7 @@ const routeTree = rootRoute.addChildren([
     workloadRoute,
     docsListRoute,
     docEditorRoute,
-    chatChannelListRoute,
-    chatChannelRoute,
+    chatChannelListRoute.addChildren([chatIndexRoute, chatChannelRoute]),
     formsListRoute,
     formEditorRoute,
     automationsListRoute,
@@ -54,6 +56,9 @@ const routeTree = rootRoute.addChildren([
     developerRoute,
     importRoute,
     securityRoute,
+    rolesRoute,
+    brandKitsRoute,
+    semanticSearchRoute,
   ]),
 ]);
 

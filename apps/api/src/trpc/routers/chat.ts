@@ -5,6 +5,7 @@ import {
   createMessageSchema,
   deleteMessageSchema,
   getChannelSchema,
+  listChannelMembersSchema,
   listChannelsSchema,
   listMessagesSchema,
   removeChannelMemberSchema,
@@ -12,38 +13,14 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { isChannelMember, requireChannel, requireMessage } from "../../lib/chat-queries";
 import { getMembershipRole } from "../../lib/membership";
 import { extractMentionedUserIds } from "../../lib/mentions";
+import { notifyUsers } from "../../lib/notify";
 import { validateMessageParent } from "../../lib/message-thread";
 import { assertCan } from "../../lib/permissions";
 import { publish } from "../../lib/realtime";
 import { protectedProcedure, router } from "../trpc";
-
-async function requireChannel(channelId: string) {
-  const channel = await db.query.channels.findFirst({
-    where: and(eq(schema.channels.id, channelId), isNull(schema.channels.deletedAt)),
-  });
-  if (!channel) throw new TRPCError({ code: "NOT_FOUND" });
-  return channel;
-}
-
-async function isChannelMember(channelId: string, userId: string) {
-  const row = await db.query.channelMembers.findFirst({
-    where: and(
-      eq(schema.channelMembers.channelId, channelId),
-      eq(schema.channelMembers.userId, userId),
-    ),
-  });
-  return !!row;
-}
-
-async function requireMessage(messageId: string) {
-  const message = await db.query.messages.findFirst({
-    where: and(eq(schema.messages.id, messageId), isNull(schema.messages.deletedAt)),
-  });
-  if (!message) throw new TRPCError({ code: "NOT_FOUND" });
-  return message;
-}
 
 export const chatRouter = router({
   channel: router({
@@ -103,6 +80,25 @@ export const chatRouter = router({
     }),
 
     members: router({
+      list: protectedProcedure.input(listChannelMembersSchema).query(async ({ ctx, input }) => {
+        const channel = await requireChannel(input.channelId);
+        await assertCan(ctx.user, channel.workspaceId, "channel:view");
+        if (channel.isPrivate && !(await isChannelMember(channel.id, ctx.user.id))) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        return db
+          .select({
+            userId: schema.channelMembers.userId,
+            name: schema.users.name,
+            avatarUrl: schema.users.avatarUrl,
+          })
+          .from(schema.channelMembers)
+          .innerJoin(schema.users, eq(schema.users.id, schema.channelMembers.userId))
+          .where(eq(schema.channelMembers.channelId, channel.id))
+          .orderBy(asc(schema.users.name));
+      }),
+
       add: protectedProcedure.input(addChannelMemberSchema).mutation(async ({ ctx, input }) => {
         const channel = await requireChannel(input.channelId);
         await assertCan(ctx.user, channel.workspaceId, "channel:view");
@@ -192,6 +188,22 @@ export const chatRouter = router({
         )
         .orderBy(asc(schema.messages.createdAt));
 
+      const attachmentsByMessage = new Map<string, (typeof schema.attachments.$inferSelect)[]>();
+      if (rows.length > 0) {
+        const attachmentRows = await db.query.attachments.findMany({
+          where: inArray(
+            schema.attachments.messageId,
+            rows.map((r) => r.id),
+          ),
+        });
+        for (const a of attachmentRows) {
+          if (!a.messageId) continue;
+          const list = attachmentsByMessage.get(a.messageId) ?? [];
+          list.push(a);
+          attachmentsByMessage.set(a.messageId, list);
+        }
+      }
+
       return rows.map((r) => ({
         id: r.id,
         channelId: r.channelId,
@@ -200,6 +212,7 @@ export const chatRouter = router({
         bodyJson: r.bodyJson,
         createdAt: r.createdAt,
         author: { id: r.authorId, name: r.authorName, avatarUrl: r.authorAvatarUrl },
+        attachments: attachmentsByMessage.get(r.id) ?? [],
       }));
     }),
 
@@ -251,11 +264,10 @@ export const chatRouter = router({
               inArray(schema.memberships.userId, mentionedUserIds),
             ),
           );
-        if (members.length > 0) {
-          await db
-            .insert(schema.notifications)
-            .values(members.map((m) => ({ userId: m.userId, activityId: activityRow.id })));
-        }
+        await notifyUsers(
+          activityRow.id,
+          members.map((m) => m.userId),
+        );
       }
 
       await publish(channel.workspaceId, {

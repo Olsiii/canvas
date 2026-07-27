@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { CSV_IMPORT_TOOLS, type CsvImportTool, type ImportStatus } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
+import { CheckCircle2, Clock, History, Loader2, Upload, UploadCloud, XCircle } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -16,8 +18,18 @@ function ImportPage() {
   const { workspaceId } = importRoute.useParams();
 
   return (
-    <div className="max-w-2xl space-y-8 p-6" data-testid="import-page">
-      <h1 className="text-lg font-semibold">Import</h1>
+    <div className="max-w-2xl space-y-6 p-6" data-testid="import-page">
+      <div className="flex items-center gap-2">
+        <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
+          <Upload className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <h1 className="text-lg font-semibold">Import</h1>
+          <p className="text-muted-foreground text-xs">
+            Bring in work from ClickUp, or a Trello/Asana CSV export.
+          </p>
+        </div>
+      </div>
       <ClickUpImportSection workspaceId={workspaceId} />
       <CsvImportSection workspaceId={workspaceId} />
       <ImportHistorySection workspaceId={workspaceId} />
@@ -43,32 +55,42 @@ function ClickUpImportSection({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <section className="space-y-3" data-testid="clickup-import-section">
-      <h2 className="text-sm font-semibold">Import from ClickUp</h2>
-      <p className="text-muted-foreground text-xs">
-        Brings in every space, folder, list, and task your ClickUp API token can see (first
-        authorized workspace) as new spaces/lists/tasks here.
-      </p>
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <Input
-          type="password"
-          value={apiToken}
-          onChange={(e) => setApiToken(e.target.value)}
-          placeholder="ClickUp personal API token"
-          className="h-8 max-w-xs text-sm"
-          data-testid="clickup-token-input"
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={start.isPending || !apiToken.trim()}
-          data-testid="clickup-import-start"
-        >
-          {start.isPending ? "Starting…" : "Import"}
-        </Button>
-      </form>
-      {start.error && <p className="text-xs text-red-500">{start.error.message}</p>}
-    </section>
+    <Card data-testid="clickup-import-section">
+      <CardHeader>
+        <CardTitle>Import from ClickUp</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-muted-foreground text-xs">
+          Brings in every space, folder, list, and task your ClickUp API token can see (first
+          authorized workspace) as new spaces/lists/tasks here.
+        </p>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            type="password"
+            value={apiToken}
+            onChange={(e) => setApiToken(e.target.value)}
+            placeholder="ClickUp personal API token"
+            className="h-8 max-w-xs text-sm"
+            data-testid="clickup-token-input"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={start.isPending || !apiToken.trim()}
+            data-testid="clickup-import-start"
+            className="gap-1.5"
+          >
+            {start.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <UploadCloud className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {start.isPending ? "Starting…" : "Import"}
+          </Button>
+        </form>
+        {start.error && <p className="text-xs text-red-500">{start.error.message}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -114,67 +136,84 @@ function CsvImportSection({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <section className="space-y-3" data-testid="csv-import-section">
-      <h2 className="text-sm font-semibold">Import from a Trello/Asana CSV export</h2>
-      <p className="text-muted-foreground text-xs">
-        Creates one new space containing one new list, with a status per distinct section/list
-        column value in the file.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-2">
-        <div className="flex gap-3">
-          {CSV_IMPORT_TOOLS.map((t) => (
-            <label key={t} className="flex items-center gap-1 text-xs capitalize">
-              <input
-                type="radio"
-                name="csv-tool"
-                checked={tool === t}
-                onChange={() => setTool(t)}
-                data-testid={`csv-tool-${t}`}
-              />
-              {t}
-            </label>
-          ))}
-        </div>
-        <Input
-          value={spaceName}
-          onChange={(e) => setSpaceName(e.target.value)}
-          placeholder="New space name"
-          className="h-8 text-sm"
-          data-testid="csv-space-name"
-        />
-        <Input
-          value={listName}
-          onChange={(e) => setListName(e.target.value)}
-          placeholder="New list name"
-          className="h-8 text-sm"
-          data-testid="csv-list-name"
-        />
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          data-testid="csv-file-input"
-          className="text-xs"
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={isUploading || !file || !spaceName.trim() || !listName.trim()}
-          data-testid="csv-import-start"
-        >
-          {isUploading ? "Uploading…" : "Import"}
-        </Button>
-      </form>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-    </section>
+    <Card data-testid="csv-import-section">
+      <CardHeader>
+        <CardTitle>Import from a Trello/Asana CSV export</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-muted-foreground text-xs">
+          Creates one new space containing one new list, with a status per distinct section/list
+          column value in the file.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <div className="flex gap-3">
+            {CSV_IMPORT_TOOLS.map((t) => (
+              <label key={t} className="flex items-center gap-1 text-xs capitalize">
+                <input
+                  type="radio"
+                  name="csv-tool"
+                  checked={tool === t}
+                  onChange={() => setTool(t)}
+                  data-testid={`csv-tool-${t}`}
+                />
+                {t}
+              </label>
+            ))}
+          </div>
+          <Input
+            value={spaceName}
+            onChange={(e) => setSpaceName(e.target.value)}
+            placeholder="New space name"
+            className="h-8 text-sm"
+            data-testid="csv-space-name"
+          />
+          <Input
+            value={listName}
+            onChange={(e) => setListName(e.target.value)}
+            placeholder="New list name"
+            className="h-8 text-sm"
+            data-testid="csv-list-name"
+          />
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            data-testid="csv-file-input"
+            className="text-xs"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isUploading || !file || !spaceName.trim() || !listName.trim()}
+            data-testid="csv-import-start"
+            className="gap-1.5"
+          >
+            {isUploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <UploadCloud className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {isUploading ? "Uploading…" : "Import"}
+          </Button>
+        </form>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+      </CardContent>
+    </Card>
   );
 }
 
 const STATUS_COLOR: Record<ImportStatus, string> = {
   pending: "text-muted-foreground",
-  running: "text-blue-600",
-  done: "text-green-600",
-  failed: "text-red-500",
+  running: "text-accent",
+  done: "text-status-good",
+  failed: "text-status-critical",
+};
+
+const STATUS_ICON: Record<ImportStatus, typeof Clock> = {
+  pending: Clock,
+  running: Loader2,
+  done: CheckCircle2,
+  failed: XCircle,
 };
 
 function ImportHistorySection({ workspaceId }: { workspaceId: string }) {
@@ -211,44 +250,57 @@ function ImportHistorySection({ workspaceId }: { workspaceId: string }) {
   }, [imports.data, utils, workspaceId]);
 
   return (
-    <section className="space-y-3" data-testid="import-history-section">
-      <h2 className="text-sm font-semibold">Import history</h2>
-      {(imports.data?.length ?? 0) === 0 ? (
-        <p className="text-muted-foreground text-xs">No imports yet.</p>
-      ) : (
-        <ul className="divide-border border-border divide-y rounded-md border text-sm">
-          {imports.data?.map((row) => {
-            const summary = row.summaryJson as {
-              spacesCreated: number;
-              listsCreated: number;
-              tasksCreated: number;
-            } | null;
-            return (
-              <li key={row.id} data-testid={`import-row-${row.id}`} className="px-3 py-2">
-                <div className="flex items-center justify-between">
-                  <span>
-                    {row.source === "clickup_api" ? "ClickUp" : `CSV (${row.sourceDetail})`}
-                  </span>
-                  <span
-                    className={STATUS_COLOR[row.status as ImportStatus]}
-                    data-testid={`import-status-${row.id}`}
-                  >
-                    {row.status}
-                  </span>
+    <Card data-testid="import-history-section">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-1.5">
+          <History className="h-3.5 w-3.5" aria-hidden />
+          Import history
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {(imports.data?.length ?? 0) === 0 ? (
+          <p className="text-muted-foreground text-xs">No imports yet.</p>
+        ) : (
+          <div className="divide-border divide-y rounded-md border text-sm">
+            {imports.data?.map((row) => {
+              const summary = row.summaryJson as {
+                spacesCreated: number;
+                listsCreated: number;
+                tasksCreated: number;
+              } | null;
+              const status = row.status as ImportStatus;
+              const StatusIcon = STATUS_ICON[status];
+              return (
+                <div key={row.id} data-testid={`import-row-${row.id}`} className="px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      {row.source === "clickup_api" ? "ClickUp" : `CSV (${row.sourceDetail})`}
+                    </span>
+                    <span
+                      className={`flex items-center gap-1 ${STATUS_COLOR[status]}`}
+                      data-testid={`import-status-${row.id}`}
+                    >
+                      <StatusIcon
+                        className={`h-3 w-3 ${status === "running" ? "animate-spin" : ""}`}
+                        aria-hidden
+                      />
+                      {row.status}
+                    </span>
+                  </div>
+                  {summary && (
+                    <p className="text-muted-foreground text-xs">
+                      {summary.spacesCreated} space{summary.spacesCreated === 1 ? "" : "s"},{" "}
+                      {summary.listsCreated} list{summary.listsCreated === 1 ? "" : "s"},{" "}
+                      {summary.tasksCreated} task{summary.tasksCreated === 1 ? "" : "s"}
+                    </p>
+                  )}
+                  {row.error && <p className="text-xs text-red-500">{row.error}</p>}
                 </div>
-                {summary && (
-                  <p className="text-muted-foreground text-xs">
-                    {summary.spacesCreated} space{summary.spacesCreated === 1 ? "" : "s"},{" "}
-                    {summary.listsCreated} list{summary.listsCreated === 1 ? "" : "s"},{" "}
-                    {summary.tasksCreated} task{summary.tasksCreated === 1 ? "" : "s"}
-                  </p>
-                )}
-                {row.error && <p className="text-xs text-red-500">{row.error}</p>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

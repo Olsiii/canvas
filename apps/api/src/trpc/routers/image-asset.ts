@@ -6,11 +6,13 @@ import {
   generateImageAssetSchema,
   getImageAssetSchema,
   listAnnotationsSchema,
+  listImageAssetsSchema,
   promoteImageVersionSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { resolveEffectiveBrandKit } from "../../lib/brand-kit";
 import { publishImageAssetJob } from "../../lib/image-asset-realtime";
 import { assertCan } from "../../lib/permissions";
 import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
@@ -18,6 +20,33 @@ import { imageQueue } from "../../queues/image-queue";
 import { protectedProcedure, router } from "../trpc";
 
 export const imageAssetRouter = router({
+  // Phase 6: the picker behind visual search — the workspace's recent
+  // images with their current version's blurhash, for ImageVersionThumb.
+  list: protectedProcedure.input(listImageAssetsSchema).query(async ({ ctx, input }) => {
+    await assertCan(ctx.user, input.workspaceId, "imageAsset:view");
+
+    return db
+      .select({
+        id: schema.imageAssets.id,
+        altText: schema.imageAssets.altText,
+        currentVersionId: schema.imageAssets.currentVersionId,
+        blurhash: schema.imageVersions.blurhash,
+      })
+      .from(schema.imageAssets)
+      .leftJoin(
+        schema.imageVersions,
+        eq(schema.imageVersions.id, schema.imageAssets.currentVersionId),
+      )
+      .where(
+        and(
+          eq(schema.imageAssets.workspaceId, input.workspaceId),
+          isNull(schema.imageAssets.deletedAt),
+        ),
+      )
+      .orderBy(desc(schema.imageAssets.createdAt))
+      .limit(60);
+  }),
+
   get: protectedProcedure.input(getImageAssetSchema).query(async ({ ctx, input }) => {
     const asset = await db.query.imageAssets.findFirst({
       where: and(eq(schema.imageAssets.id, input.assetId), isNull(schema.imageAssets.deletedAt)),
@@ -37,8 +66,10 @@ export const imageAssetRouter = router({
 
     let brandPalette: string[] | undefined;
     if (input.useBrandPalette) {
-      const brand = await db.query.brandSettings.findFirst({
-        where: eq(schema.brandSettings.workspaceId, input.workspaceId),
+      const brand = await resolveEffectiveBrandKit({
+        workspaceId: input.workspaceId,
+        spaceId: input.spaceId,
+        brandKitId: input.brandKitId,
       });
       if (brand?.paletteJson?.length) brandPalette = brand.paletteJson;
     }
@@ -61,6 +92,8 @@ export const imageAssetRouter = router({
       kind: "generate",
       assetId: asset.id,
       workspaceId: input.workspaceId,
+      spaceId: input.spaceId,
+      brandKitId: input.brandKitId,
       userId: ctx.user.id,
       prompt: input.prompt,
       size: input.size,

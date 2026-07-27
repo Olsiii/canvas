@@ -1,8 +1,9 @@
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { WEBHOOK_EVENTS, type WebhookEvent } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
+import { Code2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -17,10 +18,54 @@ function DeveloperPage() {
 
   return (
     <div className="max-w-2xl space-y-8 p-6" data-testid="developer-page">
-      <h1 className="text-lg font-semibold">Developer</h1>
+      <div className="flex items-center gap-2">
+        <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
+          <Code2 className="h-5 w-5" aria-hidden />
+        </span>
+        <div>
+          <h1 className="text-lg font-semibold">Developer</h1>
+          <p className="text-muted-foreground text-xs">
+            API keys, webhooks, and data export for this workspace.
+          </p>
+        </div>
+      </div>
       <ApiKeysSection workspaceId={workspaceId} />
       <WebhooksSection workspaceId={workspaceId} />
+      <ExportSection workspaceId={workspaceId} />
     </div>
+  );
+}
+
+// Phase 6: data export. Plain <a> links to REST routes (not tRPC — a file
+// download needs real Content-Disposition headers), authenticated the same
+// way image thumbnails already are: the browser sends the session cookie
+// on same-origin navigation, no separate token needed.
+function ExportSection({ workspaceId }: { workspaceId: string }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-medium">Export data</h2>
+      <p className="text-muted-foreground text-xs">
+        Download this workspace's tasks as a spreadsheet, or the full task/hierarchy graph as JSON.
+      </p>
+      <div className="flex gap-2">
+        <a
+          href={`/export/${workspaceId}/tasks.csv`}
+          data-testid="export-tasks-csv"
+          download
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          Download tasks (CSV)
+        </a>
+        <a
+          href={`/export/${workspaceId}/workspace.json`}
+          data-testid="export-workspace-json"
+          download
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          Download workspace (JSON)
+        </a>
+      </div>
+    </section>
   );
 }
 
@@ -158,7 +203,11 @@ function WebhooksSection({ workspaceId }: { workspaceId: string }) {
     <section className="space-y-3" data-testid="webhooks-section">
       <h2 className="text-sm font-semibold">Webhooks</h2>
       <p className="text-muted-foreground text-xs">
-        POSTs a signed JSON payload to your URL when a subscribed event happens. Verify it with the{" "}
+        Sends a notification to another tool the moment something you pick below happens here — no
+        need for it to keep checking back.
+      </p>
+      <p className="text-muted-foreground text-xs">
+        Technical detail: we POST a signed JSON payload to your URL. Verify it with the{" "}
         <code>X-Canvas-Signature</code> header (HMAC-SHA256 of the body, using the secret below).
       </p>
 

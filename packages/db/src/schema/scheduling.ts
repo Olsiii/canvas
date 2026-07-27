@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { tasks } from "./tasks";
@@ -9,35 +10,59 @@ import { tasks } from "./tasks";
 // no separate dtstart column, since re-anchoring on the current next_run_at
 // is equivalent to a fixed original dtstart for every INTERVAL=1 preset
 // this milestone exposes (daily/weekdays/weekly/monthly).
-export const recurrenceRules = pgTable("recurrence_rules", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  taskId: uuid("task_id")
-    .notNull()
-    .unique()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  rrule: text("rrule").notNull(),
-  nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const recurrenceRules = pgTable(
+  "recurrence_rules",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    taskId: uuid("task_id")
+      .notNull()
+      .unique()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    rrule: text("rrule").notNull(),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Every scheduler tick (scheduler.ts) scans `WHERE next_run_at <= now()`
+  // across every recurring task in the system, not scoped to one workspace
+  // — a sequential scan here gets slower on every tick as recurring tasks
+  // accumulate, unlike most other indexes in this pass which just speed up
+  // one-off requests.
+  (table) => [index("recurrence_rules_next_run_at_idx").on(table.nextRunAt)],
+);
 
 // DATA_MODEL.md's `task_id fk null` allows a standalone reminder with no
 // task at all, but a standalone reminder has no workspace to log an
 // `activity` row against (every other notification in this app is sourced
 // from one) — scoped down to task-linked reminders only for M3.5; see
 // PROGRESS.md. The column itself stays nullable, matching DATA_MODEL.md.
-export const reminders = pgTable("reminders", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  taskId: uuid("task_id").references(() => tasks.id, { onDelete: "cascade" }),
-  remindAt: timestamp("remind_at", { withTimezone: true }).notNull(),
-  note: text("note"),
-  doneAt: timestamp("done_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "cascade" }),
+    remindAt: timestamp("remind_at", { withTimezone: true }).notNull(),
+    note: text("note"),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Two distinct hot access patterns, both always filtering doneAt IS
+    // NULL (same partial-index shape brain_conversations already uses):
+    // the scheduler's own tick (system-wide, no userId) and reminder.list
+    // (one user's own pending reminders, ordered by remindAt).
+    index("reminders_due_idx")
+      .on(table.remindAt)
+      .where(sql`${table.doneAt} is null`),
+    index("reminders_user_due_idx")
+      .on(table.userId, table.remindAt)
+      .where(sql`${table.doneAt} is null`),
+  ],
+);

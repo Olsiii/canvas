@@ -2,18 +2,13 @@ import type { AppRouter } from "@canvas/api";
 import { BlurhashThumb } from "@/components/blurhash-thumb";
 import { Section } from "@/components/detail-field";
 import { Lightbox } from "@/components/lightbox";
+import { formatBytes } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
 import { useRef, useState } from "react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Attachment = RouterOutputs["attachment"]["list"][number];
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 // "google_drive" attachments never have a generated thumb/blurhash (see
 // schema/attachments.ts) — even one with an image mimeType goes in the

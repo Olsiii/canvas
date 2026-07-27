@@ -6,6 +6,7 @@ import { uuidv7 } from "uuidv7";
 import { getSessionUser } from "../auth/session";
 import { can } from "../auth/can";
 import { logActivity } from "../lib/activity";
+import { isChannelMember, requireChannel, requireMessage } from "../lib/chat-queries";
 import { processImage } from "../lib/image-processing";
 import { getMembershipRole } from "../lib/membership";
 import { getObject, putObject } from "../lib/storage";
@@ -20,6 +21,7 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
     if (!user) return reply.code(401).send({ error: "Unauthorized" });
 
     let taskId: string | undefined;
+    let messageId: string | undefined;
     let file: { buffer: Buffer; filename: string; mimetype: string } | undefined;
 
     for await (const part of req.parts()) {
@@ -27,20 +29,36 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
         file = { buffer: await part.toBuffer(), filename: part.filename, mimetype: part.mimetype };
       } else if (part.fieldname === "taskId" && typeof part.value === "string") {
         taskId = part.value;
+      } else if (part.fieldname === "messageId" && typeof part.value === "string") {
+        messageId = part.value;
       }
     }
 
-    if (!taskId || !file) {
-      return reply.code(400).send({ error: "Missing file or taskId" });
+    if ((!taskId && !messageId) || !file) {
+      return reply.code(400).send({ error: "Missing file, and taskId or messageId" });
     }
 
-    const task = await requireTask(taskId).catch(() => null);
-    if (!task) return reply.code(404).send({ error: "Task not found" });
-
-    const workspaceId = await workspaceIdForTask(taskId);
-    const role = await getMembershipRole(workspaceId, user.id);
-    if (!can(user, "attachment:create", { type: "workspace", role })) {
-      return reply.code(403).send({ error: "Forbidden" });
+    let workspaceId: string;
+    if (messageId) {
+      const message = await requireMessage(messageId).catch(() => null);
+      if (!message) return reply.code(404).send({ error: "Message not found" });
+      const channel = await requireChannel(message.channelId);
+      workspaceId = channel.workspaceId;
+      const role = await getMembershipRole(workspaceId, user.id);
+      if (!can(user, "message:create", { type: "workspace", role })) {
+        return reply.code(403).send({ error: "Forbidden" });
+      }
+      if (channel.isPrivate && !(await isChannelMember(channel.id, user.id))) {
+        return reply.code(403).send({ error: "Forbidden" });
+      }
+    } else {
+      const task = await requireTask(taskId!).catch(() => null);
+      if (!task) return reply.code(404).send({ error: "Task not found" });
+      workspaceId = await workspaceIdForTask(taskId!);
+      const role = await getMembershipRole(workspaceId, user.id);
+      if (!can(user, "attachment:create", { type: "workspace", role })) {
+        return reply.code(403).send({ error: "Forbidden" });
+      }
     }
 
     // Generated up front (rather than letting the DB default it) since the
@@ -68,7 +86,8 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
       .values({
         id: attachmentId,
         workspaceId,
-        taskId,
+        taskId: taskId ?? null,
+        messageId: messageId ?? null,
         uploaderId: user.id,
         fileKey: originalKey,
         fileName: file.filename,
@@ -87,8 +106,9 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
     return reply.send(attachment);
   });
 
-  app.get<{ Params: { attachmentId: string } }>("/uploads/:attachmentId", (req, reply) =>
-    streamAttachment(req, reply, "file"),
+  app.get<{ Params: { attachmentId: string }; Querystring: { download?: string } }>(
+    "/uploads/:attachmentId",
+    (req, reply) => streamAttachment(req, reply, "file"),
   );
 
   app.get<{ Params: { attachmentId: string } }>("/uploads/:attachmentId/thumb", (req, reply) =>
@@ -96,8 +116,16 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
   );
 }
 
+// Header values can't contain CRLF/quotes without breaking the header (or,
+// worse, injecting one) — strip control characters and quotes from a
+// user-supplied filename before it goes into Content-Disposition.
+function sanitizeForHeader(fileName: string): string {
+  // eslint-disable-next-line no-control-regex -- deliberately stripping control chars from a header value
+  return fileName.replace(/["\r\n\x00-\x1f]/g, "");
+}
+
 async function streamAttachment(
-  req: FastifyRequest<{ Params: { attachmentId: string } }>,
+  req: FastifyRequest<{ Params: { attachmentId: string }; Querystring?: { download?: string } }>,
   reply: FastifyReply,
   kind: "file" | "thumb",
 ) {
@@ -113,6 +141,17 @@ async function streamAttachment(
   if (!can(user, "attachment:view", { type: "workspace", role })) {
     return reply.code(403).send({ error: "Forbidden" });
   }
+  // A workspace-level "can view attachments" pass isn't enough on its own
+  // for a message attachment — it would let any workspace member fetch a
+  // private channel's files by attachment id alone, bypassing the same
+  // channel-membership gate every other message-reading path enforces.
+  if (attachment.messageId) {
+    const message = await requireMessage(attachment.messageId);
+    const channel = await requireChannel(message.channelId);
+    if (channel.isPrivate && !(await isChannelMember(channel.id, user.id))) {
+      return reply.code(403).send({ error: "Forbidden" });
+    }
+  }
 
   const key = kind === "thumb" ? attachment.thumbKey : attachment.fileKey;
   if (!key) return reply.code(404).send({ error: "Not found" });
@@ -126,7 +165,11 @@ async function streamAttachment(
     reply.header("Content-Length", String(object.ContentLength));
   }
   if (kind === "file") {
-    reply.header("Content-Disposition", `inline; filename="${attachment.fileName}"`);
+    const disposition = req.query?.download ? "attachment" : "inline";
+    reply.header(
+      "Content-Disposition",
+      `${disposition}; filename="${sanitizeForHeader(attachment.fileName)}"`,
+    );
   }
   return reply.send(object.Body as Readable);
 }

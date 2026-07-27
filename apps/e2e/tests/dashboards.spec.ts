@@ -52,6 +52,7 @@ test("M5.2 dashboards: task counts, burndown, and time-tracked widgets reflect r
   // Build the dashboard.
   await page.getByRole("link", { name: "Dashboards", exact: true }).click();
   await expect(page.getByTestId("dashboards-list-page")).toBeVisible();
+  await page.getByTestId("dashboards-new").click();
   await page.getByTestId("dashboards-new-name").fill("Sprint overview");
   const dashboardCreated = page.waitForResponse((res) => res.url().includes("dashboard.create"));
   await page.getByTestId("dashboards-create").click();
@@ -99,4 +100,59 @@ test("M5.2 dashboards: task counts, burndown, and time-tracked widgets reflect r
   await expect(page.getByText("Remaining now: 1")).toBeVisible();
   await expect(page.getByText("Total: 1.5h")).toBeVisible();
   await expect(page.getByTestId("widget-grid").getByText("Task counts")).toHaveCount(0);
+});
+
+test("Dashboards: assignee and priority breakdown widgets reflect real workspace data", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+
+  await signUp(page, "Breakdown Owner");
+  await createWorkspaceAndOpen(page, "Breakdown Workspace");
+  await createSpaceAndList(page, "Ops", "Sprint");
+  await page.getByRole("button", { name: "Board", exact: true }).click();
+  const todoColumn = page.getByTestId("status-column-To Do");
+
+  await todoColumn.getByRole("button", { name: "+ Add task" }).click();
+  await page.getByPlaceholder("Task title").fill("Assigned urgent task");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Assigned urgent task" }).click();
+  const assigned = page.waitForResponse((res) => res.url().includes("assignees.add"));
+  await page.getByLabel("Assign someone").selectOption({ label: "Breakdown Owner" });
+  await assigned;
+  const urgentSet = page.waitForResponse((res) => res.url().includes("task.update"));
+  await page.getByLabel("Priority").selectOption({ label: "Urgent" });
+  await urgentSet;
+  await page.getByRole("button", { name: "Close task details" }).click();
+
+  await todoColumn.getByRole("button", { name: "+ Add task" }).click();
+  await page.getByPlaceholder("Task title").fill("Unassigned task");
+  await page.keyboard.press("Enter");
+
+  await page.getByRole("link", { name: "Dashboards", exact: true }).click();
+  await page.getByTestId("dashboards-new").click();
+  await page.getByTestId("dashboards-new-name").fill("Team breakdowns");
+  const dashboardCreated = page.waitForResponse((res) => res.url().includes("dashboard.create"));
+  await page.getByTestId("dashboards-create").click();
+  await dashboardCreated;
+
+  const widgetGrid = page.getByTestId("widget-grid");
+
+  await page.getByTestId("widget-type-select").selectOption("assignee_breakdown");
+  const assigneeAdded = page.waitForResponse((res) => res.url().includes("widget.add"));
+  await page.getByTestId("add-widget").click();
+  await assigneeAdded;
+  const assigneeWidget = widgetGrid.locator("> div").filter({ hasText: "Open tasks by assignee" });
+  const assigneeTable = assigneeWidget.getByTestId("widget-table");
+  await expect(assigneeTable.locator("div", { hasText: "Breakdown Owner" })).toBeVisible();
+  await expect(assigneeTable.locator("div", { hasText: "Unassigned" })).toBeVisible();
+
+  await page.getByTestId("widget-type-select").selectOption("priority_breakdown");
+  const priorityAdded = page.waitForResponse((res) => res.url().includes("widget.add"));
+  await page.getByTestId("add-widget").click();
+  await priorityAdded;
+  const priorityWidget = widgetGrid.locator("> div").filter({ hasText: "Open tasks by priority" });
+  const priorityTable = priorityWidget.getByTestId("widget-table");
+  await expect(priorityTable.locator("div", { hasText: "Urgent" })).toBeVisible();
+  await expect(priorityTable.locator("div", { hasText: "None" })).toBeVisible();
 });

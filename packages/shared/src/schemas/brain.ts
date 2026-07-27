@@ -15,3 +15,8 @@ export const sendBrainMessageSchema = z.object({
   conversationId: z.string().uuid(),
   text: z.string().trim().min(1).max(8000),
 });
+
+export const setBrainConversationBrandKitSchema = z.object({
+  conversationId: z.string().uuid(),
+  brandKitId: z.string().uuid().nullable(),
+});

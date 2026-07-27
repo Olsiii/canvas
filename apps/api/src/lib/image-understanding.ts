@@ -1,5 +1,6 @@
 import { db, schema } from "@canvas/db";
 import { eq } from "drizzle-orm";
+import { embeddingQueue } from "../queues/embedding-queue";
 import { estimateChatCostUsd } from "./ai-usage";
 import { logActivity } from "./activity";
 
@@ -67,6 +68,22 @@ export async function applyImageUnderstanding(opts: {
     "image_asset.understood",
     { tags: understanding.tags },
   );
+
+  // Phase 6: "find images like this" — visual search runs over the
+  // AI-described content (alt-text + tags) rather than raw pixels; this
+  // codebase has no image-embedding API integrated anywhere (Vertex's
+  // multimodal-embedding endpoint is a different, heavier surface than the
+  // plain Gemini API the rest of the image/brain pipeline already uses),
+  // so text-derived similarity is the honest, buildable v1 — same
+  // "degrade to what's actually available" call M5.6 made for the Google
+  // Drive picker.
+  await embeddingQueue.add("embed", {
+    workspaceId: opts.workspaceId,
+    userId: opts.userId,
+    entityType: "image_asset",
+    entityId: opts.assetId,
+    text: [understanding.altText, ...understanding.tags].join(" "),
+  });
 
   return understanding;
 }

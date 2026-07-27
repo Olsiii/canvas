@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { can } from "./can";
+import { can, isGrantable } from "./can";
 import type { SessionUser } from "./session";
 
 const user: SessionUser = { id: "u1", email: "a@example.com", name: "A", avatarUrl: null };
@@ -132,5 +132,89 @@ describe("can", () => {
     expect(can(user, "channel:create", { type: "workspace", role: "guest" })).toBe(false);
     expect(can(user, "channel:create", { type: "workspace", role: "member" })).toBe(true);
     expect(can(user, "message:create", { type: "workspace", role: "guest" })).toBe(true);
+  });
+
+  describe("custom role grants/revokes (Phase 6)", () => {
+    it("grants a guest an action their base rank would normally deny", () => {
+      const resource = {
+        type: "workspace" as const,
+        role: "guest" as const,
+        customRole: { grants: ["task:create" as const], revokes: [] },
+      };
+      expect(can(user, "task:create", resource)).toBe(true);
+      // Unrelated actions still fall through to the base rank check.
+      expect(can(user, "hierarchy:delete", resource)).toBe(false);
+    });
+
+    it("revokes an action an owner's base rank would normally allow", () => {
+      const resource = {
+        type: "workspace" as const,
+        role: "owner" as const,
+        customRole: { grants: [], revokes: ["task:delete" as const] },
+      };
+      expect(can(user, "task:delete", resource)).toBe(false);
+      expect(can(user, "task:create", resource)).toBe(true);
+    });
+
+    it("revoke wins over grant for the same action", () => {
+      const resource = {
+        type: "workspace" as const,
+        role: "member" as const,
+        customRole: { grants: ["task:delete" as const], revokes: ["task:delete" as const] },
+      };
+      expect(can(user, "task:delete", resource)).toBe(false);
+    });
+
+    it("a membership with no custom role is unaffected (backward compatible)", () => {
+      expect(
+        can(user, "task:create", { type: "workspace", role: "member", customRole: null }),
+      ).toBe(true);
+    });
+  });
+
+  describe("space overrides (Phase 6)", () => {
+    it("an allow override beats a base rank that would otherwise deny", () => {
+      expect(
+        can(user, "task:create", { type: "workspace", role: "guest", spaceOverride: true }),
+      ).toBe(true);
+    });
+
+    it("a deny override beats a base rank that would otherwise allow", () => {
+      expect(
+        can(user, "task:create", { type: "workspace", role: "owner", spaceOverride: false }),
+      ).toBe(false);
+    });
+
+    it("a space override beats a custom role's grants/revokes too — most specific layer wins", () => {
+      const resource = {
+        type: "workspace" as const,
+        role: "guest" as const,
+        customRole: { grants: [], revokes: ["task:create" as const] },
+        spaceOverride: true,
+      };
+      expect(can(user, "task:create", resource)).toBe(true);
+    });
+
+    it("no override resolved (undefined/null) falls through to the base/custom-role check", () => {
+      expect(
+        can(user, "task:create", { type: "workspace", role: "guest", spaceOverride: null }),
+      ).toBe(false);
+      expect(can(user, "task:create", { type: "workspace", role: "member" })).toBe(true);
+    });
+  });
+
+  describe("isGrantable", () => {
+    it("excludes owner-tier actions from being grantable via custom role or space override", () => {
+      expect(isGrantable("workspace:delete")).toBe(false);
+      expect(isGrantable("sso:update")).toBe(false);
+      expect(isGrantable("scimToken:create")).toBe(false);
+      expect(isGrantable("scimToken:delete")).toBe(false);
+    });
+
+    it("allows admin-tier-and-below actions to be granted", () => {
+      expect(isGrantable("task:create")).toBe(true);
+      expect(isGrantable("automation:create")).toBe(true);
+      expect(isGrantable("apiKey:create")).toBe(true);
+    });
   });
 });

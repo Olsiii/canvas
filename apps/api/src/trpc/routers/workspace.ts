@@ -46,9 +46,12 @@ export const workspaceRouter = router({
         email: schema.users.email,
         avatarUrl: schema.users.avatarUrl,
         role: schema.memberships.role,
+        customRoleId: schema.memberships.customRoleId,
+        customRoleName: schema.customRoles.name,
       })
       .from(schema.memberships)
       .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+      .leftJoin(schema.customRoles, eq(schema.customRoles.id, schema.memberships.customRoleId))
       .where(eq(schema.memberships.workspaceId, input.workspaceId));
   }),
 
@@ -92,12 +95,29 @@ export const workspaceRouter = router({
       throw new TRPCError({ code: "FORBIDDEN" });
     }
 
+    if (input.customRoleId) {
+      const customRole = await db.query.customRoles.findFirst({
+        where: and(
+          eq(schema.customRoles.id, input.customRoleId),
+          isNull(schema.customRoles.deletedAt),
+        ),
+      });
+      if (!customRole) throw new TRPCError({ code: "NOT_FOUND", message: "Custom role not found" });
+      if (customRole.workspaceId !== input.workspaceId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Role belongs to a different workspace",
+        });
+      }
+    }
+
     const [invite] = await db
       .insert(schema.invites)
       .values({
         workspaceId: input.workspaceId,
         email: input.email,
         role: input.role,
+        customRoleId: input.customRoleId ?? null,
         invitedBy: ctx.user.id,
         expiresAt: new Date(Date.now() + INVITE_TTL_MS),
       })
@@ -156,6 +176,7 @@ export const workspaceRouter = router({
         workspaceId: invite.workspaceId,
         userId: ctx.user.id,
         role: invite.role,
+        customRoleId: invite.customRoleId,
       });
     }
 

@@ -35,7 +35,7 @@ test("task changes made by one user appear live for another user with no reload"
   await createWorkspaceAndOpen(page, "Realtime Workspace");
 
   // back to the dashboard to invite a teammate
-  await page.getByRole("link", { name: "← All workspaces" }).click();
+  await page.getByRole("link", { name: "All workspaces" }).click();
   const bobEmail = `bob-realtime-${Date.now()}@example.com`;
   const inviteLink = await inviteAndGetLink(page, bobEmail);
 
@@ -56,7 +56,7 @@ test("task changes made by one user appear live for another user with no reload"
   // re-navigation happens on Bob's side for the rest of this test, so any
   // update Bob sees below can only have arrived over the WS connection.
   await bobPage.getByRole("link", { name: "Open" }).click();
-  await bobPage.getByRole("link", { name: "# Sprint" }).click();
+  await bobPage.getByRole("link", { name: "Sprint" }).click();
   await bobPage.getByRole("button", { name: "Board", exact: true }).click();
 
   // Ada creates a task

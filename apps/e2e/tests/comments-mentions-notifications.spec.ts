@@ -9,7 +9,7 @@ test("comment, @mention, react, and reply across two users; mentioned user gets 
   await createWorkspaceAndOpen(page, "Collab Workspace");
 
   // back to the dashboard to invite a teammate
-  await page.getByRole("link", { name: "← All workspaces" }).click();
+  await page.getByRole("link", { name: "All workspaces" }).click();
   const bobEmail = `bob-${Date.now()}@example.com`;
   const inviteLink = await inviteAndGetLink(page, bobEmail);
 
@@ -33,7 +33,7 @@ test("comment, @mention, react, and reply across two users; mentioned user gets 
 
   // Bob navigates to the same list and opens the task
   await bobPage.getByRole("link", { name: "Open" }).click();
-  await bobPage.getByRole("link", { name: "# Backlog" }).click();
+  await bobPage.getByRole("link", { name: "Backlog" }).click();
   await bobPage.getByRole("button", { name: "Board", exact: true }).click();
   await bobPage.getByRole("button", { name: "Review homepage copy" }).click();
   await expect(bobPage.getByLabel("Task title")).toHaveValue("Review homepage copy");

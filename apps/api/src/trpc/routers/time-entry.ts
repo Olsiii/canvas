@@ -5,6 +5,7 @@ import {
   listTimeEntriesForTaskSchema,
   startTimerSchema,
   timesheetSchema,
+  workspaceTimesheetSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
@@ -197,4 +198,40 @@ export const timeEntryRouter = router({
       )
       .orderBy(asc(schema.timeEntries.startedAt));
   }),
+
+  // Every member's entries across the workspace — the "Team overview" a
+  // Finance Manager-style role needs (per-task hours, who logged them),
+  // not just their own. A bigger blast radius than the personal timesheet
+  // above, so it's gated by timeEntry:viewAll rather than task:view.
+  workspaceTimesheet: protectedProcedure
+    .input(workspaceTimesheetSchema)
+    .query(async ({ ctx, input }) => {
+      await assertCan(ctx.user, input.workspaceId, "timeEntry:viewAll");
+
+      const rangeStart = new Date(`${input.start}T00:00:00`);
+      const rangeEnd = new Date(`${input.end}T23:59:59.999`);
+
+      return db
+        .select({
+          id: schema.timeEntries.id,
+          userId: schema.timeEntries.userId,
+          taskId: schema.timeEntries.taskId,
+          taskTitle: schema.tasks.title,
+          startedAt: schema.timeEntries.startedAt,
+          endedAt: schema.timeEntries.endedAt,
+          durationSec: schema.timeEntries.durationSec,
+        })
+        .from(schema.timeEntries)
+        .innerJoin(schema.tasks, eq(schema.tasks.id, schema.timeEntries.taskId))
+        .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
+        .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .where(
+          and(
+            eq(schema.spaces.workspaceId, input.workspaceId),
+            gte(schema.timeEntries.startedAt, rangeStart),
+            lte(schema.timeEntries.startedAt, rangeEnd),
+          ),
+        )
+        .orderBy(asc(schema.timeEntries.startedAt));
+    }),
 });

@@ -1,5 +1,6 @@
 import { RequireAuth } from "@/components/require-auth";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
@@ -33,7 +34,7 @@ function NewWorkspacePage() {
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 px-4">
-      <div className="w-full max-w-sm space-y-6">
+      <Card className="w-full max-w-sm space-y-6 p-6">
         <h1 className="text-xl font-semibold">Create a workspace</h1>
         <form
           className="space-y-4"
@@ -52,7 +53,7 @@ function NewWorkspacePage() {
             {create.isPending ? "Creating…" : "Create workspace"}
           </Button>
         </form>
-      </div>
+      </Card>
     </main>
   );
 }

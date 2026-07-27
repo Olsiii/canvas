@@ -1,5 +1,6 @@
 import type { AppRouter } from "@canvas/api";
 import { Input } from "@/components/ui/input";
+import { NewTaskInlineForm } from "@/components/new-task-inline-form";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import {
@@ -33,6 +34,7 @@ export function TaskListView({
   listId: string;
   onOpenTask: (taskId: string) => void;
 }) {
+  const utils = trpc.useUtils();
   const statuses = trpc.status.list.useQuery({ listId });
   const tasks = trpc.task.list.useQuery({ listId });
 
@@ -40,6 +42,7 @@ export function TaskListView({
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [sorting, setSorting] = useState<SortingState>([{ id: "title", desc: false }]);
   const [grouping, setGrouping] = useState<GroupingState>([]);
+  const [addingTask, setAddingTask] = useState(false);
   const isGroupedByStatus = grouping.includes("statusId");
   // Groups themselves always sort in workflow order; the user's chosen sort
   // (e.g. title) becomes the secondary, within-group sort. Memoized so the
@@ -56,6 +59,13 @@ export function TaskListView({
   const statusList = useMemo(() => statuses.data ?? [], [statuses.data]);
   const statusById = useMemo(() => new Map(statusList.map((s) => [s.id, s])), [statusList]);
   const statusOrder = useMemo(() => new Map(statusList.map((s, i) => [s.id, i])), [statusList]);
+
+  const createTask = trpc.task.create.useMutation({
+    onSuccess: () => {
+      void utils.task.list.invalidate({ listId });
+      setAddingTask(false);
+    },
+  });
 
   const filteredTasks = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -162,6 +172,26 @@ export function TaskListView({
         <span className="text-muted-foreground text-xs">
           {filteredTasks.length} task{filteredTasks.length === 1 ? "" : "s"}
         </span>
+        <div className="ml-auto">
+          {addingTask ? (
+            <NewTaskInlineForm
+              isPending={createTask.isPending}
+              onCancel={() => setAddingTask(false)}
+              onSubmit={(title) =>
+                statusList[0] && createTask.mutate({ listId, statusId: statusList[0].id, title })
+              }
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingTask(true)}
+              disabled={!statusList[0]}
+              className="text-muted-foreground hover:text-foreground text-xs disabled:opacity-50"
+            >
+              + Add task
+            </button>
+          )}
+        </div>
       </div>
 
       <div className={`border-border grid ${COLUMNS} gap-2 border-b px-2 pb-1 text-xs font-medium`}>

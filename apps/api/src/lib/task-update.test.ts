@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskUpdateFields, computeCompletedAt } from "./task-update";
+import { becameUrgent, buildTaskUpdateFields, computeCompletedAt } from "./task-update";
 
 describe("buildTaskUpdateFields", () => {
   it("includes only the fields actually provided", () => {
@@ -93,5 +93,26 @@ describe("computeCompletedAt", () => {
 
   it("stays null moving between open and active", () => {
     expect(computeCompletedAt("active", null, now)).toBeNull();
+  });
+});
+
+describe("becameUrgent", () => {
+  it("is true when priority moves from something else to urgent", () => {
+    expect(becameUrgent("normal", "urgent")).toBe(true);
+    expect(becameUrgent(null, "urgent")).toBe(true);
+  });
+
+  it("is false when priority was already urgent — no re-broadcast on an unrelated edit", () => {
+    expect(becameUrgent("urgent", "urgent")).toBe(false);
+  });
+
+  it("is false when priority didn't change at all (update omitted the field)", () => {
+    expect(becameUrgent("normal", undefined)).toBe(false);
+    expect(becameUrgent("urgent", undefined)).toBe(false);
+  });
+
+  it("is false when moving to a non-urgent priority, or clearing it", () => {
+    expect(becameUrgent("urgent", "high")).toBe(false);
+    expect(becameUrgent("normal", null)).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import {
 } from "@/components/automation-actions-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { describeAutomationRunLogEntry } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import {
   automationActionSchema,
@@ -100,6 +101,10 @@ function AutomationEditorPage() {
       <h1 className="text-lg font-semibold">Edit automation</h1>
 
       <form onSubmit={handleSave} className="space-y-3">
+        <p className="text-muted-foreground text-xs">
+          Watch for something happening, optionally only when a condition is true, then do something
+          automatically.
+        </p>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -217,9 +222,11 @@ function AutomationEditorPage() {
                     {new Date(run.createdAt).toLocaleString()}
                   </span>
                 </div>
-                <pre className="text-muted-foreground mt-1 overflow-x-auto text-xs">
-                  {JSON.stringify(run.logJson, null, 2)}
-                </pre>
+                <ul className="text-muted-foreground mt-1 space-y-0.5 text-xs">
+                  {(Array.isArray(run.logJson) ? run.logJson : []).map((entry, i) => (
+                    <li key={i}>{describeAutomationRunLogEntry(entry)}</li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>

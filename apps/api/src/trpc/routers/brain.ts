@@ -3,6 +3,7 @@ import {
   getOrCreateBrainConversationSchema,
   listBrainMessagesSchema,
   sendBrainMessageSchema,
+  setBrainConversationBrandKitSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
@@ -135,6 +136,35 @@ export const brainRouter = router({
       const winner = await db.query.brainConversations.findFirst({ where: lookup });
       if (!winner) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       return winner;
+    }),
+
+  // Attaches (or clears) a brand kit on an existing conversation — every
+  // subsequent message picks it up via the worker's system-prompt build
+  // (see worker.ts), not just messages sent after this call re-reads fresh
+  // each time rather than snapshotting it into history.
+  setBrandKit: protectedProcedure
+    .input(setBrainConversationBrandKitSchema)
+    .mutation(async ({ ctx, input }) => {
+      const conversation = await requireConversation(input.conversationId);
+      assertOwnsConversation(ctx.user.id, conversation);
+
+      if (input.brandKitId) {
+        const kit = await db.query.brandSettings.findFirst({
+          where: and(
+            eq(schema.brandSettings.id, input.brandKitId),
+            eq(schema.brandSettings.workspaceId, conversation.workspaceId),
+          ),
+        });
+        if (!kit) throw new TRPCError({ code: "NOT_FOUND", message: "Brand kit not found" });
+      }
+
+      const [updated] = await db
+        .update(schema.brainConversations)
+        .set({ brandKitId: input.brandKitId })
+        .where(eq(schema.brainConversations.id, conversation.id))
+        .returning();
+      if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return updated;
     }),
 
   messages: router({

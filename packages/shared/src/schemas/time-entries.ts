@@ -32,3 +32,7 @@ export const timesheetSchema = z.object({
   start: z.string().date(),
   end: z.string().date(),
 });
+
+// Same shape as timesheetSchema — kept as a separate export since it's
+// gated by a different, more sensitive permission (timeEntry:viewAll).
+export const workspaceTimesheetSchema = timesheetSchema;

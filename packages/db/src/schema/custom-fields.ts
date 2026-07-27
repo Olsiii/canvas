@@ -1,4 +1,4 @@
-import { jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { lists } from "./hierarchy";
 import { tasks } from "./tasks";
@@ -16,24 +16,28 @@ export const customFieldType = pgEnum("custom_field_type", [
   "image",
 ]);
 
-export const customFieldDefs = pgTable("custom_field_defs", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  // null = workspace-wide (applies to every list). Not exposed by the UI
-  // yet — see PROGRESS.md (M1.8 decisions) — but supported by the schema
-  // and API since DATA_MODEL.md specifies it.
-  listId: uuid("list_id").references(() => lists.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  type: customFieldType("type").notNull(),
-  optionsJson: jsonb("options_json").$type<unknown>(),
-  orderKey: text("order_key").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const customFieldDefs = pgTable(
+  "custom_field_defs",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    // null = workspace-wide (applies to every list). Not exposed by the UI
+    // yet — see PROGRESS.md (M1.8 decisions) — but supported by the schema
+    // and API since DATA_MODEL.md specifies it.
+    listId: uuid("list_id").references(() => lists.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    type: customFieldType("type").notNull(),
+    optionsJson: jsonb("options_json").$type<unknown>(),
+    orderKey: text("order_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("custom_field_defs_workspace_id_idx").on(table.workspaceId)],
+);
 
 export const customFieldValues = pgTable(
   "custom_field_values",
@@ -51,5 +55,10 @@ export const customFieldValues = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [unique().on(table.fieldDefId, table.taskId)],
+  (table) => [
+    unique().on(table.fieldDefId, table.taskId),
+    // The unique constraint's leading column (fieldDefId) doesn't serve
+    // "all custom field values of task X" (every task detail panel load).
+    index("custom_field_values_task_id_idx").on(table.taskId),
+  ],
 );

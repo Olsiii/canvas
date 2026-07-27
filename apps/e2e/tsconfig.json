@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": ["node"],
-    "noEmit": true
+    "noEmit": true,
+    // Specs pass callbacks into page.evaluate/evaluateHandle that run in the
+    // browser and reference browser globals (DataTransfer, File) — the base
+    // config's ES2022-only lib doesn't include those.
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["tests", "playwright.config.ts"]
 }

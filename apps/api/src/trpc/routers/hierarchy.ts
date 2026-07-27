@@ -124,13 +124,14 @@ export const hierarchyRouter = router({
 
     update: protectedProcedure.input(updateSpaceSchema).mutation(async ({ ctx, input }) => {
       const space = await requireSpace(input.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:update");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:update", { spaceId: space.id });
 
       const [updated] = await db
         .update(schema.spaces)
         .set({
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...(input.icon !== undefined ? { icon: input.icon } : {}),
+          ...(input.brandKitId !== undefined ? { brandKitId: input.brandKitId } : {}),
           updatedAt: new Date(),
         })
         .where(eq(schema.spaces.id, input.spaceId))
@@ -143,7 +144,7 @@ export const hierarchyRouter = router({
 
     delete: protectedProcedure.input(deleteSpaceSchema).mutation(async ({ ctx, input }) => {
       const space = await requireSpace(input.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:delete");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:delete", { spaceId: space.id });
 
       const now = new Date();
       await db.transaction(async (tx) => {
@@ -169,7 +170,7 @@ export const hierarchyRouter = router({
   folder: router({
     create: protectedProcedure.input(createFolderSchema).mutation(async ({ ctx, input }) => {
       const space = await requireSpace(input.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:create");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:create", { spaceId: space.id });
 
       const lastKey = await lastFolderOrderKey(input.spaceId);
 
@@ -186,7 +187,7 @@ export const hierarchyRouter = router({
     update: protectedProcedure.input(updateFolderSchema).mutation(async ({ ctx, input }) => {
       const folder = await requireFolder(input.folderId);
       const space = await requireSpace(folder.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:update");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:update", { spaceId: space.id });
 
       const [updated] = await db
         .update(schema.folders)
@@ -202,7 +203,7 @@ export const hierarchyRouter = router({
     delete: protectedProcedure.input(deleteFolderSchema).mutation(async ({ ctx, input }) => {
       const folder = await requireFolder(input.folderId);
       const space = await requireSpace(folder.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:delete");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:delete", { spaceId: space.id });
 
       const now = new Date();
       await db.transaction(async (tx) => {
@@ -224,7 +225,7 @@ export const hierarchyRouter = router({
   list: router({
     create: protectedProcedure.input(createListSchema).mutation(async ({ ctx, input }) => {
       const space = await requireSpace(input.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:create");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:create", { spaceId: space.id });
 
       if (input.folderId) {
         const folder = await requireFolder(input.folderId);
@@ -268,7 +269,7 @@ export const hierarchyRouter = router({
     update: protectedProcedure.input(updateListSchema).mutation(async ({ ctx, input }) => {
       const list = await requireList(input.listId);
       const space = await requireSpace(list.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:update");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:update", { spaceId: space.id });
 
       if (input.folderId) {
         const folder = await requireFolder(input.folderId);
@@ -298,7 +299,7 @@ export const hierarchyRouter = router({
     delete: protectedProcedure.input(deleteListSchema).mutation(async ({ ctx, input }) => {
       const list = await requireList(input.listId);
       const space = await requireSpace(list.spaceId);
-      await assertCan(ctx.user, space.workspaceId, "hierarchy:delete");
+      await assertCan(ctx.user, space.workspaceId, "hierarchy:delete", { spaceId: space.id });
 
       await db
         .update(schema.lists)

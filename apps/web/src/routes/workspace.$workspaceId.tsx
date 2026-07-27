@@ -1,13 +1,18 @@
 import { BrainChatPanel } from "@/components/brain-chat-panel";
 import { GenerationPanel } from "@/components/generation-panel";
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
+import { LoginSummaryPanel } from "@/components/login-summary-panel";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { RequireAuth } from "@/components/require-auth";
 import { RunningTimerWidget } from "@/components/running-timer-widget";
 import { SearchBox } from "@/components/search-box";
+import { Button } from "@/components/ui/button";
+import { WorkspaceNav } from "@/components/workspace-nav";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useSession } from "@/hooks/use-session";
 import { trpc } from "@/lib/trpc";
-import { createRoute, Link, Outlet, useParams } from "@tanstack/react-router";
+import { createRoute, Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
+import { ChevronLeft, LogOut, Sparkles, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { rootRoute } from "./__root";
 
@@ -24,156 +29,109 @@ export const workspaceShellRoute = createRoute({
 function WorkspaceShell() {
   const { workspaceId, listId } = useParams({ strict: false });
   const workspaces = trpc.workspace.listMine.useQuery();
-  const workspace = workspaces.data?.find((w) => w.workspace.id === workspaceId)?.workspace;
+  const membership = workspaces.data?.find((w) => w.workspace.id === workspaceId);
+  const workspace = membership?.workspace;
+  const { user } = useSession();
+  const navigate = useNavigate();
+  const logOut = trpc.auth.logOut.useMutation({
+    onSuccess: () => navigate({ to: "/login" }),
+  });
   const [brainOpen, setBrainOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
 
   useRealtime(workspaceId);
 
+  const initials = (workspace?.name ?? "C").slice(0, 1).toUpperCase();
+
   return (
     <div className="flex h-svh">
-      <aside className="border-border flex w-64 shrink-0 flex-col border-r">
-        <div className="border-border border-b px-3 py-3">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="text-muted-foreground hover:text-foreground text-xs">
-              ← All workspaces
+      <aside className="border-border bg-card flex w-64 shrink-0 flex-col border-r">
+        <div className="border-border flex items-center gap-2 border-b px-3 py-3">
+          <Link
+            to="/"
+            aria-label="Canvas home"
+            className="bg-accent text-accent-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-semibold"
+          >
+            {initials}
+          </Link>
+          <div className="min-w-0 flex-1">
+            <Link
+              to="/"
+              className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 text-[10px] tracking-wide uppercase"
+            >
+              <ChevronLeft className="h-3 w-3" aria-hidden />
+              All workspaces
             </Link>
-            <NotificationsBell />
+            <h1 className="truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
           </div>
-          <h1 className="mt-1 truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/docs"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Docs
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/chat"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Chat
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/forms"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Forms
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/developer"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Developer
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/security"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Security
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/goals"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Goals
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/import"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Import
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/dashboards"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Dashboards
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/automations"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Automations
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/workload"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Workload
-              </Link>
-            )}
-            {workspaceId && (
-              <Link
-                to="/w/$workspaceId/timesheet"
-                params={{ workspaceId }}
-                className="text-muted-foreground hover:text-foreground text-xs"
-              >
-                Timesheet
-              </Link>
-            )}
-            <button
-              type="button"
-              aria-label="Generate image"
-              onClick={() => setGenerateOpen(true)}
-              className="text-muted-foreground hover:text-foreground text-xs"
-            >
-              Generate
-            </button>
-            <button
-              type="button"
-              aria-label="Open Brain"
-              onClick={() => setBrainOpen(true)}
-              className="text-muted-foreground hover:text-foreground text-xs"
-            >
-              Brain
-            </button>
-          </div>
-          {workspaceId && (
-            <div className="mt-2">
-              <SearchBox workspaceId={workspaceId} />
-            </div>
-          )}
-          <div className="mt-2">
-            <RunningTimerWidget />
-          </div>
+          <NotificationsBell />
         </div>
-        <div className="min-h-0 flex-1">
-          {workspaceId && <HierarchySidebar workspaceId={workspaceId} activeListId={listId} />}
+
+        <div className="border-border space-y-2 border-b px-3 py-2.5">
+          {workspaceId && <SearchBox workspaceId={workspaceId} />}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-1.5"
+              onClick={() => setGenerateOpen(true)}
+              aria-label="Generate image"
+            >
+              <Wand2 className="h-3.5 w-3.5" aria-hidden />
+              Generate
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-1.5"
+              onClick={() => setBrainOpen(true)}
+              aria-label="Open Brain"
+            >
+              <Sparkles className="h-3.5 w-3.5" aria-hidden />
+              Brain
+            </Button>
+          </div>
+          <RunningTimerWidget />
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+          {workspaceId && <WorkspaceNav workspaceId={workspaceId} />}
+          {workspaceId && (
+            <>
+              <div className="border-border my-3 border-t" />
+              <HierarchySidebar workspaceId={workspaceId} activeListId={listId} />
+            </>
+          )}
+        </div>
+
+        <div className="border-border flex items-center gap-2 border-t px-3 py-2.5">
+          <span className="bg-muted text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+            {(user?.name ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{user?.name ?? user?.email}</p>
+            {membership && (
+              <p className="text-muted-foreground truncate text-xs capitalize">{membership.role}</p>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={() => logOut.mutate()}
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+          </Button>
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
         <Outlet />
       </main>
+      {workspaceId && <LoginSummaryPanel workspaceId={workspaceId} />}
       {brainOpen && workspaceId && (
         <BrainChatPanel
           workspaceId={workspaceId}
@@ -190,7 +148,11 @@ function WorkspaceShell() {
             onClick={() => setGenerateOpen(false)}
           />
           <div className="border-border bg-background relative h-full w-full max-w-md overflow-y-auto border-l p-4 shadow-xl">
-            <GenerationPanel workspaceId={workspaceId} onClose={() => setGenerateOpen(false)} />
+            <GenerationPanel
+              workspaceId={workspaceId}
+              listId={listId}
+              onClose={() => setGenerateOpen(false)}
+            />
           </div>
         </div>
       )}

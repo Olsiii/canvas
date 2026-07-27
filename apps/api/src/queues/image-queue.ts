@@ -9,6 +9,12 @@ export type ImageJobData =
       kind: "generate";
       assetId: string;
       workspaceId: string;
+      // The space generation was triggered from, if any — used to resolve
+      // which brand kit's image provider/palette applies (see brand-kit.ts).
+      spaceId?: string;
+      // An explicit brand kit choice, picked directly in the Generate panel —
+      // takes priority over spaceId/workspace-default resolution.
+      brandKitId?: string;
       userId: string;
       prompt: string;
       size: AspectPreset;
@@ -20,6 +26,7 @@ export type ImageJobData =
       kind: "edit";
       assetId: string;
       workspaceId: string;
+      spaceId?: string;
       userId: string;
       parentVersionId: string;
       instruction: string;

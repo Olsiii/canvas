@@ -268,6 +268,13 @@ export function TaskGanttView({
                       />
                     );
                   }
+                  // The bar itself only ever spans the task's actual date
+                  // range, which for a short task can be too narrow to hold
+                  // its own title — rather than truncating the label inside
+                  // it (unreadable for anything but the shortest titles),
+                  // the label sits beside the bar and is free to run into
+                  // the empty timeline to its right.
+                  const barWidth = Math.max(offset.width * DAY_WIDTH - 4, 8);
                   return (
                     <button
                       key={task.id}
@@ -278,13 +285,19 @@ export function TaskGanttView({
                         position: "absolute",
                         left: offset.left * DAY_WIDTH + 2,
                         top: i * ROW_HEIGHT + 6,
-                        width: Math.max(offset.width * DAY_WIDTH - 4, 8),
                         height: ROW_HEIGHT - 12,
                       }}
-                      className="bg-primary/80 hover:bg-primary rounded text-primary-foreground truncate px-1 text-left text-[10px]"
+                      className="hover:opacity-90 flex max-w-none items-center gap-1.5 text-left"
                       title={task.title}
                     >
-                      {task.title}
+                      <span
+                        style={{ width: barWidth }}
+                        className="bg-primary/80 h-full shrink-0 rounded"
+                        aria-hidden
+                      />
+                      <span className="text-foreground bg-background/80 rounded px-1 text-[10px] whitespace-nowrap">
+                        {task.title}
+                      </span>
                     </button>
                   );
                 })}

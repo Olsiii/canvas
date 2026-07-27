@@ -1,82 +1,7 @@
-import { ROLE_RANK, type MembershipRole } from "@canvas/shared";
+import { ROLE_RANK, type MembershipRole, type WorkspaceAction } from "@canvas/shared";
 import type { SessionUser } from "./session";
 
-export type WorkspaceAction =
-  | "workspace:invite"
-  | "workspace:manage"
-  | "workspace:delete"
-  | "hierarchy:view"
-  | "hierarchy:create"
-  | "hierarchy:update"
-  | "hierarchy:delete"
-  | "status:view"
-  | "status:create"
-  | "status:update"
-  | "status:delete"
-  | "task:view"
-  | "task:create"
-  | "task:update"
-  | "task:delete"
-  | "comment:view"
-  | "comment:create"
-  | "tag:view"
-  | "tag:create"
-  | "tag:delete"
-  | "customFieldDef:view"
-  | "customFieldDef:create"
-  | "customFieldDef:update"
-  | "customFieldDef:delete"
-  | "customFieldValue:update"
-  | "attachment:view"
-  | "attachment:create"
-  | "attachment:delete"
-  | "imageAsset:view"
-  | "imageAsset:create"
-  | "brain:view"
-  | "brain:chat"
-  | "brandSettings:view"
-  | "brandSettings:update"
-  | "taskTemplate:view"
-  | "taskTemplate:create"
-  | "taskTemplate:delete"
-  | "doc:view"
-  | "doc:create"
-  | "doc:update"
-  | "doc:delete"
-  | "channel:view"
-  | "channel:create"
-  | "message:create"
-  | "form:view"
-  | "form:create"
-  | "form:update"
-  | "form:delete"
-  | "automation:view"
-  | "automation:create"
-  | "automation:update"
-  | "automation:delete"
-  | "dashboard:view"
-  | "dashboard:create"
-  | "dashboard:update"
-  | "dashboard:delete"
-  | "goal:view"
-  | "goal:create"
-  | "goal:update"
-  | "goal:delete"
-  | "apiKey:view"
-  | "apiKey:create"
-  | "apiKey:delete"
-  | "webhook:view"
-  | "webhook:create"
-  | "webhook:delete"
-  | "import:run"
-  | "prLink:view"
-  | "prLink:create"
-  | "prLink:delete"
-  | "sso:view"
-  | "sso:update"
-  | "scimToken:view"
-  | "scimToken:create"
-  | "scimToken:delete";
+export type { WorkspaceAction };
 
 const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "workspace:invite": "admin",
@@ -208,12 +133,57 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "scimToken:view": "admin",
   "scimToken:create": "owner",
   "scimToken:delete": "owner",
+  // Admin tier, same as automation:create/apiKey:create — defining or
+  // assigning a custom role changes what OTHER members can do, a bigger
+  // blast radius than ordinary content but not an authentication/standing-
+  // access concern like sso:update/scimToken:*. Privilege escalation is
+  // capped structurally instead (see isGrantable/NON_GRANTABLE below): an
+  // admin can never grant an owner-only action through a custom role or
+  // space override, so this tier can't be used to mint a second owner.
+  "customRole:view": "admin",
+  "customRole:create": "admin",
+  "customRole:update": "admin",
+  "customRole:delete": "admin",
+  "spaceOverride:view": "admin",
+  "spaceOverride:manage": "admin",
+  // Admin tier, same reasoning as import:run — a bulk export is the read-
+  // side mirror of a bulk import (an entire workspace's worth of content
+  // leaving the app in one file, rather than entering it), same blast-
+  // radius tier as any other whole-workspace bulk operation.
+  "export:run": "admin",
+  // Admin tier — seeing every member's individual time entries and AI
+  // spend across the whole workspace is a bigger blast radius than
+  // dashboard:view's pre-aggregated cost figure (member tier); grantable
+  // via a custom role (e.g. a "Finance Manager" template) same as any
+  // other admin-tier action above.
+  "timeEntry:viewAll": "admin",
 };
+
+// Actions a custom role's grants or a space override's `allow: true` can
+// never include — same reasoning as sso:update/scimToken:* themselves:
+// these change who has standing, workspace-wide destructive/authentication
+// power, and must stay strictly rank-gated so an admin can't use
+// customRole:create (its own admin-tier action) to mint a second owner.
+export function isGrantable(action: WorkspaceAction): boolean {
+  return MIN_ROLE[action] !== "owner";
+}
 
 export interface WorkspaceResource {
   type: "workspace";
   /** The acting user's membership role in this workspace, or null if not a member. */
   role: MembershipRole | null;
+  /**
+   * Set when the membership has a custom role: permission deltas layered on
+   * top of `role`'s rank. `revokes` beats `grants` beats the rank table.
+   */
+  customRole?: { grants: WorkspaceAction[]; revokes: WorkspaceAction[] } | null;
+  /**
+   * Set when a space-level override was resolved for this exact
+   * (space, principal, action) — see lib/space-overrides.ts. The most
+   * specific layer: when present it decides the outcome outright, ahead of
+   * both the custom role and the rank table.
+   */
+  spaceOverride?: boolean | null;
 }
 
 export function can(
@@ -222,5 +192,13 @@ export function can(
   resource: WorkspaceResource,
 ): boolean {
   if (!resource.role) return false;
-  return ROLE_RANK[resource.role] >= ROLE_RANK[MIN_ROLE[action]];
+  if (resource.spaceOverride !== undefined && resource.spaceOverride !== null) {
+    return resource.spaceOverride;
+  }
+
+  const baseAllowed = ROLE_RANK[resource.role] >= ROLE_RANK[MIN_ROLE[action]];
+  if (!resource.customRole) return baseAllowed;
+  if (resource.customRole.revokes.includes(action)) return false;
+  if (resource.customRole.grants.includes(action)) return true;
+  return baseAllowed;
 }

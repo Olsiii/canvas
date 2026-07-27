@@ -1,0 +1,2 @@
+ALTER TABLE "brain_conversations" ADD COLUMN "brand_kit_id" uuid;--> statement-breakpoint
+ALTER TABLE "brain_conversations" ADD CONSTRAINT "brain_conversations_brand_kit_id_brand_settings_id_fk" FOREIGN KEY ("brand_kit_id") REFERENCES "public"."brand_settings"("id") ON DELETE set null ON UPDATE no action;

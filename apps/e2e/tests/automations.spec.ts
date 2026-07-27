@@ -61,7 +61,7 @@ test("M5.1 automations: status → Done runs a tag + comment action, gated by a 
   await expect(page.getByTestId(/^automations-link-/)).toBeVisible();
 
   // Trigger it: move "Fix the login bug" to Done.
-  await page.getByRole("link", { name: "# Bugs" }).click();
+  await page.getByRole("link", { name: "Bugs" }).click();
   await page.getByRole("button", { name: "Board", exact: true }).click();
   await page.getByRole("button", { name: "Fix the login bug" }).click();
   const updated = page.waitForResponse((res) => res.url().includes("task.update"));
@@ -94,6 +94,6 @@ test("M5.1 automations: status → Done runs a tag + comment action, gated by a 
   await expect(runsList).toBeVisible({ timeout: 10_000 });
   const run = runsList.locator('[data-testid^="automation-run-"]').first();
   await expect(run.getByText("success")).toBeVisible();
-  await expect(run).toContainText("add_tag");
-  await expect(run).toContainText("post_comment");
+  await expect(run).toContainText("Added a tag");
+  await expect(run).toContainText("Posted a comment");
 });

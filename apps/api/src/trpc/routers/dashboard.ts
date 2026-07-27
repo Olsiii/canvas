@@ -12,7 +12,7 @@ import {
   type WidgetConfig,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import {
   bucketSumByDay,
   computeBurndownSeries,
@@ -132,6 +132,64 @@ async function computeWidgetData(workspaceId: string, config: WidgetConfig) {
           config.days,
           now,
         ),
+      };
+    }
+
+    // Open task counts grouped by assignee — who currently has how much on
+    // their plate. Unassigned open tasks count under "Unassigned" so the
+    // total still matches task_counts' open+active figure.
+    case "assignee_breakdown": {
+      const rows = await db
+        .select({ userId: schema.users.id, name: schema.users.name })
+        .from(schema.tasks)
+        .innerJoin(schema.statuses, eq(schema.statuses.id, schema.tasks.statusId))
+        .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
+        .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .leftJoin(schema.taskAssignees, eq(schema.taskAssignees.taskId, schema.tasks.id))
+        .leftJoin(schema.users, eq(schema.users.id, schema.taskAssignees.userId))
+        .where(
+          and(
+            eq(schema.spaces.workspaceId, workspaceId),
+            isNull(schema.tasks.deletedAt),
+            isNull(schema.tasks.parentTaskId),
+            inArray(schema.statuses.kind, ["open", "active"]),
+          ),
+        );
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        const label = row.name ?? "Unassigned";
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+      return {
+        type: "assignee_breakdown" as const,
+        counts: [...counts.entries()].map(([name, count]) => ({ name, count })),
+      };
+    }
+
+    // Open task counts grouped by priority — what's still left to triage/pick up.
+    case "priority_breakdown": {
+      const rows = await db
+        .select({ priority: schema.tasks.priority })
+        .from(schema.tasks)
+        .innerJoin(schema.statuses, eq(schema.statuses.id, schema.tasks.statusId))
+        .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
+        .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .where(
+          and(
+            eq(schema.spaces.workspaceId, workspaceId),
+            isNull(schema.tasks.deletedAt),
+            isNull(schema.tasks.parentTaskId),
+            inArray(schema.statuses.kind, ["open", "active"]),
+          ),
+        );
+      const counts = new Map<string, number>();
+      for (const row of rows) {
+        const label = row.priority ?? "none";
+        counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+      return {
+        type: "priority_breakdown" as const,
+        counts: [...counts.entries()].map(([priority, count]) => ({ priority, count })),
       };
     }
   }

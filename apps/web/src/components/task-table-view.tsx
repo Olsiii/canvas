@@ -1,6 +1,7 @@
 import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES, type TaskPriority } from "@canvas/shared";
 import { Input } from "@/components/ui/input";
+import { NewTaskInlineForm } from "@/components/new-task-inline-form";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import {
@@ -45,12 +46,19 @@ export function TaskTableView({
       setRowSelection({});
     },
   });
+  const createTask = trpc.task.create.useMutation({
+    onSuccess: () => {
+      void utils.task.list.invalidate({ listId });
+      setAddingTask(false);
+    },
+  });
 
   const [sorting, setSorting] = useState<SortingState>([{ id: "title", desc: false }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [bulkStatusId, setBulkStatusId] = useState("");
   const [bulkPriority, setBulkPriority] = useState<"" | TaskPriority | "none">("");
   const [bulkDueDate, setBulkDueDate] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
 
   const statusList = useMemo(() => statuses.data ?? [], [statuses.data]);
   const statusOrder = useMemo(() => new Map(statusList.map((s, i) => [s.id, i])), [statusList]);
@@ -233,6 +241,27 @@ export function TaskTableView({
           </button>
         </div>
       )}
+
+      <div className="mb-2 flex items-center justify-end">
+        {addingTask ? (
+          <NewTaskInlineForm
+            isPending={createTask.isPending}
+            onCancel={() => setAddingTask(false)}
+            onSubmit={(title) =>
+              statusList[0] && createTask.mutate({ listId, statusId: statusList[0].id, title })
+            }
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingTask(true)}
+            disabled={!statusList[0]}
+            className="text-muted-foreground hover:text-foreground text-xs disabled:opacity-50"
+          >
+            + Add task
+          </button>
+        )}
+      </div>
 
       <div className={`border-border grid ${COLUMNS} gap-2 border-b px-2 pb-1 text-xs font-medium`}>
         {table.getFlatHeaders().map((header) => (

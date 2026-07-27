@@ -15,25 +15,29 @@ import {
   removeTaskTagSchema,
   searchTasksSchema,
   setTaskRecurrenceSchema,
+  taskHighlightsSchema,
   unassignTaskSchema,
   updateTaskSchema,
   type StatusKind,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { runAutomationsForTrigger } from "../../lib/automation-runner";
+import { embeddingQueue } from "../../queues/embedding-queue";
 import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
+import { notifyUsers, notifyWorkspace } from "../../lib/notify";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
 import { computeNextRunAt } from "../../lib/recurrence";
 import { publish } from "../../lib/realtime";
 import { validateSubtaskParent } from "../../lib/subtask";
-import { buildTaskUpdateFields, computeCompletedAt } from "../../lib/task-update";
+import { becameUrgent, buildTaskUpdateFields, computeCompletedAt } from "../../lib/task-update";
 import {
   firstStatusForList,
   lastTaskOrderKey,
   requireTask,
+  spaceIdForList,
   workspaceIdForList,
 } from "../../lib/task-queries";
 import { triggerWebhooksForEvent } from "../../lib/webhook-runner";
@@ -45,6 +49,23 @@ async function requireStatusInList(statusId: string, listId: string) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Status does not belong to this list" });
   }
   return status;
+}
+
+// Phase 6: semantic search. Fire-and-forget — the request doesn't wait on
+// the embedding (it runs in embeddingWorker, see worker.ts); a title-only
+// task still gets a usable, if thin, embedding.
+async function enqueueTaskEmbedding(
+  workspaceId: string,
+  userId: string,
+  task: { id: string; title: string; descriptionText: string | null },
+) {
+  await embeddingQueue.add("embed", {
+    workspaceId,
+    userId,
+    entityType: "task",
+    entityId: task.id,
+    text: [task.title, task.descriptionText].filter(Boolean).join(" "),
+  });
 }
 
 async function requireWorkspaceMember(workspaceId: string, userId: string) {
@@ -175,13 +196,17 @@ export const taskRouter = router({
     const workspaceId = await workspaceIdForList(task.listId);
     await assertCan(ctx.user, workspaceId, "task:view");
 
-    const assignees = await getAssignees(task.id);
-    const tags = await getTags(task.id);
-    const subtasks = task.parentTaskId ? [] : await getSubtasks(task.id);
-    const dependencies = await getTaskDependencies(task.id);
-    const recurrenceRule = await db.query.recurrenceRules.findFirst({
-      where: eq(schema.recurrenceRules.taskId, task.id),
-    });
+    // Five independent reads with no data dependency between them — this
+    // used to await them one at a time (five round trips back-to-back on
+    // every task-detail-panel open); running them concurrently turns that
+    // into one round trip's worth of latency.
+    const [assignees, tags, subtasks, dependencies, recurrenceRule] = await Promise.all([
+      getAssignees(task.id),
+      getTags(task.id),
+      task.parentTaskId ? Promise.resolve([]) : getSubtasks(task.id),
+      getTaskDependencies(task.id),
+      db.query.recurrenceRules.findFirst({ where: eq(schema.recurrenceRules.taskId, task.id) }),
+    ]);
     return {
       ...task,
       assignees,
@@ -226,9 +251,97 @@ export const taskRouter = router({
       .limit(20);
   }),
 
+  // Backs the Home page's "Top priority"/"Recently added" sections and the
+  // post-login summary panel — one round trip for both, since they're
+  // always shown together. "Top priority" is urgent tasks OR tasks
+  // assigned to the caller (an EXISTS subquery, not a join, so a
+  // multi-assignee task doesn't come back as duplicate rows).
+  highlights: protectedProcedure.input(taskHighlightsSchema).query(async ({ ctx, input }) => {
+    await assertCan(ctx.user, input.workspaceId, "task:view");
+
+    const baseSelection = {
+      id: schema.tasks.id,
+      title: schema.tasks.title,
+      priority: schema.tasks.priority,
+      listId: schema.tasks.listId,
+      listName: schema.lists.name,
+      spaceName: schema.spaces.name,
+      createdAt: schema.tasks.createdAt,
+    };
+
+    const assignedToMe = exists(
+      db
+        .select({ one: sql`1` })
+        .from(schema.taskAssignees)
+        .where(
+          and(
+            eq(schema.taskAssignees.taskId, schema.tasks.id),
+            eq(schema.taskAssignees.userId, ctx.user.id),
+          ),
+        ),
+    );
+
+    const [priorityRows, recentRows] = await Promise.all([
+      db
+        .select(baseSelection)
+        .from(schema.tasks)
+        .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
+        .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .where(
+          and(
+            eq(schema.spaces.workspaceId, input.workspaceId),
+            isNull(schema.tasks.deletedAt),
+            isNull(schema.tasks.parentTaskId),
+            or(eq(schema.tasks.priority, "urgent"), assignedToMe),
+          ),
+        )
+        .orderBy(desc(schema.tasks.createdAt))
+        .limit(20),
+      db
+        .select(baseSelection)
+        .from(schema.tasks)
+        .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
+        .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .where(
+          and(
+            eq(schema.spaces.workspaceId, input.workspaceId),
+            isNull(schema.tasks.deletedAt),
+            isNull(schema.tasks.parentTaskId),
+          ),
+        )
+        .orderBy(desc(schema.tasks.createdAt))
+        .limit(8),
+    ]);
+
+    // A task both urgent and freshly created would otherwise show up twice,
+    // back to back — Recently Added only needs to surface what Top Priority
+    // didn't already cover.
+    const priorityIds = new Set(priorityRows.map((r) => r.id));
+    const dedupedRecentRows = recentRows.filter((r) => !priorityIds.has(r.id));
+
+    const taskIds = [...new Set([...priorityRows, ...dedupedRecentRows].map((r) => r.id))];
+    const assigneeRows = taskIds.length
+      ? await db
+          .select({ taskId: schema.taskAssignees.taskId, userId: schema.taskAssignees.userId })
+          .from(schema.taskAssignees)
+          .where(inArray(schema.taskAssignees.taskId, taskIds))
+      : [];
+    const assigneesByTask = new Map<string, string[]>();
+    for (const row of assigneeRows) {
+      const list = assigneesByTask.get(row.taskId) ?? [];
+      list.push(row.userId);
+      assigneesByTask.set(row.taskId, list);
+    }
+    const withAssignees = (rows: typeof priorityRows) =>
+      rows.map((row) => ({ ...row, assigneeIds: assigneesByTask.get(row.id) ?? [] }));
+
+    return { priority: withAssignees(priorityRows), recent: withAssignees(dedupedRecentRows) };
+  }),
+
   create: protectedProcedure.input(createTaskSchema).mutation(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
-    await assertCan(ctx.user, workspaceId, "task:create");
+    const spaceId = await spaceIdForList(input.listId);
+    await assertCan(ctx.user, workspaceId, "task:create", { spaceId });
 
     let parentTaskId: string | undefined;
     if (input.parentTaskId) {
@@ -259,6 +372,7 @@ export const taskRouter = router({
     if (!task) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.created");
+    await enqueueTaskEmbedding(workspaceId, ctx.user.id, task);
     // Runs before publish() so that by the time the realtime "task
     // updated" invalidation reaches any open client, an automation's own
     // side effects (tag/comment/priority) have already landed — there's no
@@ -281,7 +395,8 @@ export const taskRouter = router({
   update: protectedProcedure.input(updateTaskSchema).mutation(async ({ ctx, input }) => {
     const task = await requireTask(input.taskId);
     const workspaceId = await workspaceIdForList(task.listId);
-    await assertCan(ctx.user, workspaceId, "task:update");
+    const spaceId = await spaceIdForList(task.listId);
+    await assertCan(ctx.user, workspaceId, "task:update", { spaceId });
 
     let statusId: string | undefined;
     let newStatusKind: StatusKind | undefined;
@@ -322,6 +437,20 @@ export const taskRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.updated");
+    if (becameUrgent(task.priority, input.priority)) {
+      const urgentActivity = await logActivity(
+        workspaceId,
+        ctx.user.id,
+        "task",
+        task.id,
+        "task.priority_urgent",
+        { taskId: task.id, listId: task.listId, title: updated.title },
+      );
+      await notifyWorkspace(urgentActivity.id, workspaceId, ctx.user.id);
+    }
+    if (input.title !== undefined || input.descriptionJson !== undefined) {
+      await enqueueTaskEmbedding(workspaceId, ctx.user.id, updated);
+    }
     if (newStatusKind !== undefined) {
       await runAutomationsForTrigger(
         workspaceId,
@@ -452,7 +581,8 @@ export const taskRouter = router({
   delete: protectedProcedure.input(deleteTaskSchema).mutation(async ({ ctx, input }) => {
     const task = await requireTask(input.taskId);
     const workspaceId = await workspaceIdForList(task.listId);
-    await assertCan(ctx.user, workspaceId, "task:delete");
+    const spaceId = await spaceIdForList(task.listId);
+    await assertCan(ctx.user, workspaceId, "task:delete", { spaceId });
 
     const deletedAt = new Date();
     await db.update(schema.tasks).set({ deletedAt }).where(eq(schema.tasks.id, task.id));
@@ -486,7 +616,17 @@ export const taskRouter = router({
         .values({ taskId: task.id, userId: input.userId })
         .onConflictDoNothing();
 
-      await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.assigned");
+      const activityRow = await logActivity(
+        workspaceId,
+        ctx.user.id,
+        "task",
+        task.id,
+        "task.assigned",
+        { taskId: task.id, listId: task.listId },
+      );
+      if (input.userId !== ctx.user.id) {
+        await notifyUsers(activityRow.id, [input.userId]);
+      }
       await publish(workspaceId, {
         entity: "task",
         id: task.id,

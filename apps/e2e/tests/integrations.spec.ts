@@ -54,7 +54,7 @@ test("M5.6 integrations: Slack notify automation posts a message on status chang
     await expect(page.getByTestId(/^automations-link-/)).toBeVisible();
 
     // Trigger it: move "Announce the launch" to Done.
-    await page.getByRole("link", { name: "# Launches" }).click();
+    await page.getByRole("link", { name: "Launches" }).click();
     await page.getByRole("button", { name: "Board", exact: true }).click();
     await page.getByRole("button", { name: "Announce the launch" }).click();
     const panel = page.getByTestId("task-detail-panel");

@@ -14,6 +14,10 @@ export const getChannelSchema = z.object({
   channelId: z.string().uuid(),
 });
 
+export const listChannelMembersSchema = z.object({
+  channelId: z.string().uuid(),
+});
+
 export const addChannelMemberSchema = z.object({
   channelId: z.string().uuid(),
   userId: z.string().uuid(),

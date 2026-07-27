@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { FileText, Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -25,6 +27,7 @@ function DocsListPage() {
       });
     },
   });
+  const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
 
   function handleCreate(e: FormEvent) {
@@ -39,44 +42,101 @@ function DocsListPage() {
   return (
     <div className="space-y-4 p-6" data-testid="docs-list-page">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Docs</h1>
+        <div className="flex items-center gap-2">
+          <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
+            <FileText className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold">Docs</h1>
+            <p className="text-muted-foreground text-xs">
+              Write and collaborate in real time, linked to your tasks.
+            </p>
+          </div>
+        </div>
+        {!creating && (
+          <Button
+            size="sm"
+            onClick={() => setCreating(true)}
+            data-testid="docs-new"
+            className="gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            New doc
+          </Button>
+        )}
       </div>
 
-      <form onSubmit={handleCreate} className="flex max-w-md gap-2">
-        <Input
-          data-testid="docs-new-title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="New doc title"
-          className="h-8 text-sm"
-        />
-        <Button type="submit" size="sm" disabled={create.isPending} data-testid="docs-create">
-          {create.isPending ? "Creating…" : "New doc"}
-        </Button>
-      </form>
+      {creating && (
+        <Card className="max-w-md">
+          <CardHeader>
+            <CardTitle>New doc</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreate} className="space-y-3">
+              <Input
+                autoFocus
+                data-testid="docs-new-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="New doc title"
+                className="h-8 text-sm"
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={create.isPending}
+                  data-testid="docs-create"
+                >
+                  {create.isPending ? "Creating…" : "Create doc"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCreating(false);
+                    setTitle("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+              {create.error && <p className="text-xs text-red-500">{create.error.message}</p>}
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {docs.isLoading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
       ) : (docs.data?.length ?? 0) === 0 ? (
-        <p className="text-muted-foreground text-sm">No docs yet. Create one to collaborate.</p>
+        <Card className="text-muted-foreground p-6 text-center text-sm">
+          No docs yet. Create one to collaborate.
+        </Card>
       ) : (
-        <ul className="divide-border border-border divide-y rounded-md border">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {docs.data?.map((doc) => (
-            <li key={doc.id}>
-              <Link
-                to="/w/$workspaceId/docs/$docId"
-                params={{ workspaceId, docId: doc.id }}
-                data-testid={`docs-link-${doc.id}`}
-                className="hover:bg-muted flex items-center justify-between px-3 py-2 text-sm"
-              >
-                <span className="font-medium">{doc.title}</span>
-                <span className="text-muted-foreground text-xs">
-                  {new Date(doc.updatedAt).toLocaleString()}
+            <Link
+              key={doc.id}
+              to="/w/$workspaceId/docs/$docId"
+              params={{ workspaceId, docId: doc.id }}
+              data-testid={`docs-link-${doc.id}`}
+            >
+              <Card className="hover:border-accent flex items-start gap-3 p-4 transition-colors">
+                <span className="bg-accent-soft text-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
+                  <FileText className="h-4.5 w-4.5" aria-hidden />
                 </span>
-              </Link>
-            </li>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{doc.title}</p>
+                  <p className="text-muted-foreground text-xs">
+                    Updated {new Date(doc.updatedAt).toLocaleString()}
+                  </p>
+                </div>
+              </Card>
+            </Link>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

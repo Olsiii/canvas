@@ -9,9 +9,20 @@ type ActivityEntry = RouterOutputs["activity"]["list"][number];
 
 const VERB_LABEL: Record<string, string> = {
   "task.created": "created this task",
+  "task.created_from_form": "created this task from a form submission",
+  "task.created_from_template": "created this task from a template",
+  "task.created_from_import": "created this task via import",
   "task.updated": "updated this task",
   "task.assigned": "assigned someone",
   "task.unassigned": "unassigned someone",
+  "task.priority_urgent": "flagged this task as urgent",
+  "task.tagged": "added a tag",
+  "task.untagged": "removed a tag",
+  "task.dependency_added": "added a dependency",
+  "task.dependency_removed": "removed a dependency",
+  "task.recurrence_set": "set this task to repeat",
+  "task.recurrence_cleared": "turned off repeating",
+  "task.pr_linked": "linked a pull request",
   "task.deleted": "deleted this task",
 };
 

@@ -52,7 +52,7 @@ test("save a task as a template, then create a new task from it", async ({ page 
   await expect(page.getByText("New hire onboarding")).toBeVisible();
 
   // Back to the list; instantiate a second task from the template.
-  await page.getByRole("link", { name: "# Onboarding" }).click();
+  await page.getByRole("link", { name: "Onboarding" }).click();
   await expect(page.getByRole("heading", { name: "# Onboarding" })).toBeVisible();
   await page.getByRole("button", { name: "Board", exact: true }).click();
 

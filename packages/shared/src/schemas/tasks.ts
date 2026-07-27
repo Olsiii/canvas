@@ -88,6 +88,10 @@ export const searchTasksSchema = z.object({
   query: z.string().trim().min(1).max(200),
 });
 
+export const taskHighlightsSchema = z.object({
+  workspaceId: z.string().uuid(),
+});
+
 export const assignTaskSchema = z.object({
   taskId: z.string().uuid(),
   userId: z.string().uuid(),

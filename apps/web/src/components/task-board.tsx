@@ -2,6 +2,7 @@ import type { AppRouter } from "@canvas/api";
 import { STATUS_KINDS } from "@canvas/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NewTaskInlineForm } from "@/components/new-task-inline-form";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import {
@@ -262,7 +263,7 @@ function StatusColumn({
       </SortableContext>
 
       {addingTask ? (
-        <NewTaskForm
+        <NewTaskInlineForm
           isPending={createTask.isPending}
           onCancel={() => setAddingTask(false)}
           onSubmit={(title) => createTask.mutate({ listId, statusId: status.id, title })}
@@ -375,49 +376,6 @@ function TaskRow({
         </div>
       )}
     </div>
-  );
-}
-
-function NewTaskForm({
-  isPending,
-  onSubmit,
-  onCancel,
-}: {
-  isPending: boolean;
-  onSubmit: (title: string) => void;
-  onCancel: () => void;
-}) {
-  const [title, setTitle] = useState("");
-  return (
-    <form
-      className="space-y-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (title.trim()) onSubmit(title.trim());
-      }}
-    >
-      <Input
-        autoFocus
-        value={title}
-        placeholder="Task title"
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
-        onBlur={() => {
-          if (!title.trim()) onCancel();
-        }}
-        className="h-7 text-xs"
-      />
-      <Button
-        type="submit"
-        size="sm"
-        className="h-6 px-2 text-xs"
-        disabled={isPending || !title.trim()}
-      >
-        Add
-      </Button>
-    </form>
   );
 }
 

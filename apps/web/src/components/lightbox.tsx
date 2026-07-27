@@ -38,6 +38,15 @@ export function Lightbox({
       data-testid="lightbox"
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80"
     >
+      <a
+        href={`/uploads/${image.id}?download=1`}
+        download
+        aria-label={`Download ${image.fileName}`}
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-4 right-16 text-xl text-white hover:opacity-75"
+      >
+        ⭳
+      </a>
       <button
         type="button"
         aria-label="Close"

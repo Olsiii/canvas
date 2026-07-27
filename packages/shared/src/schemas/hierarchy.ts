@@ -16,6 +16,7 @@ export const updateSpaceSchema = z.object({
   spaceId: z.string().uuid(),
   name: name.optional(),
   icon: z.string().trim().max(50).nullable().optional(),
+  brandKitId: z.string().uuid().nullable().optional(),
 });
 
 export const deleteSpaceSchema = z.object({

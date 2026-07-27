@@ -6,8 +6,10 @@ import {
   sumDurations,
   todayDateOnly,
 } from "@canvas/shared";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight, Clock, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -34,15 +36,24 @@ function TimesheetPage() {
   return (
     <div className="space-y-4 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Timesheet</h1>
+        <div className="flex items-center gap-2">
+          <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
+            <Clock className="h-5 w-5" aria-hidden />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold">Timesheet</h1>
+            <p className="text-muted-foreground text-xs">Logged time by day, for this week.</p>
+          </div>
+        </div>
         <div className="flex items-center gap-2 text-sm">
           <button
             type="button"
             data-testid="timesheet-prev-week"
+            aria-label="Previous week"
             onClick={() => setWeekStart((w) => addDaysToDateOnly(w, -7))}
-            className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
+            className="border-border hover:bg-muted rounded border p-1.5"
           >
-            Prev
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
           </button>
           <span className="text-muted-foreground text-xs">
             {weekStart} – {weekEnd}
@@ -50,26 +61,29 @@ function TimesheetPage() {
           <button
             type="button"
             data-testid="timesheet-next-week"
+            aria-label="Next week"
             onClick={() => setWeekStart((w) => addDaysToDateOnly(w, 7))}
-            className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
+            className="border-border hover:bg-muted rounded border p-1.5"
           >
-            Next
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
           </button>
         </div>
       </div>
 
-      <p className="text-sm font-medium" data-testid="timesheet-total">
+      <Card className="w-fit px-4 py-2 text-sm font-medium" data-testid="timesheet-total">
         Total: {formatDurationSec(totalSec)}
-      </p>
+      </Card>
 
       {entries.isLoading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
       ) : days.length === 0 ? (
-        <p className="text-muted-foreground text-sm">No time logged this week.</p>
+        <Card className="text-muted-foreground p-6 text-center text-sm">
+          No time logged this week.
+        </Card>
       ) : (
         <div className="space-y-4">
           {days.map((day) => (
-            <div key={day.date} data-testid={`timesheet-day-${day.date}`} className="space-y-1">
+            <div key={day.date} data-testid={`timesheet-day-${day.date}`} className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">{day.date}</p>
                 <p
@@ -79,22 +93,107 @@ function TimesheetPage() {
                   {formatDurationSec(day.totalSec)}
                 </p>
               </div>
-              <ul className="divide-border divide-y rounded-md border">
+              <Card className="divide-y overflow-hidden p-0">
                 {day.entries.map((entry) => (
-                  <li key={entry.id} className="flex items-center justify-between p-2 text-sm">
+                  <div key={entry.id} className="flex items-center justify-between p-3 text-sm">
                     <span className="truncate">{entry.taskTitle}</span>
                     <span className="text-muted-foreground shrink-0 text-xs">
                       {entry.durationSec != null
                         ? formatDurationSec(entry.durationSec)
                         : "running…"}
                     </span>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </Card>
             </div>
           ))}
         </div>
       )}
+
+      <TeamOverviewSection workspaceId={workspaceId} start={weekStart} end={weekEnd} />
     </div>
+  );
+}
+
+function formatUsd(v: number): string {
+  return `$${v.toFixed(2)}`;
+}
+
+// Workspace-wide time + AI cost, per person — a Finance-Manager-style
+// role's other main concern (see the `timeEntry:viewAll` custom-role
+// grant on the Roles page). Both queries 403 for anyone without that
+// grant; rather than showing an error, the section just doesn't render
+// for the common case of a viewer who doesn't have it.
+function TeamOverviewSection({
+  workspaceId,
+  start,
+  end,
+}: {
+  workspaceId: string;
+  start: string;
+  end: string;
+}) {
+  const timesheet = trpc.timeEntry.workspaceTimesheet.useQuery({ workspaceId, start, end });
+  const aiCost = trpc.aiUsage.workspaceCost.useQuery({ workspaceId, start, end });
+  const members = trpc.workspace.members.useQuery({ workspaceId });
+
+  const memberNamesById = useMemo(
+    () => new Map((members.data ?? []).map((m) => [m.userId, m.name])),
+    [members.data],
+  );
+
+  const hoursByUser = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const entry of timesheet.data ?? []) {
+      totals.set(entry.userId, (totals.get(entry.userId) ?? 0) + (entry.durationSec ?? 0));
+    }
+    return totals;
+  }, [timesheet.data]);
+
+  if (timesheet.isError || aiCost.isError) return null;
+  if (!timesheet.data || !aiCost.data) return null;
+
+  const usdByUser = new Map(aiCost.data.byUser.map((r) => [r.userId, r.usd]));
+  const userIds = [...new Set([...hoursByUser.keys(), ...usdByUser.keys()])];
+
+  return (
+    <Card data-testid="timesheet-team-overview">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <span className="bg-accent-soft text-accent flex h-7 w-7 items-center justify-center rounded-md">
+            <Wallet className="h-3.5 w-3.5" aria-hidden />
+          </span>
+          <CardTitle>Team overview</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-muted-foreground text-xs">
+          Everyone's logged time and AI spend for this week —{" "}
+          {formatDurationSec(sumDurations(timesheet.data))} total, {formatUsd(aiCost.data.totalUsd)}{" "}
+          in AI cost.
+        </p>
+        {userIds.length === 0 ? (
+          <p className="text-muted-foreground text-xs">Nothing logged by anyone this week.</p>
+        ) : (
+          <div className="divide-border divide-y rounded-md border">
+            {userIds.map((userId) => (
+              <div
+                key={userId}
+                className="flex items-center justify-between px-3 py-2 text-sm"
+                data-testid={`team-overview-row-${userId}`}
+              >
+                <span className="truncate font-medium">
+                  {memberNamesById.get(userId) ?? "Former member"}
+                </span>
+                <span className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
+                  <span>{formatDurationSec(hoursByUser.get(userId) ?? 0)}</span>
+                  <span>{formatUsd(usdByUser.get(userId) ?? 0)}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

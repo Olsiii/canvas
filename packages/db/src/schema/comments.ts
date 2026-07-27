@@ -1,5 +1,6 @@
 import {
   type AnyPgColumn,
+  index,
   jsonb,
   pgTable,
   text,
@@ -14,24 +15,28 @@ import { tasks } from "./tasks";
 // Threading is capped at depth 2 (a reply cannot itself be replied to) —
 // enforced in the API layer, mirroring tasks.parentTaskId. See PROGRESS.md
 // (M1.7 decisions).
-export const comments = pgTable("comments", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  taskId: uuid("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  parentCommentId: uuid("parent_comment_id").references((): AnyPgColumn => comments.id, {
-    onDelete: "cascade",
-  }),
-  authorId: uuid("author_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  bodyJson: jsonb("body_json").$type<unknown>().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-});
+export const comments = pgTable(
+  "comments",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    parentCommentId: uuid("parent_comment_id").references((): AnyPgColumn => comments.id, {
+      onDelete: "cascade",
+    }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bodyJson: jsonb("body_json").$type<unknown>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [index("comments_task_id_idx").on(table.taskId)],
+);
 
 export const reactions = pgTable(
   "reactions",

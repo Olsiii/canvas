@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { Link } from "@tanstack/react-router";
 import type { inferRouterOutputs } from "@trpc/server";
+import { ChevronDown, ChevronRight, Folder, Hash, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -36,16 +37,18 @@ export function HierarchySidebar({
   }
 
   return (
-    <nav className="flex h-full flex-col gap-1 overflow-y-auto p-3">
-      <div className="flex items-center justify-between px-1 pb-1">
-        <span className="text-muted-foreground text-xs font-medium uppercase">Spaces</span>
+    <nav className="flex flex-col gap-1">
+      <div className="flex items-center justify-between px-2 pb-1">
+        <span className="text-muted-foreground text-[10px] font-semibold tracking-wide uppercase">
+          Spaces
+        </span>
         <button
           type="button"
           onClick={() => setAddingSpace((v) => !v)}
-          className="text-muted-foreground hover:text-foreground text-sm"
+          className="text-muted-foreground hover:text-foreground"
           aria-label="New space"
         >
-          +
+          <Plus className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
 
@@ -126,10 +129,14 @@ function SpaceSection({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="text-muted-foreground w-3 text-xs"
+          className="text-muted-foreground flex w-3 items-center justify-center"
           aria-label={expanded ? "Collapse" : "Expand"}
         >
-          {expanded ? "▾" : "▸"}
+          {expanded ? (
+            <ChevronDown className="h-3 w-3" aria-hidden />
+          ) : (
+            <ChevronRight className="h-3 w-3" aria-hidden />
+          )}
         </button>
 
         {renaming ? (
@@ -149,16 +156,16 @@ function SpaceSection({
         {!renaming && (
           <div className="hidden gap-1 group-hover:flex">
             <IconAction label="New folder" onClick={() => setAddingFolder((v) => !v)}>
-              📁
+              <Folder className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
             <IconAction label="New list" onClick={() => setAddingList((v) => !v)}>
-              +
+              <Plus className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
             <IconAction label="Rename space" onClick={() => setRenaming(true)}>
-              ✎
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
             <IconAction label="Delete space" onClick={() => setConfirmingDelete(true)}>
-              ✕
+              <X className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
           </div>
         )}
@@ -257,10 +264,14 @@ function FolderSection({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="text-muted-foreground w-3 text-xs"
+          className="text-muted-foreground flex w-3 items-center justify-center"
           aria-label={expanded ? "Collapse" : "Expand"}
         >
-          {expanded ? "▾" : "▸"}
+          {expanded ? (
+            <ChevronDown className="h-3 w-3" aria-hidden />
+          ) : (
+            <ChevronRight className="h-3 w-3" aria-hidden />
+          )}
         </button>
 
         {renaming ? (
@@ -271,19 +282,22 @@ function FolderSection({
             onSubmit={(name) => rename.mutate({ folderId: folder.id, name })}
           />
         ) : (
-          <span className="flex-1 truncate text-sm">📁 {folder.name}</span>
+          <span className="flex flex-1 items-center gap-1.5 truncate text-sm">
+            <Folder className="text-muted-foreground h-3.5 w-3.5 shrink-0" aria-hidden />
+            {folder.name}
+          </span>
         )}
 
         {!renaming && (
           <div className="hidden gap-1 group-hover:flex">
             <IconAction label="New list" onClick={() => setAddingList((v) => !v)}>
-              +
+              <Plus className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
             <IconAction label="Rename folder" onClick={() => setRenaming(true)}>
-              ✎
+              <Pencil className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
             <IconAction label="Delete folder" onClick={() => setConfirmingDelete(true)}>
-              ✕
+              <X className="h-3.5 w-3.5" aria-hidden />
             </IconAction>
           </div>
         )}
@@ -364,16 +378,17 @@ function ListRow({
         <Link
           to="/w/$workspaceId/l/$listId"
           params={{ workspaceId, listId: list.id }}
-          className={`flex-1 truncate text-sm ${active ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
+          className={`flex flex-1 items-center gap-1.5 truncate text-sm ${active ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
         >
-          # {list.name}
+          <Hash className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {list.name}
         </Link>
         <div className="hidden gap-1 group-hover:flex">
           <IconAction label="Rename list" onClick={() => setRenaming(true)}>
-            ✎
+            <Pencil className="h-3.5 w-3.5" aria-hidden />
           </IconAction>
           <IconAction label="Delete list" onClick={() => setConfirmingDelete(true)}>
-            ✕
+            <X className="h-3.5 w-3.5" aria-hidden />
           </IconAction>
         </div>
       </div>
@@ -404,7 +419,7 @@ function IconAction({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="text-muted-foreground hover:text-foreground text-xs"
+      className="text-muted-foreground hover:text-foreground flex items-center"
     >
       {children}
     </button>

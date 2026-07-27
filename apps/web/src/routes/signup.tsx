@@ -1,4 +1,5 @@
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +46,7 @@ function SignupPage() {
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 px-4">
-      <div className="w-full max-w-sm space-y-6">
+      <Card className="w-full max-w-sm space-y-6 p-6">
         <div>
           <h1 className="text-xl font-semibold">Create your account</h1>
           {invite.data && (
@@ -105,7 +106,7 @@ function SignupPage() {
             Log in
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

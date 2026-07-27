@@ -136,6 +136,119 @@ export function CategoricalBarChart({ data }: { data: { label: string; value: nu
   );
 }
 
+// Donut chart for one categorical series (e.g. tasks by status). Fixed slot
+// order per the categorical palette; a legend is always rendered alongside
+// since color is never the only identity cue.
+export function DonutChart({
+  data,
+  centerLabel,
+  centerValue,
+}: {
+  data: { label: string; value: number }[];
+  centerLabel: string;
+  centerValue: string;
+}) {
+  const size = 160;
+  const stroke = 22;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const total = Math.max(
+    1,
+    data.reduce((sum, d) => sum + d.value, 0),
+  );
+
+  let offset = 0;
+  const segments = data.map((d, i) => {
+    const fraction = d.value / total;
+    const dash = fraction * circumference;
+    const gap = Math.max(0, circumference - dash);
+    const segment = {
+      d,
+      dash,
+      gap,
+      rotation: (offset / circumference) * 360,
+      light: CATEGORICAL[i % CATEGORICAL.length],
+      dark: CATEGORICAL_DARK[i % CATEGORICAL_DARK.length],
+    };
+    offset += dash;
+    return segment;
+  });
+
+  return (
+    <div className="flex items-center gap-4">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={`Donut chart of ${centerLabel}`}
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          className="stroke-border"
+          strokeWidth={stroke}
+        />
+        {segments.map((s) => (
+          <circle
+            key={s.d.label}
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            strokeWidth={stroke}
+            strokeDasharray={`${s.dash} ${s.gap}`}
+            transform={`rotate(${s.rotation - 90} ${size / 2} ${size / 2})`}
+            style={{ "--dot-light": s.light, "--dot-dark": s.dark } as React.CSSProperties}
+            className="[stroke:var(--dot-light)] dark:[stroke:var(--dot-dark)]"
+          >
+            <title>{`${s.d.label}: ${s.d.value}`}</title>
+          </circle>
+        ))}
+        <text
+          x={size / 2}
+          y={size / 2 - 4}
+          textAnchor="middle"
+          className="fill-foreground text-lg font-semibold"
+        >
+          {centerValue}
+        </text>
+        <text
+          x={size / 2}
+          y={size / 2 + 16}
+          textAnchor="middle"
+          className="fill-muted-foreground text-[10px] uppercase"
+        >
+          {centerLabel}
+        </text>
+      </svg>
+      <ul className="flex flex-col gap-1.5 text-xs">
+        {data.map((d, i) => (
+          <li key={d.label} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="h-2.5 w-2.5 shrink-0 rounded-full [background:var(--dot-light)] dark:[background:var(--dot-dark)]"
+              style={
+                {
+                  "--dot-light": CATEGORICAL[i % CATEGORICAL.length],
+                  "--dot-dark": CATEGORICAL_DARK[i % CATEGORICAL_DARK.length],
+                } as React.CSSProperties
+              }
+            />
+            <span className="text-muted-foreground">{d.label}</span>
+            <span className="font-medium">{d.value}</span>
+            <span className="text-muted-foreground">
+              ({total > 0 ? Math.round((d.value / total) * 100) : 0}%)
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function LineChart({
   data,
   color,

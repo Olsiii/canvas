@@ -3,8 +3,11 @@ import { z } from "zod";
 // Upload itself is a plain multipart POST to /uploads, not a tRPC mutation
 // — tRPC has no native file-upload transport. See PROGRESS.md (M1.9
 // decisions).
+// Exactly one of taskId/messageId — an attachment belongs to a task or a
+// chat message, never both (enforced server-side in attachment.ts).
 export const listAttachmentsSchema = z.object({
-  taskId: z.string().uuid(),
+  taskId: z.string().uuid().optional(),
+  messageId: z.string().uuid().optional(),
 });
 
 export const deleteAttachmentSchema = z.object({

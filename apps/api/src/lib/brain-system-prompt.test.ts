@@ -49,4 +49,45 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("#campaigns");
     expect(prompt).not.toContain("Title:");
   });
+
+  it("omits any brand section when no brand is attached", () => {
+    const prompt = buildSystemPrompt({ type: "global" }, null);
+    expect(prompt).not.toContain("brand kit");
+  });
+
+  it("appends the brand kit's name, palette, tone, and guidelines for a global conversation", () => {
+    const prompt = buildSystemPrompt(
+      { type: "global" },
+      {
+        name: "Acme Corp",
+        palette: ["#FF5733", "#33FF57"],
+        tone: "Bold and energetic",
+        guidelines: "Never use Comic Sans.",
+      },
+    );
+    expect(prompt).toContain('"Acme Corp"');
+    expect(prompt).toContain("#FF5733, #33FF57");
+    expect(prompt).toContain("Tone: Bold and energetic");
+    expect(prompt).toContain("Guidelines: Never use Comic Sans.");
+  });
+
+  it("appends the brand section on top of task context too", () => {
+    const prompt = buildSystemPrompt(
+      { type: "task", title: "Design banner", listName: "Campaigns", descriptionJson: null },
+      { name: "Acme Corp", palette: [], tone: null, guidelines: null },
+    );
+    expect(prompt).toContain("Title: Design banner");
+    expect(prompt).toContain('"Acme Corp"');
+  });
+
+  it("omits palette/tone/guidelines lines that are empty or null", () => {
+    const prompt = buildSystemPrompt(
+      { type: "global" },
+      { name: "Bare Kit", palette: [], tone: null, guidelines: null },
+    );
+    expect(prompt).toContain('"Bare Kit"');
+    expect(prompt).not.toContain("Palette:");
+    expect(prompt).not.toContain("Tone:");
+    expect(prompt).not.toContain("Guidelines:");
+  });
 });

@@ -36,6 +36,11 @@ async function workspaceIdForList(listId: string) {
   return space.workspaceId;
 }
 
+async function spaceIdForList(listId: string) {
+  const list = await requireList(listId);
+  return list.spaceId;
+}
+
 export const statusRouter = router({
   list: protectedProcedure.input(listStatusesSchema).query(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
@@ -50,7 +55,8 @@ export const statusRouter = router({
 
   create: protectedProcedure.input(createStatusSchema).mutation(async ({ ctx, input }) => {
     const workspaceId = await workspaceIdForList(input.listId);
-    await assertCan(ctx.user, workspaceId, "status:create");
+    const spaceId = await spaceIdForList(input.listId);
+    await assertCan(ctx.user, workspaceId, "status:create", { spaceId });
 
     const lastKey = await lastStatusOrderKey(input.listId);
 
@@ -79,7 +85,8 @@ export const statusRouter = router({
   update: protectedProcedure.input(updateStatusSchema).mutation(async ({ ctx, input }) => {
     const status = await requireStatus(input.statusId);
     const workspaceId = await workspaceIdForList(status.listId);
-    await assertCan(ctx.user, workspaceId, "status:update");
+    const spaceId = await spaceIdForList(status.listId);
+    await assertCan(ctx.user, workspaceId, "status:update", { spaceId });
 
     const [updated] = await db
       .update(schema.statuses)
@@ -105,7 +112,8 @@ export const statusRouter = router({
   delete: protectedProcedure.input(deleteStatusSchema).mutation(async ({ ctx, input }) => {
     const status = await requireStatus(input.statusId);
     const workspaceId = await workspaceIdForList(status.listId);
-    await assertCan(ctx.user, workspaceId, "status:delete");
+    const spaceId = await spaceIdForList(status.listId);
+    await assertCan(ctx.user, workspaceId, "status:delete", { spaceId });
 
     const [taskInStatus] = await db
       .select({ id: schema.tasks.id })

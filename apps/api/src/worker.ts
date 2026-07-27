@@ -5,8 +5,10 @@ import { getChatClient, type ProviderMessage, type ToolCall } from "./brain";
 import { executeTool } from "./brain/execute-tool";
 import { BRAIN_TOOLS } from "./brain/tools";
 import { estimateChatCostUsd } from "./lib/ai-usage";
-import { buildSystemPrompt } from "./lib/brain-system-prompt";
+import { resolveEffectiveBrandKit } from "./lib/brand-kit";
+import { buildSystemPrompt, type BrandContext } from "./lib/brain-system-prompt";
 import { publish as publishBrainEvent } from "./lib/brain-realtime";
+import { runEmbedding } from "./lib/embedding-runner";
 import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
 import { runClickUpImport, runCsvImport } from "./lib/import-runner";
@@ -15,6 +17,7 @@ import { ensureBucketExists } from "./lib/storage";
 import { signWebhookPayload } from "./lib/webhook-signature";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
+import { EMBEDDING_QUEUE_NAME, type EmbeddingJobData } from "./queues/embedding-queue";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
 import { IMPORT_QUEUE_NAME, type ImportJobData } from "./queues/import-queue";
 import { scheduleRecurringTick, SCHEDULER_QUEUE_NAME } from "./queues/scheduler-queue";
@@ -118,23 +121,26 @@ function historyToProviderMessages(
   return out;
 }
 
-async function buildTaskSystemPrompt(taskId: string): Promise<string> {
+async function buildTaskSystemPrompt(taskId: string, brand: BrandContext | null): Promise<string> {
   const task = await db.query.tasks.findFirst({ where: eq(schema.tasks.id, taskId) });
-  if (!task) return buildSystemPrompt({ type: "global" });
+  if (!task) return buildSystemPrompt({ type: "global" }, brand);
   const list = await db.query.lists.findFirst({ where: eq(schema.lists.id, task.listId) });
-  return buildSystemPrompt({
-    type: "task",
-    title: task.title,
-    listName: list?.name ?? "unknown list",
-    descriptionJson: task.descriptionJson,
-  });
+  return buildSystemPrompt(
+    {
+      type: "task",
+      title: task.title,
+      listName: list?.name ?? "unknown list",
+      descriptionJson: task.descriptionJson,
+    },
+    brand,
+  );
 }
 
-async function buildDocSystemPrompt(docId: string): Promise<string> {
+async function buildDocSystemPrompt(docId: string, brand: BrandContext | null): Promise<string> {
   const doc = await db.query.docs.findFirst({
     where: and(eq(schema.docs.id, docId), isNull(schema.docs.deletedAt)),
   });
-  if (!doc) return buildSystemPrompt({ type: "global" });
+  if (!doc) return buildSystemPrompt({ type: "global" }, brand);
 
   const linkedTasks = await db
     .select({ id: schema.tasks.id, title: schema.tasks.title })
@@ -142,19 +148,25 @@ async function buildDocSystemPrompt(docId: string): Promise<string> {
     .innerJoin(schema.tasks, eq(schema.tasks.id, schema.docTaskLinks.taskId))
     .where(and(eq(schema.docTaskLinks.docId, docId), isNull(schema.tasks.deletedAt)));
 
-  return buildSystemPrompt({
-    type: "doc",
-    title: doc.title,
-    linkedTasks,
-  });
+  return buildSystemPrompt(
+    {
+      type: "doc",
+      title: doc.title,
+      linkedTasks,
+    },
+    brand,
+  );
 }
 
-async function buildChannelSystemPrompt(channelId: string): Promise<string> {
+async function buildChannelSystemPrompt(
+  channelId: string,
+  brand: BrandContext | null,
+): Promise<string> {
   const channel = await db.query.channels.findFirst({
     where: and(eq(schema.channels.id, channelId), isNull(schema.channels.deletedAt)),
   });
-  if (!channel) return buildSystemPrompt({ type: "global" });
-  return buildSystemPrompt({ type: "channel", name: channel.name });
+  if (!channel) return buildSystemPrompt({ type: "global" }, brand);
+  return buildSystemPrompt({ type: "channel", name: channel.name }, brand);
 }
 
 const brainWorker = new Worker<BrainJobData>(
@@ -167,14 +179,29 @@ const brainWorker = new Worker<BrainJobData>(
     });
     if (!conversation) throw new Error(`brain_conversations row ${data.conversationId} not found`);
 
+    const brandKit = conversation.brandKitId
+      ? await resolveEffectiveBrandKit({
+          workspaceId: conversation.workspaceId,
+          brandKitId: conversation.brandKitId,
+        })
+      : null;
+    const brand: BrandContext | null = brandKit
+      ? {
+          name: brandKit.name,
+          palette: brandKit.paletteJson ?? [],
+          tone: brandKit.tone,
+          guidelines: brandKit.guidelines,
+        }
+      : null;
+
     const systemPrompt =
       conversation.contextType === "task" && conversation.contextId
-        ? await buildTaskSystemPrompt(conversation.contextId)
+        ? await buildTaskSystemPrompt(conversation.contextId, brand)
         : conversation.contextType === "doc" && conversation.contextId
-          ? await buildDocSystemPrompt(conversation.contextId)
+          ? await buildDocSystemPrompt(conversation.contextId, brand)
           : conversation.contextType === "channel" && conversation.contextId
-            ? await buildChannelSystemPrompt(conversation.contextId)
-            : buildSystemPrompt({ type: "global" });
+            ? await buildChannelSystemPrompt(conversation.contextId, brand)
+            : buildSystemPrompt({ type: "global" }, brand);
 
     const chatClient = getChatClient();
     let lastAssistantMessageId: string | null = null;
@@ -406,6 +433,22 @@ slackWorker.on("failed", (job, err) => {
   console.error(`[worker] slack delivery ${job?.id} failed:`, err);
 });
 
+// Phase 6: semantic + visual search. Content embeddings (task text, image
+// alt-text/tags) are the persisted, potentially-slow/costly AI call CLAUDE.md's
+// "run in a worker" rule is about — see search.ts for why the ephemeral
+// per-request *query* embedding is the one documented exception.
+const embeddingWorker = new Worker<EmbeddingJobData>(
+  EMBEDDING_QUEUE_NAME,
+  async (job) => {
+    await runEmbedding(job.data);
+  },
+  { connection: redisConnection },
+);
+
+embeddingWorker.on("failed", (job, err) => {
+  console.error(`[worker] embedding ${job?.data.entityType}/${job?.data.entityId} failed:`, err);
+});
+
 console.log(
-  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}", "${SLACK_QUEUE_NAME}"`,
+  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}", "${SLACK_QUEUE_NAME}", "${EMBEDDING_QUEUE_NAME}"`,
 );

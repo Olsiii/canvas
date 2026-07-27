@@ -1,4 +1,6 @@
+import { JUST_LOGGED_IN_KEY } from "@/components/login-summary-panel";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -32,6 +34,7 @@ function LoginPage() {
   const logIn = trpc.auth.logIn.useMutation({
     onSuccess: async () => {
       await utils.auth.me.invalidate();
+      sessionStorage.setItem(JUST_LOGGED_IN_KEY, "1");
       if (redirect) {
         window.location.assign(redirect);
       } else {
@@ -43,7 +46,7 @@ function LoginPage() {
 
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 px-4">
-      <div className="w-full max-w-sm space-y-6">
+      <Card className="w-full max-w-sm space-y-6 p-6">
         <h1 className="text-xl font-semibold">Log in</h1>
 
         <form
@@ -92,7 +95,7 @@ function LoginPage() {
             Sign up
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }
