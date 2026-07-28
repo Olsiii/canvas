@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createSpaceAndList, createWorkspaceAndOpen, signUp } from "./helpers";
+import {
+  createSpaceAndList,
+  createWorkspaceAndOpen,
+  signUp,
+  fillGenerationContext,
+} from "./helpers";
 
 test("M4.4 image proofing: pin a comment on a version, switch versions, pin survives, and Brain critiques", async ({
   page,
@@ -23,6 +28,7 @@ test("M4.4 image proofing: pin a comment on a version, switch versions, pin surv
   await expect(gen).toBeVisible();
 
   await gen.getByTestId("generation-prompt").fill("a poster mockup");
+  await fillGenerationContext(gen);
   await gen.getByTestId("generation-n").selectOption("1");
   await gen.getByTestId("generation-submit").click();
 

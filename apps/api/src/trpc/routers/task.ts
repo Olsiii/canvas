@@ -26,13 +26,23 @@ import { logActivity } from "../../lib/activity";
 import { runAutomationsForTrigger } from "../../lib/automation-runner";
 import { embeddingQueue } from "../../queues/embedding-queue";
 import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
-import { notifyUsers, notifyWorkspace } from "../../lib/notify";
+import {
+  getOperationsManagerIds,
+  notifyOperationsManagers,
+  notifyUsers,
+  notifyWorkspace,
+} from "../../lib/notify";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
 import { computeNextRunAt } from "../../lib/recurrence";
 import { publish } from "../../lib/realtime";
 import { validateSubtaskParent } from "../../lib/subtask";
-import { becameUrgent, buildTaskUpdateFields, computeCompletedAt } from "../../lib/task-update";
+import {
+  becameUrgent,
+  buildTaskUpdateFields,
+  computeCompletedAt,
+  isDoneKind,
+} from "../../lib/task-update";
 import {
   firstStatusForList,
   lastTaskOrderKey,
@@ -401,11 +411,20 @@ export const taskRouter = router({
     let statusId: string | undefined;
     let newStatusKind: StatusKind | undefined;
     let completedAt: Date | null | undefined;
+    // Only set when the status is actually changing — used below to notify
+    // Operations Managers on the transition INTO done/closed, not on every
+    // save of a task that was already there (e.g. done -> closed).
+    let justCompleted = false;
     if (input.statusId !== undefined && input.statusId !== task.statusId) {
       const status = await requireStatusInList(input.statusId, task.listId);
       statusId = status.id;
       newStatusKind = status.kind;
       completedAt = computeCompletedAt(status.kind, task.completedAt, new Date());
+
+      const previousStatus = await db.query.statuses.findFirst({
+        where: eq(schema.statuses.id, task.statusId),
+      });
+      justCompleted = isDoneKind(status.kind) && !isDoneKind(previousStatus?.kind ?? "open");
     }
 
     // An explicit orderKey (e.g. from a board drag-and-drop drop) wins; a
@@ -437,6 +456,17 @@ export const taskRouter = router({
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "task", task.id, "task.updated");
+    if (justCompleted) {
+      const completedActivity = await logActivity(
+        workspaceId,
+        ctx.user.id,
+        "task",
+        task.id,
+        "task.completed",
+        { taskId: task.id, listId: task.listId, title: updated.title },
+      );
+      await notifyOperationsManagers(completedActivity.id, workspaceId);
+    }
     if (becameUrgent(task.priority, input.priority)) {
       const urgentActivity = await logActivity(
         workspaceId,
@@ -507,6 +537,14 @@ export const taskRouter = router({
       });
     }
 
+    // Every status a row might currently be in, so each row's own
+    // transition-into-done can be detected below without a query per row.
+    const statusKindById = new Map(
+      (await db.query.statuses.findMany({ where: eq(schema.statuses.listId, input.listId) })).map(
+        (s) => [s.id, s.kind] as const,
+      ),
+    );
+
     // Status changes append each task to the end of the new column so we
     // don't invent a shared orderKey for the whole selection.
     let orderKeyByTaskId: Map<string, string> | undefined;
@@ -519,6 +557,11 @@ export const taskRouter = router({
         orderKeyByTaskId.set(row.id, lastKey);
       }
     }
+
+    // Resolved lazily (only if some row actually completes below) and
+    // cached for the rest of the loop — every completed row in this batch
+    // shares the same workspace, so the manager list is the same for all.
+    let managerIds: string[] | undefined;
 
     const updatedAt = new Date();
     for (const row of rows) {
@@ -558,6 +601,18 @@ export const taskRouter = router({
           listId: input.listId,
           statusKind: newStatusKind,
         });
+        if (isDoneKind(newStatusKind) && !isDoneKind(statusKindById.get(row.statusId) ?? "open")) {
+          const completedActivity = await logActivity(
+            workspaceId,
+            ctx.user.id,
+            "task",
+            row.id,
+            "task.completed",
+            { taskId: row.id, listId: input.listId, title: row.title },
+          );
+          managerIds ??= await getOperationsManagerIds(workspaceId);
+          await notifyUsers(completedActivity.id, managerIds);
+        }
       }
       await publish(workspaceId, {
         entity: "task",

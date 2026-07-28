@@ -21,6 +21,8 @@ export type ImageJobData =
       style?: string;
       brandPalette?: string[];
       n?: number;
+      /** Presigned URLs for reference images (image-to-image style). */
+      referenceImageUrls?: string[];
     }
   | {
       kind: "edit";

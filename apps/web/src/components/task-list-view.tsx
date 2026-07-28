@@ -1,6 +1,7 @@
 import type { AppRouter } from "@canvas/api";
 import { Input } from "@/components/ui/input";
 import { NewTaskInlineForm } from "@/components/new-task-inline-form";
+import { StatusSelect } from "@/components/status-select";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import {
@@ -233,8 +234,12 @@ export function TaskListView({
               return (
                 <div
                   key={row.id}
-                  style={rowStyle}
-                  className="bg-muted/40 flex items-center gap-2 px-2 text-xs font-medium"
+                  style={{
+                    ...rowStyle,
+                    backgroundColor: `${status?.color ?? "#94a3b8"}12`,
+                    borderLeftColor: status?.color ?? "#94a3b8",
+                  }}
+                  className="flex items-center gap-2 border-l-4 px-2 text-xs font-semibold"
                 >
                   <button
                     type="button"
@@ -250,7 +255,15 @@ export function TaskListView({
                     aria-hidden
                   />
                   {status?.name ?? "—"}{" "}
-                  <span className="text-muted-foreground">({row.subRows.length})</span>
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[10px]"
+                    style={{
+                      backgroundColor: `${status?.color ?? "#94a3b8"}26`,
+                      color: status?.color,
+                    }}
+                  >
+                    ({row.subRows.length})
+                  </span>
                 </div>
               );
             }
@@ -339,31 +352,5 @@ function EditableTitle({
       }}
       className="h-7 text-sm"
     />
-  );
-}
-
-function StatusSelect({
-  listId,
-  task,
-  statuses,
-}: {
-  listId: string;
-  task: Task;
-  statuses: Status[];
-}) {
-  const update = useOptimisticTaskUpdate(listId);
-  return (
-    <select
-      value={task.statusId}
-      disabled={update.isPending}
-      onChange={(e) => update.mutate({ taskId: task.id, statusId: e.target.value })}
-      className="border-border bg-background h-7 rounded border text-xs"
-    >
-      {statuses.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.name}
-        </option>
-      ))}
-    </select>
   );
 }

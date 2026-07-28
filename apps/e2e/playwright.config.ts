@@ -30,16 +30,13 @@ export default defineConfig({
       // starts null (always due on the first tick regardless of this
       // value), but a short interval also lets the spec observe a second
       // digest cycle without waiting a real day.
-      // M5.5: points the ClickUp importer at a local mock server the
-      // imports spec itself starts on this fixed port (before it triggers
-      // an import), instead of ever calling the real ClickUp API — same
+      // M5.6: points the GitHub PR-link fetch at a local mock server the
+      // integrations spec starts on this fixed port (before it triggers a
+      // fetch), instead of ever calling the real GitHub API — same
       // testability-seam idea as SCHEDULER_TICK_MS/DIGEST_INTERVAL_MS.
-      // M5.6: same idea for the GitHub PR-link fetch — the integrations
-      // spec starts its own mock server on this fixed port.
       env: {
         SCHEDULER_TICK_MS: "3000",
         DIGEST_INTERVAL_MS: "3000",
-        CLICKUP_API_BASE_URL: "http://127.0.0.1:4010",
         GITHUB_API_BASE_URL: "http://127.0.0.1:4011",
       },
     },

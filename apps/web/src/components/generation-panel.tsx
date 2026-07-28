@@ -10,11 +10,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImageProofing } from "@/components/image-proofing";
+import { ReferenceAttachZone, type AiReference } from "@/components/reference-attach-zone";
 import { VersionCompare } from "@/components/version-compare";
 import { VersionTreeSidebar } from "@/components/version-tree-sidebar";
 import { useImageAssetJob } from "@/hooks/use-image-asset-job";
 import { trpc } from "@/lib/trpc";
-import { CheckCircle2, GitBranch, Loader2, Paperclip, Sparkles, Wand2, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  CheckCircle2,
+  GitBranch,
+  Images,
+  Loader2,
+  Paperclip,
+  Sparkles,
+  Wand2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 export function GenerationPanel({
@@ -44,8 +55,14 @@ export function GenerationPanel({
     spaceId,
     brandKitId: brandKitId || undefined,
   });
+  const folders = trpc.imageFolder.list.useQuery({ workspaceId });
+  const [folderId, setFolderId] = useState("");
 
   const [prompt, setPrompt] = useState("");
+  const [useCase, setUseCase] = useState("");
+  const [mustHave, setMustHave] = useState("");
+  const [avoid, setAvoid] = useState("");
+  const [references, setReferences] = useState<AiReference[]>([]);
   const [size, setSize] = useState<AspectPreset>("square");
   const [style, setStyle] = useState<StylePreset | "">("");
   const [n, setN] = useState(2);
@@ -127,6 +144,18 @@ export function GenerationPanel({
     e.preventDefault();
     const text = prompt.trim();
     if (!text || generate.isPending) return;
+    if (!useCase.trim() || !mustHave.trim()) {
+      setError("Answer the clarifying questions (use + must-haves) before generating.");
+      return;
+    }
+    const enriched = [
+      text,
+      `Use: ${useCase.trim()}`,
+      `Must include: ${mustHave.trim()}`,
+      avoid.trim() ? `Avoid: ${avoid.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
     setError(null);
     setAssetId(null);
     setSelectedVersionId(null);
@@ -137,18 +166,21 @@ export function GenerationPanel({
     try {
       const created = await generate.mutateAsync({
         workspaceId,
-        prompt: text,
+        prompt: enriched,
         size,
         style: style || undefined,
         n,
         useBrandPalette,
         spaceId,
         brandKitId: brandKitId || undefined,
+        folderId: folderId || undefined,
+        referenceAttachmentIds: references.map((r) => r.id),
       });
       setAssetId(created.id);
-    } catch {
+      setReferences([]);
+    } catch (err) {
       setJobStatus("error");
-      setError("Generation failed to start.");
+      setError(err instanceof Error ? err.message : "Generation failed to start.");
     }
   }
 
@@ -219,19 +251,73 @@ export function GenerationPanel({
 
       <Card>
         <CardContent className="space-y-3 pt-4">
-          <div>
-            <label htmlFor="gen-prompt" className="mb-1 block text-xs font-medium">
-              Prompt
-            </label>
-            <textarea
-              id="gen-prompt"
-              data-testid="generation-prompt"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={3}
-              placeholder="Describe the image you want…"
-              className="border-border focus-visible:ring-accent w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2"
-            />
+          <ReferenceAttachZone
+            workspaceId={workspaceId}
+            references={references}
+            onChange={setReferences}
+            disabled={busy}
+            testId="generation-reference-zone"
+          >
+            <div className="px-2 pt-2">
+              <label htmlFor="gen-prompt" className="mb-1 block text-xs font-medium">
+                Prompt
+              </label>
+              <textarea
+                id="gen-prompt"
+                data-testid="generation-prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={3}
+                placeholder="Describe the image you want… Drop a reference image/file/video here too."
+                className="border-border focus-visible:ring-accent w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2"
+              />
+            </div>
+          </ReferenceAttachZone>
+
+          <div
+            className="space-y-2 rounded-md border border-dashed p-3"
+            data-testid="generation-clarify"
+          >
+            <p className="text-xs font-medium">A few details before we generate</p>
+            <div>
+              <label htmlFor="gen-use" className="mb-1 block text-[11px] font-medium">
+                Where will this be used?
+              </label>
+              <input
+                id="gen-use"
+                data-testid="generation-use-case"
+                value={useCase}
+                onChange={(e) => setUseCase(e.target.value)}
+                placeholder="e.g. Instagram post, print flyer, website hero"
+                className="border-border h-8 w-full rounded-md border bg-transparent px-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="gen-must" className="mb-1 block text-[11px] font-medium">
+                What must appear?
+              </label>
+              <input
+                id="gen-must"
+                data-testid="generation-must-have"
+                value={mustHave}
+                onChange={(e) => setMustHave(e.target.value)}
+                placeholder="e.g. Zone Club logo, warm sunset, no people"
+                className="border-border h-8 w-full rounded-md border bg-transparent px-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="gen-avoid" className="mb-1 block text-[11px] font-medium">
+                Anything to avoid? (optional)
+              </label>
+              <input
+                id="gen-avoid"
+                data-testid="generation-avoid"
+                value={avoid}
+                onChange={(e) => setAvoid(e.target.value)}
+                placeholder="e.g. neon colors, stock-photo look"
+                className="border-border h-8 w-full rounded-md border bg-transparent px-2 text-sm"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -290,6 +376,28 @@ export function GenerationPanel({
                 {brandKits.data?.map((kit) => (
                   <option key={kit.id} value={kit.id}>
                     {kit.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(folders.data?.length ?? 0) > 0 && (
+            <div>
+              <label htmlFor="gen-folder" className="mb-1 block text-xs font-medium">
+                Save to folder
+              </label>
+              <select
+                id="gen-folder"
+                data-testid="generation-folder"
+                value={folderId}
+                onChange={(e) => setFolderId(e.target.value)}
+                className="border-border bg-background h-8 w-full rounded border text-sm"
+              >
+                <option value="">Library (no folder)</option>
+                {folders.data?.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
                   </option>
                 ))}
               </select>
@@ -374,6 +482,19 @@ export function GenerationPanel({
 
       {ready && (
         <div className="space-y-4">
+          <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <CheckCircle2 className="text-status-good h-3.5 w-3.5" aria-hidden />
+            Saved in Canvas —{" "}
+            <Link
+              to="/w/$workspaceId/library"
+              params={{ workspaceId }}
+              className="text-accent inline-flex items-center gap-1 hover:underline"
+            >
+              <Images className="h-3 w-3" aria-hidden />
+              view in Library
+            </Link>
+          </p>
+
           <VersionTreeSidebar
             roots={treeRoots}
             selectedVersionId={selectedVersionId}

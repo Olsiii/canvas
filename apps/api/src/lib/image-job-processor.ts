@@ -41,6 +41,7 @@ export async function processImageJob(data: ImageJobData): Promise<ProcessImageJ
           style: data.style,
           brandPalette: data.brandPalette,
           n: data.n,
+          referenceImageUrls: data.referenceImageUrls,
         })
       : await engine.edit({
           sourceImageUrl: await sourceUrlForVersion(data.parentVersionId),

@@ -1,4 +1,4 @@
-import type { CsvImportTool, ImportedTaskRow } from "@canvas/shared";
+import type { ImportedTaskRow } from "@canvas/shared";
 
 /**
  * Minimal RFC4180-ish CSV tokenizer: quoted fields, embedded commas/
@@ -103,10 +103,9 @@ function findColumnIndex(headerRow: string[], aliases: string[]): number {
 }
 
 /**
- * Buckets a CSV "section/list" column value into the same open/active/
- * done/closed vocabulary ClickUp's status.type maps to
- * (clickup-client.ts's mapClickUpStatusKind) — a CSV export has no
- * equivalent typed field, so this falls back to name-sniffing common
+ * Buckets a CSV "section/list" column value into the open/active/done/
+ * closed vocabulary every status carries — a CSV export has no typed
+ * status field of its own, so this falls back to name-sniffing common
  * "done" column names, then position (first column = open, rest = active).
  */
 export function mapSectionStatusKind(
@@ -118,11 +117,11 @@ export function mapSectionStatusKind(
 }
 
 /**
- * Parses a Trello/Asana CSV export into the tool-agnostic row shape
- * import-runner.ts writes tasks from. Throws if no title-like column is
- * found — everything else is optional and simply comes back null/empty.
+ * Parses a CSV export into the tool-agnostic row shape import-runner.ts
+ * writes tasks from. Throws if no title-like column is found — everything
+ * else is optional and simply comes back null/empty.
  */
-export function parseImportCsv(csvText: string, tool: CsvImportTool): ImportedTaskRow[] {
+export function parseImportCsv(csvText: string): ImportedTaskRow[] {
   const rows = parseCsvText(csvText);
   if (rows.length === 0) return [];
 
@@ -132,7 +131,7 @@ export function parseImportCsv(csvText: string, tool: CsvImportTool): ImportedTa
   const titleIndex = findColumnIndex(headerRow, COLUMN_ALIASES.title);
   if (titleIndex === -1) {
     throw new Error(
-      `Couldn't find a task name/title column in this ${tool} CSV (looked for: ${COLUMN_ALIASES.title.join(", ")}).`,
+      `Couldn't find a task name/title column in this CSV (looked for: ${COLUMN_ALIASES.title.join(", ")}).`,
     );
   }
   const statusIndex = findColumnIndex(headerRow, COLUMN_ALIASES.statusName);

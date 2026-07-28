@@ -2,12 +2,6 @@ import { db, schema } from "@canvas/db";
 import { csvImportPayloadSchema, type ImportedTaskRow } from "@canvas/shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "./activity";
-import {
-  ClickUpClient,
-  mapClickUpPriority,
-  mapClickUpStatusKind,
-  type ClickUpTask,
-} from "./clickup-client";
 import { mapSectionStatusKind } from "./csv-import";
 import { nextOrderKey } from "./order";
 import { extractPlainText } from "./plain-text";
@@ -124,11 +118,6 @@ interface NormalizedTask {
   title: string;
   descriptionJson: unknown;
   statusName: string | null;
-  // ClickUp's own status.type ("open"/"custom"/"done"/"closed") — ground
-  // truth for mapClickUpStatusKind when present. CSV rows have no such
-  // field (null), so their status kind falls back to mapSectionStatusKind's
-  // name-sniffing/position heuristic instead.
-  statusTypeHint: string | null;
   priority: "urgent" | "high" | "normal" | "low" | null;
   dueDate: string | null;
   assigneeEmails: string[];
@@ -164,9 +153,7 @@ async function lastSpaceOrderKey(workspaceId: string): Promise<string | null> {
 /**
  * Creates one Canvas list (with statuses derived from the distinct
  * statusName values seen, in first-seen order) inside `spaceId`, then
- * inserts every normalized task into it — the shared leaf-level logic
- * both the ClickUp and CSV import paths funnel into once they've reduced
- * their source data to this common shape.
+ * inserts every normalized task into it.
  */
 async function importTasksIntoNewList(
   workspaceId: string,
@@ -189,11 +176,9 @@ async function importTasksIntoNewList(
   await logActivity(workspaceId, createdBy, "list", list.id, "list.created_from_import");
 
   const distinctStatusNames: string[] = [];
-  const statusTypeHintByName = new Map<string, string>();
   for (const t of tasksIn) {
     if (t.statusName && !distinctStatusNames.includes(t.statusName)) {
       distinctStatusNames.push(t.statusName);
-      if (t.statusTypeHint) statusTypeHintByName.set(t.statusName, t.statusTypeHint);
     }
   }
   if (distinctStatusNames.length === 0) distinctStatusNames.push("Imported");
@@ -202,10 +187,7 @@ async function importTasksIntoNewList(
   const statusKindById = new Map<string, "open" | "active" | "done" | "closed">();
   let statusOrderKey: string | null = null;
   for (const [index, name] of distinctStatusNames.entries()) {
-    const typeHint = statusTypeHintByName.get(name);
-    const kind = typeHint
-      ? mapClickUpStatusKind(typeHint, index)
-      : mapSectionStatusKind(name, index);
+    const kind = mapSectionStatusKind(name, index);
     statusOrderKey = nextOrderKey(statusOrderKey);
     const [status] = await db
       .insert(schema.statuses)
@@ -284,25 +266,11 @@ async function importTasksIntoNewList(
   }
 }
 
-function normalizeClickUpTask(task: ClickUpTask): NormalizedTask {
-  return {
-    title: task.name,
-    descriptionJson: task.text_content ? plainTextToTipTapJson(task.text_content) : null,
-    statusName: task.status?.status ?? null,
-    statusTypeHint: task.status?.type ?? null,
-    priority: mapClickUpPriority(task.priority),
-    dueDate: toIsoDate(task.due_date),
-    assigneeEmails: task.assignees.map((a) => a.email),
-    tagNames: task.tags.map((t) => t.name),
-  };
-}
-
 function normalizeCsvRow(row: ImportedTaskRow): NormalizedTask {
   return {
     title: row.title,
     descriptionJson: row.description ? plainTextToTipTapJson(row.description) : null,
     statusName: row.statusName,
-    statusTypeHint: null,
     priority: null,
     dueDate: toIsoDate(row.dueDate),
     assigneeEmails: row.assigneeEmail ? [row.assigneeEmail] : [],
@@ -311,103 +279,10 @@ function normalizeCsvRow(row: ImportedTaskRow): NormalizedTask {
 }
 
 /**
- * Imports the whole workspace a ClickUp API token has access to (first
- * authorized team — see PROGRESS.md decisions): every space, its folders
- * and folderless lists, and every task in every list, mapped 1:1 onto
- * Canvas's own space/folder/list/task hierarchy.
+ * Imports a CSV export (uploaded from a computer, or fetched from a
+ * published Google Sheet — see import.ts's two entry points) as one new
+ * space containing one new list.
  */
-export async function runClickUpImport(importId: string, apiToken: string): Promise<void> {
-  const importRow = await requireImport(importId);
-  await markRunning(importId);
-  const summary = newSummary();
-
-  try {
-    const client = new ClickUpClient(apiToken);
-    const teams = await client.getAuthorizedTeams();
-    const team = teams[0];
-    if (!team) throw new Error("This ClickUp token has no authorized workspaces");
-
-    const memberEmails = await loadMemberEmailMap(importRow.workspaceId);
-    const tagCache = new Map<string, string>();
-
-    const spaceLastKey = await lastSpaceOrderKey(importRow.workspaceId);
-    const spaceOrderKeys = new OrderKeySeries(spaceLastKey);
-
-    const clickUpSpaces = await client.getSpaces(team.id);
-    for (const cuSpace of clickUpSpaces) {
-      const [space] = await db
-        .insert(schema.spaces)
-        .values({
-          workspaceId: importRow.workspaceId,
-          name: cuSpace.name,
-          orderKey: spaceOrderKeys.next(),
-        })
-        .returning();
-      if (!space) throw new Error(`Failed to create space "${cuSpace.name}"`);
-      summary.spacesCreated++;
-      await logActivity(
-        importRow.workspaceId,
-        importRow.createdBy,
-        "space",
-        space.id,
-        "space.created_from_import",
-      );
-
-      const folderOrderKeys = new OrderKeySeries(null);
-      const listOrderKeys = new OrderKeySeries(null);
-
-      const folders = await client.getFolders(cuSpace.id);
-      for (const cuFolder of folders) {
-        const [folder] = await db
-          .insert(schema.folders)
-          .values({ spaceId: space.id, name: cuFolder.name, orderKey: folderOrderKeys.next() })
-          .returning();
-        if (!folder) throw new Error(`Failed to create folder "${cuFolder.name}"`);
-        summary.foldersCreated++;
-
-        const cuLists = await client.getListsInFolder(cuFolder.id);
-        for (const cuList of cuLists) {
-          const cuTasks = await client.getTasks(cuList.id);
-          await importTasksIntoNewList(
-            importRow.workspaceId,
-            space.id,
-            folder.id,
-            cuList.name,
-            listOrderKeys,
-            cuTasks.map(normalizeClickUpTask),
-            importRow.createdBy,
-            memberEmails,
-            tagCache,
-            summary,
-          );
-        }
-      }
-
-      const folderlessLists = await client.getFolderlessLists(cuSpace.id);
-      for (const cuList of folderlessLists) {
-        const cuTasks = await client.getTasks(cuList.id);
-        await importTasksIntoNewList(
-          importRow.workspaceId,
-          space.id,
-          null,
-          cuList.name,
-          listOrderKeys,
-          cuTasks.map(normalizeClickUpTask),
-          importRow.createdBy,
-          memberEmails,
-          tagCache,
-          summary,
-        );
-      }
-    }
-
-    await markDone(importId, summary);
-  } catch (err) {
-    await markFailed(importId, err);
-  }
-}
-
-/** Imports a single Trello/Asana CSV export as one new space containing one new list. */
 export async function runCsvImport(importId: string): Promise<void> {
   const importRow = await requireImport(importId);
   await markRunning(importId);

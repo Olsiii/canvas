@@ -17,6 +17,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   customFieldValue: "Custom field values",
   attachment: "Attachments",
   imageAsset: "Generated images",
+  imageFolder: "Library folders",
   brain: "Brain (AI assistant)",
   brandSettings: "Brand settings",
   taskTemplate: "Task templates",

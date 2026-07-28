@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export function uniqueEmail(prefix = "e2e") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -32,6 +32,18 @@ export async function inviteAndGetLink(page: Page, email: string, role?: "admin"
   const href = await link.textContent();
   if (!href) throw new Error("Invite link was empty");
   return href;
+}
+
+/** Fills the Generate panel clarifying questions required before submit. */
+export async function fillGenerationContext(
+  panel: Locator,
+  opts: { use?: string; mustHave?: string; avoid?: string } = {},
+) {
+  await panel.getByTestId("generation-use-case").fill(opts.use ?? "social post");
+  await panel
+    .getByTestId("generation-must-have")
+    .fill(opts.mustHave ?? "clear subject, high contrast");
+  if (opts.avoid) await panel.getByTestId("generation-avoid").fill(opts.avoid);
 }
 
 /** Creates a space, then a list directly under it, and navigates into the list. */

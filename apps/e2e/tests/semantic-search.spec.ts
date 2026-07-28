@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createSpaceAndList, createWorkspaceAndOpen, signUp } from "./helpers";
+import {
+  createSpaceAndList,
+  createWorkspaceAndOpen,
+  signUp,
+  fillGenerationContext,
+} from "./helpers";
 
 test("Phase 6: semantic task search ranks by meaning, and visual search finds a similar generated image", async ({
   page,
@@ -49,6 +54,7 @@ test("Phase 6: semantic task search ranks by meaning, and visual search finds a 
   const panelA = page.getByTestId("task-detail-panel");
   const genA = panelA.getByTestId("generation-panel");
   await genA.getByTestId("generation-prompt").fill("a bold red product shot");
+  await fillGenerationContext(genA);
   await genA.getByTestId("generation-submit").click();
   await expect(genA.getByTestId("generation-variants")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Close task details" }).click();
@@ -60,6 +66,7 @@ test("Phase 6: semantic task search ranks by meaning, and visual search finds a 
   const panelB = page.getByTestId("task-detail-panel");
   const genB = panelB.getByTestId("generation-panel");
   await genB.getByTestId("generation-prompt").fill("a bold red product photo");
+  await fillGenerationContext(genB);
   await genB.getByTestId("generation-submit").click();
   await expect(genB.getByTestId("generation-variants")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Close task details" }).click();

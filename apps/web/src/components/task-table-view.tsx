@@ -2,6 +2,7 @@ import type { AppRouter } from "@canvas/api";
 import { TASK_PRIORITIES, type TaskPriority } from "@canvas/shared";
 import { Input } from "@/components/ui/input";
 import { NewTaskInlineForm } from "@/components/new-task-inline-form";
+import { StatusSelect } from "@/components/status-select";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import {
@@ -99,7 +100,12 @@ export function TaskTableView({
       columnHelper.accessor("statusId", {
         header: "Status",
         cell: (info) => (
-          <StatusCell listId={listId} task={info.row.original} statuses={statusList} />
+          <StatusSelect
+            listId={listId}
+            task={info.row.original}
+            statuses={statusList}
+            testId={`table-status-${info.row.original.id}`}
+          />
         ),
         sortingFn: (a, b) =>
           (statusOrder.get(a.original.statusId) ?? 0) - (statusOrder.get(b.original.statusId) ?? 0),
@@ -369,33 +375,6 @@ function InlineTitle({
       }}
       className="h-7 text-sm"
     />
-  );
-}
-
-function StatusCell({
-  listId,
-  task,
-  statuses,
-}: {
-  listId: string;
-  task: Task;
-  statuses: Status[];
-}) {
-  const update = useOptimisticTaskUpdate(listId);
-  return (
-    <select
-      data-testid={`table-status-${task.id}`}
-      value={task.statusId}
-      disabled={update.isPending}
-      onChange={(e) => update.mutate({ taskId: task.id, statusId: e.target.value })}
-      className="border-border bg-background h-7 w-full rounded border text-xs"
-    >
-      {statuses.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.name}
-        </option>
-      ))}
-    </select>
   );
 }
 

@@ -28,6 +28,7 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
   const updateRole = trpc.workspace.updateMemberRole.useMutation({ onSuccess: invalidate });
   const removeMember = trpc.workspace.removeMember.useMutation({ onSuccess: invalidate });
   const assignCustomRole = trpc.role.assignToMember.useMutation({ onSuccess: invalidate });
+  const setOpsManager = trpc.workspace.setOperationsManager.useMutation({ onSuccess: invalidate });
 
   return (
     <div className="w-full max-w-md space-y-2 p-6">
@@ -39,59 +40,93 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
               <p className="truncate font-medium">{m.name}</p>
               <p className="text-muted-foreground truncate text-xs">{m.email}</p>
             </div>
-            {canManage && m.role !== "owner" ? (
+            {canManage ? (
               <div className="flex shrink-0 items-center gap-2">
-                <select
-                  value={m.role}
-                  aria-label={`Role for ${m.name}`}
-                  onChange={(e) =>
-                    updateRole.mutate({
-                      workspaceId,
-                      userId: m.userId,
-                      role: e.target.value as EditableRole,
-                    })
-                  }
-                  className="border-border bg-background h-7 rounded border text-xs"
+                {m.role !== "owner" && (
+                  <>
+                    <select
+                      value={m.role}
+                      aria-label={`Role for ${m.name}`}
+                      onChange={(e) =>
+                        updateRole.mutate({
+                          workspaceId,
+                          userId: m.userId,
+                          role: e.target.value as EditableRole,
+                        })
+                      }
+                      className="border-border bg-background h-7 rounded border text-xs"
+                    >
+                      {EDITABLE_ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                    {(customRoles.data?.length ?? 0) > 0 && (
+                      <select
+                        value={m.customRoleId ?? ""}
+                        aria-label={`Custom role for ${m.name}`}
+                        onChange={(e) =>
+                          assignCustomRole.mutate({
+                            workspaceId,
+                            userId: m.userId,
+                            customRoleId: e.target.value || null,
+                          })
+                        }
+                        className="border-border bg-background h-7 rounded border text-xs"
+                      >
+                        <option value="">No custom role</option>
+                        {customRoles.data?.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </>
+                )}
+                <label
+                  className="flex items-center gap-1 text-xs whitespace-nowrap"
+                  title="Gets notified when a task is finished"
                 >
-                  {EDITABLE_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                {(customRoles.data?.length ?? 0) > 0 && (
-                  <select
-                    value={m.customRoleId ?? ""}
-                    aria-label={`Custom role for ${m.name}`}
+                  <input
+                    type="checkbox"
+                    checked={m.isOperationsManager}
+                    aria-label={`Operations Manager: ${m.name}`}
                     onChange={(e) =>
-                      assignCustomRole.mutate({
+                      setOpsManager.mutate({
                         workspaceId,
                         userId: m.userId,
-                        customRoleId: e.target.value || null,
+                        isOperationsManager: e.target.checked,
                       })
                     }
-                    className="border-border bg-background h-7 rounded border text-xs"
+                  />
+                  Ops Manager
+                </label>
+                {m.role !== "owner" && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${m.name}`}
+                    onClick={() => removeMember.mutate({ workspaceId, userId: m.userId })}
+                    className="text-muted-foreground hover:text-foreground text-xs"
                   >
-                    <option value="">No custom role</option>
-                    {customRoles.data?.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.name}
-                      </option>
-                    ))}
-                  </select>
+                    Remove
+                  </button>
                 )}
-                <button
-                  type="button"
-                  aria-label={`Remove ${m.name}`}
-                  onClick={() => removeMember.mutate({ workspaceId, userId: m.userId })}
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                >
-                  Remove
-                </button>
               </div>
             ) : (
-              <span className="text-muted-foreground shrink-0 text-xs uppercase">
-                {m.customRoleName ?? m.role}
+              <span className="flex shrink-0 items-center gap-1.5 text-xs">
+                {m.isOperationsManager && (
+                  <span
+                    className="bg-accent-soft text-accent rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                    title="Gets notified when a task is finished"
+                  >
+                    Ops
+                  </span>
+                )}
+                <span className="text-muted-foreground uppercase">
+                  {m.customRoleName ?? m.role}
+                </span>
               </span>
             )}
           </li>

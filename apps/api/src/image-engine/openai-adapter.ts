@@ -21,7 +21,10 @@ async function placeholderImage(
 
 // gpt-image-1 adapter (ARCHITECTURE.md §3.1). Mocked like Gemini — no
 // OPENAI_API_KEY in this environment. Real HTTP can replace the bodies
-// later without changing ImageEngine callers.
+// later without changing ImageEngine callers. When that swap happens,
+// req.referenceImageUrls should be sent as the `image[]` input on gpt-image-1
+// edits/generations; the mock below already threads it into the seed so
+// this isn't a silent no-op in the meantime.
 export class OpenAIImageAdapter implements ImageEngine {
   readonly provider = "openai";
   readonly model = "gpt-image-1";
@@ -29,9 +32,12 @@ export class OpenAIImageAdapter implements ImageEngine {
   async generate(req: GenerateRequest): Promise<GeneratedImage[]> {
     const { width, height } = dimensionsForAspect(req.size);
     const n = req.n ?? 1;
+    const referenceSuffix = req.referenceImageUrls?.length
+      ? `#refs:${req.referenceImageUrls.join(",")}`
+      : "";
     const images: GeneratedImage[] = [];
     for (let i = 0; i < n; i++) {
-      images.push(await placeholderImage(width, height, `${req.prompt}#${i}`));
+      images.push(await placeholderImage(width, height, `${req.prompt}#${i}${referenceSuffix}`));
     }
     return images;
   }

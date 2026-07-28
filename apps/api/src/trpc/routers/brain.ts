@@ -8,6 +8,8 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { AiQuotaError, assertAiQuota } from "../../lib/ai-quota";
+import { referenceContextSuffix, resolveAiReferences } from "../../lib/ai-references";
 import { assertCan } from "../../lib/permissions";
 import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
 import { brainQueue } from "../../queues/brain-queue";
@@ -183,10 +185,36 @@ export const brainRouter = router({
       assertOwnsConversation(ctx.user.id, conversation);
       await assertCan(ctx.user, conversation.workspaceId, "brain:chat");
 
+      try {
+        await assertAiQuota(ctx.user.id, "brain");
+      } catch (err) {
+        if (err instanceof AiQuotaError) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: err.message });
+        }
+        throw err;
+      }
+
+      const refs = await resolveAiReferences(
+        conversation.workspaceId,
+        input.referenceAttachmentIds,
+      );
+      const text = `${input.text}${referenceContextSuffix(refs)}`;
+      const imageVersionIds = refs
+        .map((r) => r.imageVersionId)
+        .filter((id): id is string => typeof id === "string");
+
       await db.insert(schema.brainMessages).values({
         conversationId: conversation.id,
         role: "user",
-        contentJson: { text: input.text },
+        contentJson: {
+          text,
+          attachments: refs.map((r) => ({
+            id: r.attachmentId,
+            fileName: r.fileName,
+            mime: r.mime,
+          })),
+        },
+        imageVersionIds: imageVersionIds.length > 0 ? imageVersionIds : null,
       });
 
       await logActivity(

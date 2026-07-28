@@ -10,7 +10,18 @@ function toAnthropicMessages(messages: ProviderMessage[]): Anthropic.MessagePara
 
   for (const m of messages) {
     if (m.role === "user") {
-      out.push({ role: "user", content: m.text });
+      if (m.images && m.images.length > 0) {
+        const content: Anthropic.ContentBlockParam[] = [
+          ...m.images.map((img): Anthropic.ImageBlockParam => ({
+            type: "image",
+            source: { type: "base64", media_type: img.mediaType, data: img.data },
+          })),
+          { type: "text", text: m.text },
+        ];
+        out.push({ role: "user", content });
+      } else {
+        out.push({ role: "user", content: m.text });
+      }
       continue;
     }
     if (m.role === "assistant") {

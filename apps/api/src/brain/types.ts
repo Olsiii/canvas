@@ -7,7 +7,15 @@ export type ToolCall = {
 };
 
 export type ProviderMessage =
-  | { role: "user"; text: string }
+  | {
+      role: "user";
+      text: string;
+      /** Inline images for vision (base64) — used when the user attaches references. */
+      images?: {
+        mediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+        data: string;
+      }[];
+    }
   | { role: "assistant"; text?: string; toolCalls?: ToolCall[] }
   | { role: "tool"; toolUseId: string; name: string; result: unknown };
 

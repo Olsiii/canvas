@@ -18,7 +18,9 @@
     "test": "turbo run test",
     "test:e2e": "turbo run test:e2e",
     "db:generate": "pnpm --filter @canvas/db db:generate",
-    "db:migrate": "pnpm --filter @canvas/db db:migrate"
+    "db:migrate": "pnpm --filter @canvas/db db:migrate",
+    "start:api": "pnpm --filter @canvas/api start",
+    "start:worker": "pnpm --filter @canvas/api worker:start"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

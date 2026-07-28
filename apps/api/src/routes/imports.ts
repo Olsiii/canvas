@@ -1,5 +1,5 @@
 import { db, schema } from "@canvas/db";
-import { CSV_IMPORT_TOOLS, type CsvImportPayload, type CsvImportTool } from "@canvas/shared";
+import type { CsvImportPayload } from "@canvas/shared";
 import type { FastifyInstance } from "fastify";
 import { can } from "../auth/can";
 import { getSessionUser } from "../auth/session";
@@ -9,13 +9,15 @@ import { importQueue } from "../queues/import-queue";
 
 // CSV upload is a plain multipart REST route, not a tRPC procedure — same
 // reason as /uploads (attachments.ts): tRPC has no native file transport.
+// A file straight from the person's computer — the Google Sheets import
+// path (import.startGoogleSheet) fetches its CSV text server-side instead
+// and has no file part to upload, so it's a plain tRPC mutation.
 export function registerImportRoutes(app: FastifyInstance) {
   app.post("/imports/csv", async (req, reply) => {
     const user = await getSessionUser(req);
     if (!user) return reply.code(401).send({ error: "Unauthorized" });
 
     let workspaceId: string | undefined;
-    let tool: string | undefined;
     let spaceName: string | undefined;
     let listName: string | undefined;
     let csvText: string | undefined;
@@ -25,8 +27,6 @@ export function registerImportRoutes(app: FastifyInstance) {
         csvText = (await part.toBuffer()).toString("utf8");
       } else if (part.fieldname === "workspaceId" && typeof part.value === "string") {
         workspaceId = part.value;
-      } else if (part.fieldname === "tool" && typeof part.value === "string") {
-        tool = part.value;
       } else if (part.fieldname === "spaceName" && typeof part.value === "string") {
         spaceName = part.value;
       } else if (part.fieldname === "listName" && typeof part.value === "string") {
@@ -34,13 +34,8 @@ export function registerImportRoutes(app: FastifyInstance) {
       }
     }
 
-    if (!workspaceId || !tool || !spaceName || !listName || !csvText) {
-      return reply
-        .code(400)
-        .send({ error: "Missing workspaceId, tool, spaceName, listName, or file" });
-    }
-    if (!(CSV_IMPORT_TOOLS as readonly string[]).includes(tool)) {
-      return reply.code(400).send({ error: `tool must be one of: ${CSV_IMPORT_TOOLS.join(", ")}` });
+    if (!workspaceId || !spaceName || !listName || !csvText) {
+      return reply.code(400).send({ error: "Missing workspaceId, spaceName, listName, or file" });
     }
 
     const role = await getMembershipRole(workspaceId, user.id);
@@ -50,7 +45,7 @@ export function registerImportRoutes(app: FastifyInstance) {
 
     let rows;
     try {
-      rows = parseImportCsv(csvText, tool as CsvImportTool);
+      rows = parseImportCsv(csvText);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to parse CSV";
       return reply.code(400).send({ error: message });
@@ -65,7 +60,7 @@ export function registerImportRoutes(app: FastifyInstance) {
       .values({
         workspaceId,
         source: "csv",
-        sourceDetail: tool,
+        sourceDetail: "computer",
         status: "pending",
         payloadJson: payload,
         createdBy: user.id,

@@ -4,8 +4,11 @@ import { httpBatchLink } from "@trpc/client";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { router } from "./router";
+import { initSentry } from "./lib/sentry";
 import { trpc } from "./lib/trpc";
 import "./styles/globals.css";
+
+initSentry();
 
 function App() {
   const [queryClient] = useState(() => new QueryClient());

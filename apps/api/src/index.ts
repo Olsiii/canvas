@@ -5,8 +5,13 @@ import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
 import Fastify from "fastify";
+import { sql } from "drizzle-orm";
+import { db } from "@canvas/db";
 import { env } from "./env";
+import { initSentry, Sentry } from "./lib/sentry";
 import { ensureBucketExists } from "./lib/storage";
+import { redisConnection } from "./queues/connection";
+import { registerAiReferenceRoutes } from "./routes/ai-references";
 import { registerApiV1Routes } from "./routes/api-v1";
 import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
@@ -22,6 +27,8 @@ import { registerScimRoutes } from "./routes/scim";
 import { createContext } from "./trpc/context";
 import { appRouter } from "./trpc/router";
 
+initSentry("api");
+
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export type { AppRouter } from "./trpc/router";
@@ -33,7 +40,13 @@ export type { AppRouter } from "./trpc/router";
 // not this — the task detail panel alone now fires 8+ queries on mount,
 // so a 100-char cap here surfaces as an opaque 414 with no server-side
 // error log (the request never reaches the tRPC handler at all).
-const app = Fastify({ logger: true, routerOptions: { maxParamLength: 5000 } });
+const app = Fastify({
+  logger: true,
+  // Required behind a TLS terminator so req.protocol / hostname (SCIM, SAML
+  // absolute URLs) reflect the public origin rather than the internal hop.
+  trustProxy: true,
+  routerOptions: { maxParamLength: 5000 },
+});
 
 await app.register(cors, { origin: env.WEB_URL, credentials: true });
 await app.register(cookie);
@@ -53,6 +66,7 @@ registerAuthRoutes(app);
 registerApiV1Routes(app);
 registerAttachmentRoutes(app);
 registerImageAssetRoutes(app);
+registerAiReferenceRoutes(app);
 registerImportRoutes(app);
 registerExportRoutes(app);
 registerSamlRoutes(app);
@@ -62,7 +76,29 @@ registerBrainRealtimeRoutes(app);
 registerImageAssetRealtimeRoutes(app);
 registerDocRealtimeRoutes(app);
 
-app.get("/health", async () => ({ ok: true }));
+// Captures unhandled route errors when SENTRY_DSN is set (no-op otherwise).
+Sentry.setupFastifyErrorHandler(app);
+
+app.get("/health", async (_req, reply) => {
+  const checks: Record<string, "ok" | "error"> = { api: "ok" };
+
+  try {
+    await db.execute(sql`select 1`);
+    checks.database = "ok";
+  } catch {
+    checks.database = "error";
+  }
+
+  try {
+    const pong = await redisConnection.ping();
+    checks.redis = pong === "PONG" ? "ok" : "error";
+  } catch {
+    checks.redis = "error";
+  }
+
+  const ready = Object.values(checks).every((v) => v === "ok");
+  return reply.code(ready ? 200 : 503).send({ ok: ready, checks });
+});
 
 await ensureBucketExists();
 

@@ -281,6 +281,41 @@
       "when": 1785154633450,
       "tag": "0039_rare_steel_serpent",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785227240574,
+      "tag": "0040_peaceful_smiling_tiger",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1785228423649,
+      "tag": "0041_graceful_lizard",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1785230493547,
+      "tag": "0042_safe_harry_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1785234000000,
+      "tag": "0043_account_level_custom_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785238903117,
+      "tag": "0044_bumpy_beast",
+      "breakpoints": true
     }
   ]
 }

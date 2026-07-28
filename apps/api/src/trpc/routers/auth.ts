@@ -5,12 +5,46 @@ import { and, eq, isNull } from "drizzle-orm";
 import { clearSessionCookie, setSessionCookie } from "../../auth/cookies";
 import { hashPassword, verifyPassword } from "../../auth/password";
 import { createSession, invalidateSession } from "../../auth/session";
+import { assertAuthRateLimit, AuthRateLimitError } from "../../lib/rate-limit";
 import { publicProcedure, protectedProcedure, router } from "../trpc";
+
+// `X-Forwarded-For` is appended-to by each proxy hop, so its FIRST entry is
+// whatever the client itself sent — trusting it unconditionally lets anyone
+// bypass this rate limit by sending a fresh spoofed value on every request.
+// Its LAST entry is the one added by the hop closest to us, which — for the
+// single reverse proxy this app expects in front of it (see index.ts's
+// `trustProxy: true` comment) — is the one we actually control and can
+// trust. If the real deployment ever sits behind more than one hop, this
+// (and `trustProxy`, currently a blanket `true`) needs to change to trust
+// exactly that many hops, not fewer/more.
+function clientIp(req: { ip?: string; headers: Record<string, unknown> }): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.length > 0) {
+    const hops = forwarded.split(",").map((h) => h.trim());
+    const nearest = hops.at(-1);
+    if (nearest) return nearest;
+  }
+  return req.ip ?? "unknown";
+}
+
+function tooManyRequests(): never {
+  throw new TRPCError({
+    code: "TOO_MANY_REQUESTS",
+    message: "Too many attempts. Try again in a minute.",
+  });
+}
 
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => ctx.user),
 
   signUp: publicProcedure.input(signUpSchema).mutation(async ({ ctx, input }) => {
+    try {
+      await assertAuthRateLimit(clientIp(ctx.req));
+    } catch (err) {
+      if (err instanceof AuthRateLimitError) tooManyRequests();
+      throw err;
+    }
+
     const existing = await db.query.users.findFirst({
       where: eq(schema.users.email, input.email),
     });
@@ -60,6 +94,13 @@ export const authRouter = router({
   }),
 
   logIn: publicProcedure.input(logInSchema).mutation(async ({ ctx, input }) => {
+    try {
+      await assertAuthRateLimit(clientIp(ctx.req), input.email);
+    } catch (err) {
+      if (err instanceof AuthRateLimitError) tooManyRequests();
+      throw err;
+    }
+
     const user = await db.query.users.findFirst({
       where: eq(schema.users.email, input.email),
     });

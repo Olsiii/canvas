@@ -82,6 +82,15 @@ export function TaskDetailPanel({
     if (taskTitle !== undefined) setTitle(taskTitle);
   }, [taskTitle]);
 
+  // The list's first done-kind status (falling back to closed-kind) — what
+  // "Finish task" moves a task to, same effect as dragging it to a Done
+  // column on the Board but reachable without leaving the detail panel.
+  const doneStatus =
+    statuses.data?.find((s) => s.kind === "done") ??
+    statuses.data?.find((s) => s.kind === "closed");
+  const currentStatusKind = statuses.data?.find((s) => s.id === task.data?.statusId)?.kind;
+  const isFinished = currentStatusKind === "done" || currentStatusKind === "closed";
+
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const saveTemplate = trpc.taskTemplate.createFromTask.useMutation({
@@ -102,6 +111,18 @@ export function TaskDetailPanel({
       />
       <div className="border-border bg-background relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l p-6 shadow-xl">
         <div className="absolute top-4 right-4 flex items-center gap-3">
+          {task.data && doneStatus && !isFinished && (
+            <button
+              type="button"
+              onClick={() => update.mutate({ taskId, statusId: doneStatus.id })}
+              disabled={update.isPending}
+              aria-label="Finish task"
+              data-testid="finish-task-button"
+              className="text-status-good hover:opacity-80 text-sm font-medium"
+            >
+              ✓ Finish task
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setSavingTemplate((s) => !s)}

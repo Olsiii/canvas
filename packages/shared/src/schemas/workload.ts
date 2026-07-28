@@ -6,3 +6,7 @@ export const workloadAssignmentsSchema = z.object({
   start: z.string().date(),
   end: z.string().date(),
 });
+
+export const workloadSummarySchema = z.object({
+  workspaceId: z.string().uuid(),
+});

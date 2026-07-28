@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { workspaces } from "./workspaces";
@@ -44,5 +44,23 @@ export const webhooks = pgTable("webhooks", {
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Delivery attempts for outbound webhooks (success + failure). Not in the
+// compact DATA_MODEL listing — needed so admins can see why a hook failed
+// without digging through worker logs.
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => uuidv7()),
+  webhookId: uuid("webhook_id")
+    .notNull()
+    .references(() => webhooks.id, { onDelete: "cascade" }),
+  event: text("event").notNull(),
+  status: text("status").notNull(), // 'success' | 'failed'
+  httpStatus: integer("http_status"),
+  error: text("error"),
+  attempt: integer("attempt").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

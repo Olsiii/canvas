@@ -1,4 +1,14 @@
-import { index, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 
@@ -14,20 +24,29 @@ export const workspaces = pgTable("workspaces", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Phase 6: a named, workspace-scoped set of permission deltas layered on
-// top of a membership's base `role` rank — see apps/api/src/auth/can.ts.
-// `grants`/`revokes` are WorkspaceAction[]; validated against the closed
-// WORKSPACE_ACTIONS set at the tRPC boundary, not the DB (jsonb, like every
-// other *_json config column in this schema — actions_json, config_json).
+// A named set of permission deltas layered on top of a membership's base
+// `role` rank — see apps/api/src/auth/can.ts. `grants`/`revokes` are
+// WorkspaceAction[]; validated against the closed WORKSPACE_ACTIONS set at
+// the tRPC boundary, not the DB (jsonb, like every other *_json config
+// column in this schema — actions_json, config_json).
+//
+// **Account-level, not workspace-scoped** (revised from the original
+// per-workspace design — see PROGRESS.md's 2026-07-28 decision): a role
+// belongs to the user who created it (`createdBy`), not to a single
+// workspace. It's usable for assignment in any workspace where that
+// creator currently holds a membership (see role.ts's `visibleIn` join) —
+// the same "same team, several workspaces, one shared role library"
+// relationship a real org chart has, without introducing a whole new
+// organization/account tier above workspaces just for this.
 export const customRoles = pgTable(
   "custom_roles",
   {
     id: uuid("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    workspaceId: uuid("workspace_id")
+    createdBy: uuid("created_by")
       .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     baseRole: membershipRole("base_role").notNull(),
     grants: jsonb("grants").notNull().default([]),
@@ -36,7 +55,7 @@ export const customRoles = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (table) => [unique().on(table.workspaceId, table.name)],
+  (table) => [unique().on(table.createdBy, table.name)],
 );
 
 export const memberships = pgTable(
@@ -57,6 +76,10 @@ export const memberships = pgTable(
     // of `role`'s rank alone — see can().  `role` stays required regardless
     // (still the floor, and still what owner-protection/SCIM/invites read).
     customRoleId: uuid("custom_role_id").references(() => customRoles.id, { onDelete: "set null" }),
+    // Who gets notified when a task in this workspace reaches a done-kind
+    // status (task.ts's notifyOperationsManagers) — a flag rather than a
+    // role, since the person doing that job isn't necessarily the owner.
+    isOperationsManager: boolean("is_operations_manager").notNull().default(false),
   },
   (table) => [
     unique().on(table.workspaceId, table.userId),

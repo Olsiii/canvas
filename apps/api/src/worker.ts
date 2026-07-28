@@ -11,10 +11,12 @@ import { publish as publishBrainEvent } from "./lib/brain-realtime";
 import { runEmbedding } from "./lib/embedding-runner";
 import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
-import { runClickUpImport, runCsvImport } from "./lib/import-runner";
+import { runCsvImport } from "./lib/import-runner";
 import { runSchedulerTick } from "./lib/scheduler";
-import { ensureBucketExists } from "./lib/storage";
+import { captureException, initSentry } from "./lib/sentry";
+import { ensureBucketExists, getObject } from "./lib/storage";
 import { signWebhookPayload } from "./lib/webhook-signature";
+import { assertSafeOutboundUrl } from "./lib/safe-outbound-url";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
 import { EMBEDDING_QUEUE_NAME, type EmbeddingJobData } from "./queues/embedding-queue";
@@ -23,6 +25,8 @@ import { IMPORT_QUEUE_NAME, type ImportJobData } from "./queues/import-queue";
 import { scheduleRecurringTick, SCHEDULER_QUEUE_NAME } from "./queues/scheduler-queue";
 import { SLACK_QUEUE_NAME, type SlackJobData } from "./queues/slack-queue";
 import { WEBHOOK_QUEUE_NAME, type WebhookJobData } from "./queues/webhook-queue";
+
+initSentry("worker");
 
 // A separate process from the API server (`pnpm --filter @canvas/api
 // worker`, wired into the root `pnpm dev` alongside it) — matches
@@ -61,6 +65,7 @@ const imageWorker = new Worker<ImageJobData>(
 );
 
 imageWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] image job ${job?.id} failed:`, err);
 });
 
@@ -76,6 +81,20 @@ function messageText(contentJson: unknown): string {
   return "";
 }
 
+function mediaTypeForKey(
+  fileKey: string,
+): "image/jpeg" | "image/png" | "image/gif" | "image/webp" | null {
+  const lower = fileKey.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  // Unrecognized extension — the caller skips it (`if (!mediaType) continue`)
+  // rather than mislabeling it, since sending the wrong media type to the
+  // vision API is worse than just omitting that one attachment.
+  return null;
+}
+
 function toolCallsFromContent(contentJson: unknown): ToolCall[] | undefined {
   if (!contentJson || typeof contentJson !== "object") return undefined;
   const calls = (contentJson as { toolCalls?: unknown }).toolCalls;
@@ -83,42 +102,64 @@ function toolCallsFromContent(contentJson: unknown): ToolCall[] | undefined {
   return calls as ToolCall[];
 }
 
-function historyToProviderMessages(
-  history: (typeof schema.brainMessages.$inferSelect)[],
-): ProviderMessage[] {
-  const out: ProviderMessage[] = [];
-  for (const m of history) {
-    if (m.role === "user") {
-      out.push({ role: "user", text: messageText(m.contentJson) });
-      continue;
-    }
-    if (m.role === "assistant") {
-      const text = messageText(m.contentJson);
-      const toolCalls = toolCallsFromContent(m.contentJson);
-      out.push({
-        role: "assistant",
-        ...(text ? { text } : {}),
-        ...(toolCalls ? { toolCalls } : {}),
-      });
-      continue;
-    }
-    if (m.role === "tool") {
-      const c = m.contentJson as {
-        toolUseId?: string;
-        name?: string;
-        result?: unknown;
-      } | null;
-      if (c?.toolUseId && c.name) {
-        out.push({
-          role: "tool",
-          toolUseId: c.toolUseId,
-          name: c.name,
-          result: c.result ?? {},
-        });
-      }
+type HistoryImage = NonNullable<Extract<ProviderMessage, { role: "user" }>["images"]>[number];
+
+async function loadHistoryImage(versionId: string): Promise<HistoryImage | null> {
+  const version = await db.query.imageVersions.findFirst({
+    where: eq(schema.imageVersions.id, versionId),
+  });
+  if (!version) return null;
+  const obj = await getObject(version.fileKey);
+  const bytes = await obj.Body?.transformToByteArray();
+  if (!bytes) return null;
+  const mediaType = mediaTypeForKey(version.fileKey);
+  if (!mediaType) return null;
+  return { mediaType, data: Buffer.from(bytes).toString("base64") };
+}
+
+async function historyMessageToProviderMessage(
+  m: typeof schema.brainMessages.$inferSelect,
+): Promise<ProviderMessage | null> {
+  if (m.role === "user") {
+    const loaded = await Promise.all((m.imageVersionIds ?? []).map(loadHistoryImage));
+    const images = loaded.filter((img): img is HistoryImage => img !== null);
+    return {
+      role: "user",
+      text: messageText(m.contentJson),
+      ...(images.length > 0 ? { images } : {}),
+    };
+  }
+  if (m.role === "assistant") {
+    const text = messageText(m.contentJson);
+    const toolCalls = toolCallsFromContent(m.contentJson);
+    return {
+      role: "assistant",
+      ...(text ? { text } : {}),
+      ...(toolCalls ? { toolCalls } : {}),
+    };
+  }
+  if (m.role === "tool") {
+    const c = m.contentJson as {
+      toolUseId?: string;
+      name?: string;
+      result?: unknown;
+    } | null;
+    if (c?.toolUseId && c.name) {
+      return { role: "tool", toolUseId: c.toolUseId, name: c.name, result: c.result ?? {} };
     }
   }
-  return out;
+  return null;
+}
+
+// Per-message provider-message construction runs in parallel (Promise.all
+// preserves input order regardless of completion order) — a user message
+// with several attached reference images used to resolve each one's DB
+// lookup + S3 GET sequentially, one full network round trip after another.
+async function historyToProviderMessages(
+  history: (typeof schema.brainMessages.$inferSelect)[],
+): Promise<ProviderMessage[]> {
+  const messages = await Promise.all(history.map(historyMessageToProviderMessage));
+  return messages.filter((m): m is ProviderMessage => m !== null);
 }
 
 async function buildTaskSystemPrompt(taskId: string, brand: BrandContext | null): Promise<string> {
@@ -214,7 +255,7 @@ const brainWorker = new Worker<BrainJobData>(
           where: eq(schema.brainMessages.conversationId, data.conversationId),
           orderBy: asc(schema.brainMessages.createdAt),
         });
-        const providerMessages = historyToProviderMessages(history);
+        const providerMessages = await historyToProviderMessages(history);
         totalInputChars += providerMessages.reduce((sum, m) => {
           if (m.role === "user") return sum + m.text.length;
           if (m.role === "assistant") return sum + (m.text?.length ?? 0);
@@ -327,6 +368,7 @@ const brainWorker = new Worker<BrainJobData>(
 );
 
 brainWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] brain job ${job?.id} failed:`, err);
 });
 
@@ -344,65 +386,89 @@ const schedulerWorker = new Worker(
 );
 
 schedulerWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] scheduler tick ${job?.id} failed:`, err);
 });
 
 // M5.4 webhooks: signs and POSTs the payload, retried by BullMQ's own
-// attempts/backoff (see webhook-queue.ts) on a non-2xx response or a
-// network/timeout error — no delivery-log table exists to record attempts
-// in (DATA_MODEL.md's webhooks row doesn't have one), so failures surface
-// only via this worker's own logs for now.
+// attempts/backoff (see webhook-queue.ts). Each attempt is written to
+// webhook_deliveries so admins can see success/failure in Developer → Webhooks.
 const WEBHOOK_DELIVERY_TIMEOUT_MS = 10_000;
 
 const webhookWorker = new Worker<WebhookJobData>(
   WEBHOOK_QUEUE_NAME,
   async (job) => {
-    const { url, secret, event, payload } = job.data;
-    const body = JSON.stringify(payload);
-    const signature = signWebhookPayload(secret, body);
+    const { webhookId, url, secret, event, payload } = job.data;
+    const attempt = job.attemptsMade + 1;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Canvas-Event": event,
-        "X-Canvas-Signature": signature,
-      },
-      body,
-      signal: AbortSignal.timeout(WEBHOOK_DELIVERY_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      throw new Error(`Webhook delivery to ${url} failed with status ${response.status}`);
+    async function record(
+      status: "success" | "failed",
+      httpStatus: number | null,
+      error: string | null,
+    ) {
+      await db.insert(schema.webhookDeliveries).values({
+        webhookId,
+        event,
+        status,
+        httpStatus,
+        error,
+        attempt,
+      });
+    }
+
+    try {
+      await assertSafeOutboundUrl(url);
+      const body = JSON.stringify(payload);
+      const signature = signWebhookPayload(secret, body);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Canvas-Event": event,
+          "X-Canvas-Signature": signature,
+        },
+        body,
+        signal: AbortSignal.timeout(WEBHOOK_DELIVERY_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        await record("failed", response.status, `HTTP ${response.status}`);
+        throw new Error(`Webhook delivery to ${url} failed with status ${response.status}`);
+      }
+      await record("success", response.status, null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Avoid double-insert when we already recorded an HTTP failure above.
+      if (!message.startsWith("Webhook delivery to ")) {
+        await record("failed", null, message).catch(() => undefined);
+      }
+      throw err;
     }
   },
   { connection: redisConnection },
 );
 
 webhookWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] webhook delivery ${job?.id} failed:`, err);
 });
 
-// M5.5 importers: runClickUpImport/runCsvImport each own their own
-// try/catch and write status="failed" + the error message onto the
-// `imports` row themselves (see import-runner.ts), so a bad ClickUp token
-// or malformed CSV row shows up in the import history UI rather than as a
-// bare BullMQ job failure — this handler never throws, and the queue's
-// own `attempts: 1` (see import-queue.ts) means a partially-applied
-// import is never silently retried and duplicated.
+// runCsvImport owns its own try/catch and writes status="failed" + the
+// error message onto the `imports` row itself (see import-runner.ts), so a
+// malformed CSV row shows up in the import history UI rather than as a
+// bare BullMQ job failure — this handler never throws, and the queue's own
+// `attempts: 1` (see import-queue.ts) means a partially-applied import is
+// never silently retried and duplicated.
 const importWorker = new Worker<ImportJobData>(
   IMPORT_QUEUE_NAME,
   async (job) => {
-    const { importId, apiToken } = job.data;
-    if (apiToken) {
-      await runClickUpImport(importId, apiToken);
-    } else {
-      await runCsvImport(importId);
-    }
+    await runCsvImport(job.data.importId);
   },
   { connection: redisConnection },
 );
 
 importWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] import ${job?.data.importId} failed:`, err);
 });
 
@@ -416,6 +482,7 @@ const slackWorker = new Worker<SlackJobData>(
   SLACK_QUEUE_NAME,
   async (job) => {
     const { webhookUrl, text } = job.data;
+    await assertSafeOutboundUrl(webhookUrl);
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -430,6 +497,7 @@ const slackWorker = new Worker<SlackJobData>(
 );
 
 slackWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] slack delivery ${job?.id} failed:`, err);
 });
 
@@ -446,6 +514,7 @@ const embeddingWorker = new Worker<EmbeddingJobData>(
 );
 
 embeddingWorker.on("failed", (job, err) => {
+  captureException(err);
   console.error(`[worker] embedding ${job?.data.entityType}/${job?.data.entityId} failed:`, err);
 });
 

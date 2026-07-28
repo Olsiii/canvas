@@ -44,7 +44,7 @@ async function authenticateApiRequest(
     return null;
   }
 
-  const { overLimit } = await checkRateLimit(apiKey.id);
+  const { overLimit } = await checkRateLimit(`apikey:${apiKey.id}`);
   if (overLimit) {
     reply.header("Retry-After", "60");
     await reply

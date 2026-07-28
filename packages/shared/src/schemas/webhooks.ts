@@ -9,6 +9,11 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
 
 export const listWebhooksSchema = z.object({ workspaceId: z.string().uuid() });
 
+export const listWebhookDeliveriesSchema = z.object({
+  webhookId: z.string().uuid(),
+  limit: z.number().int().min(1).max(100).default(25),
+});
+
 export const createWebhookSchema = z.object({
   workspaceId: z.string().uuid(),
   url: z.string().trim().url().max(2000),

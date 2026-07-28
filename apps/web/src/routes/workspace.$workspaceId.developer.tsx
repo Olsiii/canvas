@@ -269,10 +269,32 @@ function WebhooksSection({ workspaceId }: { workspaceId: string }) {
               <p className="text-muted-foreground font-mono text-xs" data-testid="webhook-secret">
                 secret: {webhook.secret}
               </p>
+              <WebhookDeliveries webhookId={webhook.id} />
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+function WebhookDeliveries({ webhookId }: { webhookId: string }) {
+  const deliveries = trpc.webhook.deliveries.useQuery({ webhookId, limit: 10 });
+  if (deliveries.isLoading) {
+    return <p className="text-muted-foreground text-xs">Loading deliveries…</p>;
+  }
+  if (!deliveries.data?.length) {
+    return <p className="text-muted-foreground text-xs">No delivery attempts yet.</p>;
+  }
+  return (
+    <ul className="mt-1 space-y-0.5" data-testid={`webhook-deliveries-${webhookId}`}>
+      {deliveries.data.map((d) => (
+        <li key={d.id} className="text-muted-foreground font-mono text-[11px]">
+          {new Date(d.createdAt).toLocaleString()} · {d.status}
+          {d.httpStatus != null ? ` · HTTP ${d.httpStatus}` : ""}
+          {d.error ? ` · ${d.error}` : ""} · attempt {d.attempt}
+        </li>
+      ))}
+    </ul>
   );
 }

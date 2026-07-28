@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createSpaceAndList, createWorkspaceAndOpen, signUp } from "./helpers";
+import {
+  createSpaceAndList,
+  createWorkspaceAndOpen,
+  signUp,
+  fillGenerationContext,
+} from "./helpers";
 
 test("Generation UX: set brand palette, generate variants, promote one, attach to task", async ({
   page,
@@ -38,6 +43,7 @@ test("Generation UX: set brand palette, generate variants, promote one, attach t
   await expect(gen).toBeVisible();
 
   await gen.getByTestId("generation-prompt").fill("a bold red product shot");
+  await fillGenerationContext(gen);
   await gen.getByTestId("generation-n").selectOption("2");
   await gen.getByTestId("generation-use-brand").check();
   await gen.getByTestId("generation-submit").click();

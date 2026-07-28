@@ -3,14 +3,14 @@ import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { workspaces } from "./workspaces";
 
-// M5.5 importers. Not in DATA_MODEL.md's compact listing (Phase 5 there
-// stops at api_keys/webhooks) — an import is a real async job (a ClickUp
-// import makes many external API calls; a CSV import can create thousands
-// of rows), so it needs the same "row tracks job status, worker does the
-// work" shape M2.1's image_versions/M5.4's webhooks jobs already use, not
-// just a fire-and-forget mutation. `sourceDetail` names the CSV tool
-// ("trello"/"asana") when source is "csv"; null for "clickup_api".
-export const importSource = pgEnum("import_source", ["clickup_api", "csv"]);
+// Not in DATA_MODEL.md's compact listing (Phase 5 there stops at
+// api_keys/webhooks) — an import is a real async job (a CSV can create
+// thousands of rows), so it needs the same "row tracks job status, worker
+// does the work" shape M2.1's image_versions/M5.4's webhooks jobs already
+// use, not just a fire-and-forget mutation. `sourceDetail` names where the
+// CSV text came from — "computer" (direct upload) or "google_sheets"
+// (fetched server-side from a published-to-web link).
+export const importSource = pgEnum("import_source", ["csv"]);
 export const importStatus = pgEnum("import_status", ["pending", "running", "done", "failed"]);
 
 export const imports = pgTable("imports", {
@@ -23,11 +23,9 @@ export const imports = pgTable("imports", {
   source: importSource("source").notNull(),
   sourceDetail: text("source_detail"),
   status: importStatus("status").notNull().default("pending"),
-  // CSV: the parsed rows + target space/list naming, read by the worker so
-  // the (cheap, pure, local) parsing can happen in the request handler
-  // while the (potentially large) DB writes still run off the request
-  // path. ClickUp: never persisted here — the API token is passed as
-  // BullMQ job data only, not written to Postgres. See PROGRESS.md.
+  // The parsed rows + target space/list naming, read by the worker so the
+  // (cheap, pure, local) parsing can happen in the request handler while
+  // the (potentially large) DB writes still run off the request path.
   payloadJson: jsonb("payload_json").$type<unknown>(),
   // Counts of what got created, plus any per-row skip reasons — shown on
   // the import history list once status is "done".

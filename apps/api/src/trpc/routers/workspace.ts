@@ -5,6 +5,7 @@ import {
   inviteMemberSchema,
   listMembersSchema,
   removeMemberSchema,
+  setOperationsManagerSchema,
   updateMemberRoleSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
@@ -12,6 +13,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { can } from "../../auth/can";
 import { getMembershipRole } from "../../lib/membership";
 import { assertCan } from "../../lib/permissions";
+import { isRoleVisibleInWorkspace } from "../../lib/space-overrides";
 import { protectedProcedure, publicProcedure, router } from "../trpc";
 
 const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
@@ -48,6 +50,7 @@ export const workspaceRouter = router({
         role: schema.memberships.role,
         customRoleId: schema.memberships.customRoleId,
         customRoleName: schema.customRoles.name,
+        isOperationsManager: schema.memberships.isOperationsManager,
       })
       .from(schema.memberships)
       .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
@@ -103,10 +106,10 @@ export const workspaceRouter = router({
         ),
       });
       if (!customRole) throw new TRPCError({ code: "NOT_FOUND", message: "Custom role not found" });
-      if (customRole.workspaceId !== input.workspaceId) {
+      if (!(await isRoleVisibleInWorkspace(customRole.createdBy, input.workspaceId))) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Role belongs to a different workspace",
+          message: "Role isn't available in this workspace",
         });
       }
     }
@@ -235,6 +238,33 @@ export const workspaceRouter = router({
       });
 
       return { userId: input.userId, role: input.role };
+    }),
+
+  // Who task.ts's notifyOperationsManagers reaches when a task hits a
+  // done-kind status — same admin-tier gate as updateMemberRole/removeMember
+  // since it's changing another member's standing in the workspace.
+  setOperationsManager: protectedProcedure
+    .input(setOperationsManagerSchema)
+    .mutation(async ({ ctx, input }) => {
+      const role = await getMembershipRole(input.workspaceId, ctx.user.id);
+      if (!can(ctx.user, "workspace:manage", { type: "workspace", role })) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const targetRole = await getMembershipRole(input.workspaceId, input.userId);
+      if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });
+
+      await db
+        .update(schema.memberships)
+        .set({ isOperationsManager: input.isOperationsManager })
+        .where(
+          and(
+            eq(schema.memberships.workspaceId, input.workspaceId),
+            eq(schema.memberships.userId, input.userId),
+          ),
+        );
+
+      return { userId: input.userId, isOperationsManager: input.isOperationsManager };
     }),
 
   removeMember: protectedProcedure.input(removeMemberSchema).mutation(async ({ ctx, input }) => {

@@ -45,7 +45,11 @@ async function placeholderImage(
 // a deterministic placeholder image locally instead of making any network
 // call. Swap the body of each for a real fetch() against Gemini's
 // generateContent endpoint once a key exists — the ImageEngine contract and
-// every caller (the worker, the tRPC router) stay unchanged either way.
+// every caller (the worker, the tRPC router) stay unchanged either way. When
+// that swap happens, req.referenceImageUrls should be attached as input
+// images on the real request (Gemini's image models accept reference
+// images for style/content guidance); the mock below already threads it
+// into the seed so this isn't a silent no-op in the meantime.
 export class GeminiImageAdapter implements ImageEngine {
   readonly provider = "gemini";
   readonly model = "gemini-2.5-flash-image";
@@ -53,9 +57,16 @@ export class GeminiImageAdapter implements ImageEngine {
   async generate(req: GenerateRequest): Promise<GeneratedImage[]> {
     const { width, height } = dimensionsForAspect(req.size);
     const n = req.n ?? 1;
+    // Real Gemini image-to-image calls would attach these as input images;
+    // folded into the seed here so the mock's output actually varies with
+    // the reference set instead of silently ignoring it (matches how a real
+    // call's output would differ from the same prompt with no references).
+    const referenceSuffix = req.referenceImageUrls?.length
+      ? `#refs:${req.referenceImageUrls.join(",")}`
+      : "";
     const images: GeneratedImage[] = [];
     for (let i = 0; i < n; i++) {
-      images.push(await placeholderImage(width, height, `${req.prompt}#${i}`));
+      images.push(await placeholderImage(width, height, `${req.prompt}#${i}${referenceSuffix}`));
     }
     return images;
   }

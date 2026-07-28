@@ -49,7 +49,7 @@ describe("parseImportCsv", () => {
       '1,Design homepage,In Progress,ada@example.com,2026-08-01,"design, urgent",Use the new palette',
     ].join("\n");
 
-    const rows = parseImportCsv(csv, "asana");
+    const rows = parseImportCsv(csv);
 
     expect(rows).toEqual([
       {
@@ -69,7 +69,7 @@ describe("parseImportCsv", () => {
       "Fix login bug,Doing,bug,2026-08-05,Users can't log in on Safari",
     ].join("\n");
 
-    const rows = parseImportCsv(csv, "trello");
+    const rows = parseImportCsv(csv);
 
     expect(rows).toEqual([
       {
@@ -85,7 +85,7 @@ describe("parseImportCsv", () => {
 
   it("is case-insensitive on headers and tolerates missing optional columns", () => {
     const csv = ["NAME\n", "Just a title\n"].join("");
-    const rows = parseImportCsv(csv, "trello");
+    const rows = parseImportCsv(csv);
     expect(rows).toEqual([
       {
         title: "Just a title",
@@ -100,13 +100,13 @@ describe("parseImportCsv", () => {
 
   it("skips rows with a blank title", () => {
     const csv = "Name,Notes\n,No title here\nReal task,ok\n";
-    const rows = parseImportCsv(csv, "asana");
+    const rows = parseImportCsv(csv);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.title).toBe("Real task");
   });
 
   it("throws when no title-like column can be found", () => {
     const csv = "Foo,Bar\n1,2\n";
-    expect(() => parseImportCsv(csv, "trello")).toThrow(/title/i);
+    expect(() => parseImportCsv(csv)).toThrow(/title/i);
   });
 });

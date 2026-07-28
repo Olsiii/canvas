@@ -45,7 +45,7 @@ function WorkspaceShell() {
 
   return (
     <div className="flex h-svh">
-      <aside className="border-border bg-card flex w-64 shrink-0 flex-col border-r">
+      <aside className="workspace-sidebar border-border bg-card text-foreground flex w-64 shrink-0 flex-col border-r">
         <div className="border-border flex items-center gap-2 border-b px-3 py-3">
           <Link
             to="/"

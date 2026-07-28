@@ -1,5 +1,10 @@
 import { db, schema } from "@canvas/db";
-import { createWebhookSchema, deleteWebhookSchema, listWebhooksSchema } from "@canvas/shared";
+import {
+  createWebhookSchema,
+  deleteWebhookSchema,
+  listWebhookDeliveriesSchema,
+  listWebhooksSchema,
+} from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
@@ -20,6 +25,23 @@ export const webhookRouter = router({
       .where(eq(schema.webhooks.workspaceId, input.workspaceId))
       .orderBy(desc(schema.webhooks.createdAt));
   }),
+
+  deliveries: protectedProcedure
+    .input(listWebhookDeliveriesSchema)
+    .query(async ({ ctx, input }) => {
+      const webhook = await db.query.webhooks.findFirst({
+        where: eq(schema.webhooks.id, input.webhookId),
+      });
+      if (!webhook) throw new TRPCError({ code: "NOT_FOUND" });
+      await assertCan(ctx.user, webhook.workspaceId, "webhook:view");
+
+      return db
+        .select()
+        .from(schema.webhookDeliveries)
+        .where(eq(schema.webhookDeliveries.webhookId, webhook.id))
+        .orderBy(desc(schema.webhookDeliveries.createdAt))
+        .limit(input.limit);
+    }),
 
   create: protectedProcedure.input(createWebhookSchema).mutation(async ({ ctx, input }) => {
     await assertCan(ctx.user, input.workspaceId, "webhook:create");

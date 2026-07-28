@@ -23,6 +23,28 @@ export const aiUsageKind = pgEnum("ai_usage_kind", ["generate", "edit", "chat", 
 export const brainContextType = pgEnum("brain_context_type", ["task", "doc", "channel", "global"]);
 export const brainMessageRole = pgEnum("brain_message_role", ["user", "assistant", "tool"]);
 
+// Organizes the Library (e.g. "Zone Club") — no nesting, one flat level per
+// workspace, same simplicity tier as tags rather than the space/folder/list
+// hierarchy.
+export const imageFolders = pgTable(
+  "image_folders",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [index("image_folders_workspace_id_idx").on(table.workspaceId)],
+);
+
 // `imageAssets.currentVersionId` <-> `imageVersions.assetId` is a genuine
 // circular FK between the two tables (DATA_MODEL.md: current_version_id
 // "set after first version"). Both `.references()` callbacks below are
@@ -44,13 +66,20 @@ export const imageAssets = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     origin: imageOrigin("origin").notNull(),
     currentVersionId: uuid("current_version_id").references((): AnyPgColumn => imageVersions.id),
+    // Unset = unfiled, shown in the Library's "All" view but no specific
+    // folder. Deleting a folder unfiles its assets rather than cascading —
+    // a folder is organization, not ownership (see imageFolder.delete).
+    folderId: uuid("folder_id").references(() => imageFolders.id, { onDelete: "set null" }),
     altText: text("alt_text"),
     tagsJson: jsonb("tags_json").$type<string[]>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (table) => [index("image_assets_workspace_id_idx").on(table.workspaceId)],
+  (table) => [
+    index("image_assets_workspace_id_idx").on(table.workspaceId),
+    index("image_assets_folder_id_idx").on(table.folderId),
+  ],
 );
 
 export const imageVersions = pgTable(

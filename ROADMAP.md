@@ -50,8 +50,8 @@ Rule: **do not start a phase until the previous phase's acceptance criteria pass
 - M5.2 Dashboards + widgets (task counts, burndown, time, AI usage/cost).
 - M5.3 Goals/OKRs linked to tasks.
 - M5.4 Public REST API v1 + API keys + rate limits; webhooks.
-- M5.5 Importers: ClickUp (API), Trello/Asana (CSV). M5.6 Integrations: Slack notify, Google Drive picker, GitHub PR links.
-- ✅ Accept: "when status → Done, post to Slack" works; ClickUp import brings a real workspace across.
+- M5.5 Importers: CSV from a computer upload, or a published Google Sheet (tool-agnostic parsing — see PROGRESS.md's 2026-07-28 decision to drop the ClickUp/Trello/Asana-specific importers). M5.6 Integrations: Slack notify, Google Drive picker, GitHub PR links.
+- ✅ Accept: "when status → Done, post to Slack" works; a CSV import brings a real board across.
 
 ## Phase 6 — Enterprise & polish (~ongoing)
 - SAML SSO + SCIM; custom roles + per-space permission overrides; audit log UI.

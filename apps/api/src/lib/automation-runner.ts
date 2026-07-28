@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { imageQueue } from "../queues/image-queue";
 import { slackQueue } from "../queues/slack-queue";
 import { logActivity } from "./activity";
+import { assertAiQuota } from "./ai-quota";
 import {
   evaluateConditions,
   interpolatePrompt,
@@ -86,6 +87,8 @@ async function executeAction(
     }
 
     case "generate_image": {
+      await assertAiQuota(ctx.actorId, "generate");
+
       const [asset] = await db
         .insert(schema.imageAssets)
         .values({ workspaceId: ctx.workspaceId, createdBy: ctx.actorId, origin: "generation" })

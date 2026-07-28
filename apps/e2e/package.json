@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@canvas/db": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
     "drizzle-orm": "^0.38.3"
   },
   "devDependencies": {

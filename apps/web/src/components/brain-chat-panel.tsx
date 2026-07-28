@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { ReferenceAttachZone, type AiReference } from "@/components/reference-attach-zone";
 import { useBrainStream } from "@/hooks/use-brain-stream";
 import { trpc } from "@/lib/trpc";
 import { Loader2, Send, Sparkles, Wrench, X } from "lucide-react";
@@ -46,6 +47,7 @@ export function BrainChatPanel({
   const utils = trpc.useUtils();
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [draft, setDraft] = useState("");
+  const [references, setReferences] = useState<AiReference[]>([]);
   const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -136,7 +138,9 @@ export function BrainChatPanel({
     const text = draft.trim();
     if (!text || !conversationId || sending) return;
 
+    const attachmentIds = references.map((r) => r.id);
     setDraft("");
+    setReferences([]);
     setPendingUserText(text);
     setStreamingText("");
     setStreamError(null);
@@ -144,11 +148,15 @@ export function BrainChatPanel({
     setSending(true);
 
     try {
-      await send.mutateAsync({ conversationId, text });
-    } catch {
+      await send.mutateAsync({
+        conversationId,
+        text,
+        referenceAttachmentIds: attachmentIds,
+      });
+    } catch (err) {
       setPendingUserText(null);
       setSending(false);
-      setStreamError("Failed to send message.");
+      setStreamError(err instanceof Error ? err.message : "Failed to send message.");
     }
   }
 
@@ -268,6 +276,18 @@ export function BrainChatPanel({
                   {m.role === "user" ? "You" : "Brain"}
                 </p>
                 {text && <p className="whitespace-pre-wrap">{text}</p>}
+                {(m.imageVersionIds?.length ?? 0) > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {m.imageVersionIds!.map((versionId) => (
+                      <img
+                        key={versionId}
+                        src={`/image-versions/${versionId}/thumb`}
+                        alt=""
+                        className="border-border h-12 w-12 rounded border object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
                 {tools.length > 0 && (
                   <p className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
                     <Wrench className="h-3 w-3" aria-hidden />
@@ -322,26 +342,34 @@ export function BrainChatPanel({
         </div>
 
         <form onSubmit={handleSend} className="border-border border-t p-3">
-          <label className="sr-only" htmlFor="brain-message-input">
-            Message Brain
-          </label>
-          <textarea
-            id="brain-message-input"
-            data-testid="brain-message-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Ask Brain…"
-            rows={3}
+          <ReferenceAttachZone
+            workspaceId={workspaceId}
+            references={references}
+            onChange={setReferences}
             disabled={!conversationId || sending}
-            className="border-border focus-visible:ring-accent mb-2 w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleSend(e);
-              }
-            }}
-          />
-          <div className="flex justify-end">
+            testId="brain-reference-zone"
+          >
+            <label className="sr-only" htmlFor="brain-message-input">
+              Message Brain
+            </label>
+            <textarea
+              id="brain-message-input"
+              data-testid="brain-message-input"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Ask Brain… Attach a reference image, file, or video."
+              rows={3}
+              disabled={!conversationId || sending}
+              className="border-border focus-visible:ring-accent m-2 mb-0 w-[calc(100%-1rem)] resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:opacity-50"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleSend(e);
+                }
+              }}
+            />
+          </ReferenceAttachZone>
+          <div className="mt-2 flex justify-end">
             <Button
               type="submit"
               size="sm"

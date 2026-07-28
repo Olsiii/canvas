@@ -1,5 +1,5 @@
 import { db, schema } from "@canvas/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // Shared by every notification-creating call site (comment/chat @mentions,
 // task assignment, urgent-priority broadcasts) — a bare insert against an
@@ -25,4 +25,29 @@ export async function notifyWorkspace(
     .where(eq(schema.memberships.workspaceId, workspaceId));
   const userIds = members.map((m) => m.userId).filter((id) => id !== excludeUserId);
   await notifyUsers(activityId, userIds);
+}
+
+// Whoever's flagged isOperationsManager on a workspace's memberships. Split
+// out from notifyOperationsManagers so a caller notifying about several
+// activities in the same workspace (e.g. task.bulkUpdate) can look this up
+// once instead of re-querying membership per activity.
+export async function getOperationsManagerIds(workspaceId: string): Promise<string[]> {
+  const managers = await db
+    .select({ userId: schema.memberships.userId })
+    .from(schema.memberships)
+    .where(
+      and(
+        eq(schema.memberships.workspaceId, workspaceId),
+        eq(schema.memberships.isOperationsManager, true),
+      ),
+    );
+  return managers.map((m) => m.userId);
+}
+
+// Used when a task reaches a done-kind status, same "who should hear about
+// this" reasoning as notifyWorkspace but narrowed to a named role instead of
+// everyone.
+export async function notifyOperationsManagers(activityId: string, workspaceId: string) {
+  const managerIds = await getOperationsManagerIds(workspaceId);
+  await notifyUsers(activityId, managerIds);
 }

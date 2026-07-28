@@ -1,4 +1,5 @@
 import { activityRouter } from "./routers/activity";
+import { adminRouter } from "./routers/admin";
 import { aiUsageRouter } from "./routers/ai-usage";
 import { apiKeyRouter } from "./routers/api-key";
 import { attachmentRouter } from "./routers/attachment";
@@ -16,6 +17,7 @@ import { formRouter } from "./routers/form";
 import { goalRouter } from "./routers/goal";
 import { hierarchyRouter } from "./routers/hierarchy";
 import { imageAssetRouter } from "./routers/image-asset";
+import { imageFolderRouter } from "./routers/image-folder";
 import { importRouter } from "./routers/import";
 import { notificationRouter } from "./routers/notification";
 import { prLinkRouter } from "./routers/pr-link";
@@ -46,6 +48,7 @@ export const appRouter = router({
   notification: notificationRouter,
   reminder: reminderRouter,
   activity: activityRouter,
+  admin: adminRouter,
   tag: tagRouter,
   taskTemplate: taskTemplateRouter,
   timeEntry: timeEntryRouter,
@@ -53,6 +56,7 @@ export const appRouter = router({
   customField: customFieldRouter,
   attachment: attachmentRouter,
   imageAsset: imageAssetRouter,
+  imageFolder: imageFolderRouter,
   brandKit: brandKitRouter,
   brain: brainRouter,
   doc: docRouter,

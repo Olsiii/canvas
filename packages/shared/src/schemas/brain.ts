@@ -14,6 +14,8 @@ export const listBrainMessagesSchema = z.object({
 export const sendBrainMessageSchema = z.object({
   conversationId: z.string().uuid(),
   text: z.string().trim().min(1).max(8000),
+  // Workspace-scoped AI reference attachments (images, files, videos).
+  referenceAttachmentIds: z.array(z.string().uuid()).max(8).default([]),
 });
 
 export const setBrainConversationBrandKitSchema = z.object({

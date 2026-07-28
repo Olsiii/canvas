@@ -25,6 +25,23 @@ export async function getCustomRoleDeltas(customRoleId: string) {
   };
 }
 
+// A custom role is account-level (owned by its creator, not a single
+// workspace — see PROGRESS.md's 2026-07-28 decision): it's usable for
+// assignment/space-overrides in any workspace where the creator currently
+// holds a membership. This is the one check every such call site shares.
+export async function isRoleVisibleInWorkspace(
+  roleCreatedBy: string,
+  workspaceId: string,
+): Promise<boolean> {
+  const membership = await db.query.memberships.findFirst({
+    where: and(
+      eq(schema.memberships.userId, roleCreatedBy),
+      eq(schema.memberships.workspaceId, workspaceId),
+    ),
+  });
+  return !!membership;
+}
+
 export async function getSpaceOverride(
   spaceId: string,
   principal: Principal,

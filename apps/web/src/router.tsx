@@ -25,8 +25,10 @@ import { goalsListRoute } from "./routes/workspace.$workspaceId.goals";
 import { goalEditorRoute } from "./routes/workspace.$workspaceId.goals.$goalId";
 import { developerRoute } from "./routes/workspace.$workspaceId.developer";
 import { importRoute } from "./routes/workspace.$workspaceId.import";
+import { libraryRoute } from "./routes/workspace.$workspaceId.library";
 import { rolesRoute } from "./routes/workspace.$workspaceId.roles";
 import { securityRoute } from "./routes/workspace.$workspaceId.security";
+import { adminRoute } from "./routes/workspace.$workspaceId.admin";
 import { semanticSearchRoute } from "./routes/workspace.$workspaceId.semantic-search";
 import { newWorkspaceRoute } from "./routes/workspaces.new";
 
@@ -56,9 +58,11 @@ const routeTree = rootRoute.addChildren([
     developerRoute,
     importRoute,
     securityRoute,
+    adminRoute,
     rolesRoute,
     brandKitsRoute,
     semanticSearchRoute,
+    libraryRoute,
   ]),
 ]);
 

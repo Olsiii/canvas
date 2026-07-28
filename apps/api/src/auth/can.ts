@@ -43,6 +43,16 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // Generating an image costs real money (ai_usage) — same tier as
   // creating a task, not the guest-level "view" tier.
   "imageAsset:create": "member",
+  // Same tier as attachment:delete — removing a saved image from the
+  // library is ordinary content upkeep, not a workspace-wide concern.
+  "imageAsset:delete": "member",
+  "imageFolder:view": "guest",
+  // Same tier as imageAsset:create/delete — a folder is organizational, and
+  // deleting one only unfiles its images rather than deleting them, so it
+  // doesn't need tag:delete's admin tier (which removes a tag from every
+  // task that has it, a bigger blast radius).
+  "imageFolder:create": "member",
+  "imageFolder:delete": "member",
   "brain:view": "guest",
   // Sending a chat message costs real money (ai_usage), same reasoning as
   // imageAsset:create.
@@ -112,8 +122,7 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   "webhook:create": "admin",
   "webhook:delete": "admin",
   // Admin tier — an import can bulk-create an entire workspace's worth of
-  // spaces/lists/tasks in one run and, for the ClickUp path, hands the
-  // server a third-party API token. Same blast-radius reasoning as
+  // spaces/lists/tasks in one run. Same blast-radius reasoning as
   // apiKey:create/webhook:create.
   "import:run": "admin",
   // Same tiers as attachment:* — linking a PR to a task is a task edit,

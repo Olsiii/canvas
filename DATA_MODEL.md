@@ -62,9 +62,12 @@ brand_settings   (id, workspace_id fk, name text default 'Default',        -- "b
                   palette_json jsonb, tone text,
                   logo_asset_id fk null, guidelines text)
 
+image_folders    (id, workspace_id fk, name, created_by fk, deleted_at)   -- organizes the Library
+
 image_assets     (id, workspace_id fk, created_by fk,
                   origin enum('upload','generation'),
                   current_version_id fk null,               -- set after first version
+                  folder_id fk image_folders null,          -- unset = unfiled
                   alt_text, tags_json jsonb, deleted_at)
 
 image_versions   (id, asset_id fk, parent_version_id fk null,   -- tree
@@ -107,6 +110,7 @@ dashboards       (id, workspace_id fk, name); widgets (id, dashboard_id fk, type
 goals            (id, workspace_id fk, name, metric_json, due_date); goal_links(goal_id, task_id)
 api_keys         (id, workspace_id fk, hash, name, last_used_at)
 webhooks         (id, workspace_id fk, url, events text[], secret)
+webhook_deliveries (id, webhook_id fk, event, status, http_status?, error?, attempt, created_at)
 ```
 
 ## Indexes that matter from day 1

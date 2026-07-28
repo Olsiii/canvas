@@ -1,11 +1,14 @@
 import { z } from "zod";
 
-// M5.5 importers: ClickUp via its REST API, Trello/Asana via CSV export.
-export const IMPORT_SOURCES = ["clickup_api", "csv"] as const;
+// Two ways a CSV row set can reach the same importer: a file uploaded
+// straight from the person's computer, or fetched server-side from a
+// published Google Sheet — either way it funnels into the same
+// tool-agnostic column-alias parsing (see csv-import.ts).
+export const IMPORT_SOURCES = ["csv"] as const;
 export type ImportSource = (typeof IMPORT_SOURCES)[number];
 
-export const CSV_IMPORT_TOOLS = ["trello", "asana"] as const;
-export type CsvImportTool = (typeof CSV_IMPORT_TOOLS)[number];
+export const CSV_IMPORT_ORIGINS = ["computer", "google_sheets"] as const;
+export type CsvImportOrigin = (typeof CSV_IMPORT_ORIGINS)[number];
 
 export const IMPORT_STATUSES = ["pending", "running", "done", "failed"] as const;
 export type ImportStatus = (typeof IMPORT_STATUSES)[number];
@@ -13,11 +16,6 @@ export type ImportStatus = (typeof IMPORT_STATUSES)[number];
 export const listImportsSchema = z.object({ workspaceId: z.string().uuid() });
 
 export const getImportSchema = z.object({ importId: z.string().uuid() });
-
-export const startClickUpImportSchema = z.object({
-  workspaceId: z.string().uuid(),
-  apiToken: z.string().trim().min(1).max(500),
-});
 
 // One row parsed server-side from the uploaded CSV. Kept intentionally
 // loose (all fields optional except title) since a CSV export's columns
@@ -42,3 +40,14 @@ export const csvImportPayloadSchema = z.object({
   listName: z.string().min(1),
 });
 export type CsvImportPayload = z.infer<typeof csvImportPayloadSchema>;
+
+export const startGoogleSheetImportSchema = z.object({
+  workspaceId: z.string().uuid(),
+  spaceName: z.string().min(1),
+  listName: z.string().min(1),
+  // A published-to-web CSV export link (Google Sheets: File > Share >
+  // Publish to web > CSV), fetched server-side — validated further at the
+  // route boundary (host must actually be a Google domain) to keep this
+  // from becoming an open server-side-fetch proxy for arbitrary URLs.
+  sheetUrl: z.string().trim().url(),
+});

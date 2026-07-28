@@ -3,6 +3,7 @@ import { STATUS_KINDS } from "@canvas/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NewTaskInlineForm } from "@/components/new-task-inline-form";
+import { StatusSelect } from "@/components/status-select";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import {
@@ -203,14 +204,22 @@ function StatusColumn({
       className={`w-64 shrink-0 space-y-2 rounded-md p-1 ${isOver ? "bg-muted/50" : ""}`}
       data-testid={`status-column-${status.name}`}
     >
-      <div className="group flex items-center gap-2">
+      <div
+        className="group flex items-center gap-2 rounded-md border-l-4 px-2 py-1.5"
+        style={{ borderLeftColor: status.color, backgroundColor: `${status.color}12` }}
+      >
         <span
           className="h-2 w-2 shrink-0 rounded-full"
           style={{ backgroundColor: status.color }}
           aria-hidden
         />
-        <span className="flex-1 truncate text-sm font-medium">{status.name}</span>
-        <span className="text-muted-foreground text-xs">{tasks.length}</span>
+        <span className="flex-1 truncate text-sm font-semibold">{status.name}</span>
+        <span
+          className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ backgroundColor: `${status.color}26`, color: status.color }}
+        >
+          {tasks.length}
+        </span>
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}
@@ -296,7 +305,6 @@ function TaskRow({
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const update = useOptimisticTaskUpdate(listId);
   const del = trpc.task.delete.useMutation({ onSuccess: onChanged });
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -343,18 +351,9 @@ function TaskRow({
           ✕
         </button>
       </div>
-      <select
-        value={task.statusId}
-        disabled={update.isPending}
-        onChange={(e) => update.mutate({ taskId: task.id, statusId: e.target.value })}
-        className="border-border bg-background mt-1.5 h-6 w-full rounded border text-xs"
-      >
-        {statuses.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.name}
-          </option>
-        ))}
-      </select>
+      <div className="mt-1.5">
+        <StatusSelect listId={listId} task={task} statuses={statuses} />
+      </div>
       {confirmingDelete && (
         <div className="mt-1 flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">Delete task?</span>

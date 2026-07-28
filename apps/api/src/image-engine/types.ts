@@ -17,6 +17,8 @@ export interface GenerateRequest {
   style?: StylePreset;
   brandPalette?: string[];
   n?: number;
+  /** Optional reference images for style/content guidance. */
+  referenceImageUrls?: string[];
 }
 
 export interface EditRequest {

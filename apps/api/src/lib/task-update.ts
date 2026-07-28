@@ -3,6 +3,11 @@ import { extractPlainText } from "./plain-text";
 
 const COMPLETE_STATUS_KINDS = new Set<StatusKind>(["done", "closed"]);
 
+/** Whether a status kind counts as "finished" a task — done or closed. */
+export function isDoneKind(kind: StatusKind): boolean {
+  return COMPLETE_STATUS_KINDS.has(kind);
+}
+
 /**
  * A status change into "done"/"closed" completes a task (for burndown);
  * moving back out to "open"/"active" un-completes it. Preserves an

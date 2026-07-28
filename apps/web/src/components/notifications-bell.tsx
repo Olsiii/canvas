@@ -12,6 +12,7 @@ const TASK_LINK_VERBS = new Set([
   "reminder.fired",
   "task.assigned",
   "task.priority_urgent",
+  "task.completed",
 ]);
 
 function taskLink(payload: unknown): { taskId: string; listId: string } | null {
@@ -27,6 +28,12 @@ function reminderNote(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const note = (payload as { note?: unknown }).note;
   return typeof note === "string" && note ? note : null;
+}
+
+function completedTaskTitle(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const title = (payload as { title?: unknown }).title;
+  return typeof title === "string" && title ? title : null;
 }
 
 export function NotificationsBell() {
@@ -95,6 +102,8 @@ export function NotificationsBell() {
             {entries.map((n) => {
               const link = TASK_LINK_VERBS.has(n.verb) ? taskLink(n.payloadJson) : null;
               const note = n.verb === "reminder.fired" ? reminderNote(n.payloadJson) : null;
+              const completedTitle =
+                n.verb === "task.completed" ? completedTaskTitle(n.payloadJson) : null;
               return (
                 <button
                   key={n.id}
@@ -116,6 +125,11 @@ export function NotificationsBell() {
                 >
                   {n.verb === "reminder.fired" ? (
                     <span className="font-medium">{NOTIFICATION_VERB_LABELS[n.verb]}</span>
+                  ) : completedTitle ? (
+                    <>
+                      <span className="font-medium">{n.actorName}</span> finished{" "}
+                      <span className="font-medium">&ldquo;{completedTitle}&rdquo;</span>
+                    </>
                   ) : (
                     <>
                       <span className="font-medium">{n.actorName}</span>{" "}
@@ -124,7 +138,9 @@ export function NotificationsBell() {
                   )}
                   {note && <div className="mt-0.5">{note}</div>}
                   <div className="text-muted-foreground mt-0.5">
-                    {formatRelativeTime(new Date(n.createdAt))}
+                    {completedTitle
+                      ? new Date(n.createdAt).toLocaleString()
+                      : formatRelativeTime(new Date(n.createdAt))}
                   </div>
                 </button>
               );

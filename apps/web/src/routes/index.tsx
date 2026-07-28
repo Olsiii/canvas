@@ -1,16 +1,24 @@
 import { MEMBERSHIP_ROLES, type MembershipRole } from "@canvas/shared";
 import { RequireAuth } from "@/components/require-auth";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/use-session";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
+import { LayoutGrid, LogOut, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { rootRoute } from "./__root";
 
 type InvitableRole = Exclude<MembershipRole, "owner">;
 const INVITABLE_ROLES = MEMBERSHIP_ROLES.filter((r): r is InvitableRole => r !== "owner");
+
+const ROLE_BADGE_CLASS: Record<string, string> = {
+  owner: "bg-accent-soft text-accent",
+  admin: "bg-status-warning/15 text-status-warning",
+  member: "bg-muted text-muted-foreground",
+  guest: "bg-muted text-muted-foreground",
+};
 
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -38,28 +46,43 @@ function Dashboard() {
   return (
     <main className="mx-auto flex min-h-svh max-w-lg flex-col gap-6 px-4 py-16">
       <Card className="flex items-center justify-between p-4">
-        <div>
-          <h1 className="text-xl font-semibold">Canvas</h1>
-          <p className="text-muted-foreground text-sm">{user?.email}</p>
+        <div className="flex items-center gap-3">
+          <span className="bg-accent text-accent-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg font-semibold">
+            C
+          </span>
+          <div>
+            <h1 className="text-xl font-semibold">Canvas</h1>
+            <p className="text-muted-foreground text-sm">{user?.email}</p>
+          </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => logOut.mutate()}>
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => logOut.mutate()}>
+          <LogOut className="h-3.5 w-3.5" aria-hidden />
           Log out
         </Button>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Your workspaces</CardTitle>
-          <Link to="/workspaces/new" className="text-accent text-sm hover:underline">
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <div className="flex items-center gap-2">
+            <span className="bg-accent-soft text-accent flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
+              <LayoutGrid className="h-4 w-4" aria-hidden />
+            </span>
+            <CardTitle>Your workspaces</CardTitle>
+          </div>
+          <Link
+            to="/workspaces/new"
+            className="text-accent flex items-center gap-1 text-sm font-medium hover:underline"
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
             New workspace
           </Link>
         </CardHeader>
         <CardContent className="space-y-3">
           {workspaces.isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
           {workspaces.data?.length === 0 && (
-            <p className="text-muted-foreground text-sm">
+            <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
               You're not in a workspace yet — create one to get started.
-            </p>
+            </div>
           )}
 
           <ul className="divide-border divide-y rounded-md border">
@@ -122,12 +145,25 @@ function WorkspaceRow({
   }
 
   return (
-    <div className="space-y-2 p-3">
-      <div className="flex items-center justify-between">
-        <span className="font-medium">{name}</span>
-        <div className="flex items-center gap-3">
-          <span className="text-muted-foreground text-xs uppercase">{role}</span>
-          <Link to="/w/$workspaceId" params={{ workspaceId }} className="text-sm underline">
+    <div className="space-y-3 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="bg-muted text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-semibold">
+            {name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="truncate font-medium">{name}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${ROLE_BADGE_CLASS[role] ?? "bg-muted text-muted-foreground"}`}
+          >
+            {role}
+          </span>
+          <Link
+            to="/w/$workspaceId"
+            params={{ workspaceId }}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
             Open
           </Link>
         </div>

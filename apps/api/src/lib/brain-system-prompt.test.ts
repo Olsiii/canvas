@@ -5,6 +5,7 @@ describe("buildSystemPrompt", () => {
   it("returns the base prompt alone for a global conversation", () => {
     const prompt = buildSystemPrompt({ type: "global" });
     expect(prompt).toContain("Canvas's Brain");
+    expect(prompt).toContain("clarifying questions");
     expect(prompt).not.toContain("Title:");
   });
 

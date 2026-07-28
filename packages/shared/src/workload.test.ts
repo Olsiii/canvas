@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { tasksForUserOnDate, weeklyTaskCountForUser, type WorkloadAssignment } from "./workload";
+import {
+  suggestDiversify,
+  tasksForUserOnDate,
+  weeklyTaskCountForUser,
+  type WorkloadAssignment,
+} from "./workload";
 
 function assignment(overrides: Partial<WorkloadAssignment> & { id: string }): WorkloadAssignment {
   return {
@@ -45,5 +50,62 @@ describe("weeklyTaskCountForUser", () => {
     expect(weeklyTaskCountForUser(assignments, "alice")).toBe(2);
     expect(weeklyTaskCountForUser(assignments, "bob")).toBe(1);
     expect(weeklyTaskCountForUser(assignments, "carol")).toBe(0);
+  });
+});
+
+describe("suggestDiversify", () => {
+  it("returns null when there's only one person (nothing to compare)", () => {
+    expect(suggestDiversify([{ userId: "alice", count: 10 }])).toBeNull();
+  });
+
+  it("returns null for an ordinary small gap", () => {
+    expect(
+      suggestDiversify([
+        { userId: "alice", count: 3 },
+        { userId: "bob", count: 1 },
+      ]),
+    ).toBeNull();
+  });
+
+  it("flags a large, roughly-double gap", () => {
+    const result = suggestDiversify([
+      { userId: "alice", count: 8 },
+      { userId: "bob", count: 2 },
+    ]);
+    expect(result).toEqual({
+      overloadedUserIds: ["alice"],
+      underloadedUserIds: ["bob"],
+      maxCount: 8,
+      minCount: 2,
+    });
+  });
+
+  it("flags any gap of 3+ when the underloaded side has zero", () => {
+    const result = suggestDiversify([
+      { userId: "alice", count: 3 },
+      { userId: "bob", count: 0 },
+    ]);
+    expect(result?.overloadedUserIds).toEqual(["alice"]);
+    expect(result?.underloadedUserIds).toEqual(["bob"]);
+  });
+
+  it("does not flag a big gap that isn't roughly double (e.g. 10 vs 8)", () => {
+    expect(
+      suggestDiversify([
+        { userId: "alice", count: 10 },
+        { userId: "bob", count: 8 },
+      ]),
+    ).toBeNull();
+  });
+
+  it("names every tied person on each side, not just one", () => {
+    const result = suggestDiversify([
+      { userId: "alice", count: 8 },
+      { userId: "bob", count: 8 },
+      { userId: "carol", count: 1 },
+      { userId: "dan", count: 1 },
+    ]);
+    expect(result?.overloadedUserIds.sort()).toEqual(["alice", "bob"]);
+    expect(result?.underloadedUserIds.sort()).toEqual(["carol", "dan"]);
   });
 });

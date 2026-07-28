@@ -2,16 +2,21 @@ import { db, schema } from "@canvas/db";
 import {
   attachImageAssetToTaskSchema,
   createAnnotationSchema,
+  deleteImageAssetSchema,
   editImageAssetSchema,
   generateImageAssetSchema,
   getImageAssetSchema,
   listAnnotationsSchema,
   listImageAssetsSchema,
+  listImageLibrarySchema,
+  moveImageAssetSchema,
   promoteImageVersionSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, lt, or, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { AiQuotaError, assertAiQuota } from "../../lib/ai-quota";
+import { referenceContextSuffix, resolveAiReferences } from "../../lib/ai-references";
 import { resolveEffectiveBrandKit } from "../../lib/brand-kit";
 import { publishImageAssetJob } from "../../lib/image-asset-realtime";
 import { assertCan } from "../../lib/permissions";
@@ -47,6 +52,121 @@ export const imageAssetRouter = router({
       .limit(60);
   }),
 
+  // The Library page: every asset in the workspace (generated or uploaded),
+  // keyset-paginated on id (UUIDv7 ids sort chronologically, so no separate
+  // createdAt cursor is needed), newest first.
+  library: protectedProcedure.input(listImageLibrarySchema).query(async ({ ctx, input }) => {
+    await assertCan(ctx.user, input.workspaceId, "imageAsset:view");
+
+    const conditions = [
+      eq(schema.imageAssets.workspaceId, input.workspaceId),
+      isNull(schema.imageAssets.deletedAt),
+    ];
+    if (input.origin !== "all") conditions.push(eq(schema.imageAssets.origin, input.origin));
+    if (input.folderId) conditions.push(eq(schema.imageAssets.folderId, input.folderId));
+    if (input.cursor) conditions.push(lt(schema.imageAssets.id, input.cursor));
+
+    const q = input.search?.trim();
+    if (q) {
+      const pattern = `%${q}%`;
+      const searchCondition = or(
+        ilike(schema.imageAssets.altText, pattern),
+        sql`${schema.imageAssets.tagsJson}::text ilike ${pattern}`,
+      );
+      if (searchCondition) conditions.push(searchCondition);
+    }
+
+    const rows = await db
+      .select({
+        id: schema.imageAssets.id,
+        altText: schema.imageAssets.altText,
+        tagsJson: schema.imageAssets.tagsJson,
+        origin: schema.imageAssets.origin,
+        createdAt: schema.imageAssets.createdAt,
+        currentVersionId: schema.imageAssets.currentVersionId,
+        folderId: schema.imageAssets.folderId,
+        blurhash: schema.imageVersions.blurhash,
+        width: schema.imageVersions.width,
+        height: schema.imageVersions.height,
+        prompt: schema.imageVersions.prompt,
+      })
+      .from(schema.imageAssets)
+      .leftJoin(
+        schema.imageVersions,
+        eq(schema.imageVersions.id, schema.imageAssets.currentVersionId),
+      )
+      .where(and(...conditions))
+      .orderBy(desc(schema.imageAssets.id))
+      .limit(input.limit + 1);
+
+    const hasMore = rows.length > input.limit;
+    const items = hasMore ? rows.slice(0, input.limit) : rows;
+    return { items, nextCursor: hasMore ? items.at(-1)?.id : undefined };
+  }),
+
+  delete: protectedProcedure.input(deleteImageAssetSchema).mutation(async ({ ctx, input }) => {
+    const asset = await db.query.imageAssets.findFirst({
+      where: and(eq(schema.imageAssets.id, input.assetId), isNull(schema.imageAssets.deletedAt)),
+    });
+    if (!asset) throw new TRPCError({ code: "NOT_FOUND" });
+    await assertCan(ctx.user, asset.workspaceId, "imageAsset:delete");
+
+    await db
+      .update(schema.imageAssets)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.imageAssets.id, asset.id));
+
+    await logActivity(
+      asset.workspaceId,
+      ctx.user.id,
+      "image_asset",
+      asset.id,
+      "image_asset.deleted",
+    );
+
+    return { id: asset.id };
+  }),
+
+  moveToFolder: protectedProcedure.input(moveImageAssetSchema).mutation(async ({ ctx, input }) => {
+    const asset = await db.query.imageAssets.findFirst({
+      where: and(eq(schema.imageAssets.id, input.assetId), isNull(schema.imageAssets.deletedAt)),
+    });
+    if (!asset) throw new TRPCError({ code: "NOT_FOUND" });
+    // Same tier as edit/promoteVersion above — modifying an asset you can
+    // already see, not a separate permission of its own.
+    await assertCan(ctx.user, asset.workspaceId, "imageAsset:create");
+
+    if (input.folderId) {
+      const folder = await db.query.imageFolders.findFirst({
+        where: and(
+          eq(schema.imageFolders.id, input.folderId),
+          isNull(schema.imageFolders.deletedAt),
+        ),
+      });
+      if (!folder || folder.workspaceId !== asset.workspaceId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Folder not found" });
+      }
+    }
+
+    const [updated] = await db
+      .update(schema.imageAssets)
+      .set({ folderId: input.folderId, updatedAt: new Date() })
+      .where(eq(schema.imageAssets.id, asset.id))
+      .returning();
+    if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await logActivity(
+      asset.workspaceId,
+      ctx.user.id,
+      "image_asset",
+      asset.id,
+      "image_asset.moved",
+      { folderId: input.folderId },
+    );
+
+    return updated;
+  }),
+
   get: protectedProcedure.input(getImageAssetSchema).query(async ({ ctx, input }) => {
     const asset = await db.query.imageAssets.findFirst({
       where: and(eq(schema.imageAssets.id, input.assetId), isNull(schema.imageAssets.deletedAt)),
@@ -64,6 +184,27 @@ export const imageAssetRouter = router({
   generate: protectedProcedure.input(generateImageAssetSchema).mutation(async ({ ctx, input }) => {
     await assertCan(ctx.user, input.workspaceId, "imageAsset:create");
 
+    try {
+      await assertAiQuota(ctx.user.id, "generate");
+    } catch (err) {
+      if (err instanceof AiQuotaError) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: err.message });
+      }
+      throw err;
+    }
+
+    if (input.folderId) {
+      const folder = await db.query.imageFolders.findFirst({
+        where: and(
+          eq(schema.imageFolders.id, input.folderId),
+          isNull(schema.imageFolders.deletedAt),
+        ),
+      });
+      if (!folder || folder.workspaceId !== input.workspaceId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Folder not found" });
+      }
+    }
+
     let brandPalette: string[] | undefined;
     if (input.useBrandPalette) {
       const brand = await resolveEffectiveBrandKit({
@@ -74,9 +215,20 @@ export const imageAssetRouter = router({
       if (brand?.paletteJson?.length) brandPalette = brand.paletteJson;
     }
 
+    const refs = await resolveAiReferences(input.workspaceId, input.referenceAttachmentIds);
+    const prompt = `${input.prompt}${referenceContextSuffix(refs)}`;
+    const referenceImageUrls = refs
+      .map((r) => r.imageUrl)
+      .filter((url): url is string => typeof url === "string");
+
     const [asset] = await db
       .insert(schema.imageAssets)
-      .values({ workspaceId: input.workspaceId, createdBy: ctx.user.id, origin: "generation" })
+      .values({
+        workspaceId: input.workspaceId,
+        createdBy: ctx.user.id,
+        origin: "generation",
+        folderId: input.folderId ?? null,
+      })
       .returning();
     if (!asset) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -86,6 +238,9 @@ export const imageAssetRouter = router({
       "image_asset",
       asset.id,
       "image_asset.generate_requested",
+      {
+        referenceAttachmentIds: input.referenceAttachmentIds,
+      },
     );
 
     await imageQueue.add("generate", {
@@ -95,11 +250,12 @@ export const imageAssetRouter = router({
       spaceId: input.spaceId,
       brandKitId: input.brandKitId,
       userId: ctx.user.id,
-      prompt: input.prompt,
+      prompt,
       size: input.size,
       style: input.style,
       brandPalette,
       n: input.n,
+      referenceImageUrls,
     });
 
     await publishImageAssetJob(asset.id, {
@@ -117,6 +273,15 @@ export const imageAssetRouter = router({
     });
     if (!asset) throw new TRPCError({ code: "NOT_FOUND" });
     await assertCan(ctx.user, asset.workspaceId, "imageAsset:create");
+
+    try {
+      await assertAiQuota(ctx.user.id, "generate");
+    } catch (err) {
+      if (err instanceof AiQuotaError) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: err.message });
+      }
+      throw err;
+    }
 
     const parent = await db.query.imageVersions.findFirst({
       where: and(

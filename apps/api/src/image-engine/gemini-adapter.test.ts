@@ -74,4 +74,14 @@ describe("GeminiImageAdapter", () => {
     expect(engine.provider).toBe("gemini");
     expect(engine.model).toBe("gemini-2.5-flash-image");
   });
+
+  it("produces a different image when reference image URLs are given", async () => {
+    const [withoutRefs] = await engine.generate({ prompt: "a red barn", size: "square" });
+    const [withRefs] = await engine.generate({
+      prompt: "a red barn",
+      size: "square",
+      referenceImageUrls: ["https://example.com/ref.png"],
+    });
+    expect(withoutRefs!.buffer.equals(withRefs!.buffer)).toBe(false);
+  });
 });

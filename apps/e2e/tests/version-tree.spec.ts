@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createSpaceAndList, createWorkspaceAndOpen, signUp } from "./helpers";
+import {
+  createSpaceAndList,
+  createWorkspaceAndOpen,
+  signUp,
+  fillGenerationContext,
+} from "./helpers";
 
 test("M2.6 version tree: branch siblings, compare, promote", async ({ page }) => {
   test.setTimeout(120_000);
@@ -20,6 +25,7 @@ test("M2.6 version tree: branch siblings, compare, promote", async ({ page }) =>
   await expect(gen).toBeVisible();
 
   await gen.getByTestId("generation-prompt").fill("a green bottle");
+  await fillGenerationContext(gen);
   await gen.getByTestId("generation-n").selectOption("1");
   await gen.getByTestId("generation-submit").click();
 

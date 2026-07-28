@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createSpaceAndList, createWorkspaceAndOpen, signUp } from "./helpers";
+import {
+  createSpaceAndList,
+  createWorkspaceAndOpen,
+  signUp,
+  fillGenerationContext,
+} from "./helpers";
 
 test("M2.7: pick image engine, generate, see auto alt-text/tags", async ({ page }) => {
   test.setTimeout(90_000);
@@ -25,6 +30,7 @@ test("M2.7: pick image engine, generate, see auto alt-text/tags", async ({ page 
 
   const gen = page.getByTestId("task-detail-panel").getByTestId("generation-panel");
   await gen.getByTestId("generation-prompt").fill("a vivid coral seashell");
+  await fillGenerationContext(gen);
   await gen.getByTestId("generation-n").selectOption("1");
   await gen.getByTestId("generation-submit").click();
 

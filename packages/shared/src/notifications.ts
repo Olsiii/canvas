@@ -10,4 +10,5 @@ export const NOTIFICATION_VERB_LABELS: Record<string, string> = {
   "reminder.fired": "Reminder",
   "task.assigned": "assigned you a task",
   "task.priority_urgent": "flagged a task as urgent",
+  "task.completed": "finished a task",
 };

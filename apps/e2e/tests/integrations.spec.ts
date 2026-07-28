@@ -78,7 +78,7 @@ test("M5.6 integrations: link a GitHub PR and attach a Google Drive file from a 
 
   // Matches GITHUB_API_BASE_URL in playwright.config.ts's webServer env —
   // the API process reads that once at boot, so this mock server must bind
-  // to this exact fixed port, same reasoning as imports.spec.ts's ClickUp mock.
+  // to this exact fixed port.
   const GITHUB_MOCK_PORT = 4011;
   const githubMock = http.createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");

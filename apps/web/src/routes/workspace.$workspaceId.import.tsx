@@ -2,9 +2,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { CSV_IMPORT_TOOLS, type CsvImportTool, type ImportStatus } from "@canvas/shared";
+import { type ImportStatus } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
-import { CheckCircle2, Clock, History, Loader2, Upload, UploadCloud, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  History,
+  Info,
+  Loader2,
+  Sheet,
+  Upload,
+  UploadCloud,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -26,77 +36,20 @@ function ImportPage() {
         <div>
           <h1 className="text-lg font-semibold">Import</h1>
           <p className="text-muted-foreground text-xs">
-            Bring in work from ClickUp, or a Trello/Asana CSV export.
+            Bring in work from a file on your computer, or a Google Sheet.
           </p>
         </div>
       </div>
-      <ClickUpImportSection workspaceId={workspaceId} />
       <CsvImportSection workspaceId={workspaceId} />
+      <GoogleSheetImportSection workspaceId={workspaceId} />
+      <SeriImportNotice />
       <ImportHistorySection workspaceId={workspaceId} />
     </div>
   );
 }
 
-function ClickUpImportSection({ workspaceId }: { workspaceId: string }) {
-  const utils = trpc.useUtils();
-  const [apiToken, setApiToken] = useState("");
-
-  const start = trpc.import.startClickUp.useMutation({
-    onSuccess: () => {
-      void utils.import.list.invalidate({ workspaceId });
-      setApiToken("");
-    },
-  });
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!apiToken.trim()) return;
-    start.mutate({ workspaceId, apiToken: apiToken.trim() });
-  }
-
-  return (
-    <Card data-testid="clickup-import-section">
-      <CardHeader>
-        <CardTitle>Import from ClickUp</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-muted-foreground text-xs">
-          Brings in every space, folder, list, and task your ClickUp API token can see (first
-          authorized workspace) as new spaces/lists/tasks here.
-        </p>
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            type="password"
-            value={apiToken}
-            onChange={(e) => setApiToken(e.target.value)}
-            placeholder="ClickUp personal API token"
-            className="h-8 max-w-xs text-sm"
-            data-testid="clickup-token-input"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={start.isPending || !apiToken.trim()}
-            data-testid="clickup-import-start"
-            className="gap-1.5"
-          >
-            {start.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <UploadCloud className="h-3.5 w-3.5" aria-hidden />
-            )}
-            {start.isPending ? "Starting…" : "Import"}
-          </Button>
-        </form>
-        {start.error && <p className="text-xs text-red-500">{start.error.message}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
 function CsvImportSection({ workspaceId }: { workspaceId: string }) {
   const utils = trpc.useUtils();
-  const [tool, setTool] = useState<CsvImportTool>("trello");
   const [spaceName, setSpaceName] = useState("");
   const [listName, setListName] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -111,7 +64,6 @@ function CsvImportSection({ workspaceId }: { workspaceId: string }) {
 
     const form = new FormData();
     form.set("workspaceId", workspaceId);
-    form.set("tool", tool);
     form.set("spaceName", spaceName.trim());
     form.set("listName", listName.trim());
     form.set("file", file);
@@ -138,28 +90,14 @@ function CsvImportSection({ workspaceId }: { workspaceId: string }) {
   return (
     <Card data-testid="csv-import-section">
       <CardHeader>
-        <CardTitle>Import from a Trello/Asana CSV export</CardTitle>
+        <CardTitle>Import from your computer</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-muted-foreground text-xs">
-          Creates one new space containing one new list, with a status per distinct section/list
-          column value in the file.
+          Upload a CSV export (from any tool) — creates one new space containing one new list, with
+          a status per distinct section/list column value in the file.
         </p>
         <form onSubmit={handleSubmit} className="space-y-2">
-          <div className="flex gap-3">
-            {CSV_IMPORT_TOOLS.map((t) => (
-              <label key={t} className="flex items-center gap-1 text-xs capitalize">
-                <input
-                  type="radio"
-                  name="csv-tool"
-                  checked={tool === t}
-                  onChange={() => setTool(t)}
-                  data-testid={`csv-tool-${t}`}
-                />
-                {t}
-              </label>
-            ))}
-          </div>
           <Input
             value={spaceName}
             onChange={(e) => setSpaceName(e.target.value)}
@@ -197,6 +135,108 @@ function CsvImportSection({ workspaceId }: { workspaceId: string }) {
           </Button>
         </form>
         {error && <p className="text-xs text-red-500">{error}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function GoogleSheetImportSection({ workspaceId }: { workspaceId: string }) {
+  const utils = trpc.useUtils();
+  const [spaceName, setSpaceName] = useState("");
+  const [listName, setListName] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
+
+  const start = trpc.import.startGoogleSheet.useMutation({
+    onSuccess: () => {
+      void utils.import.list.invalidate({ workspaceId });
+      setSpaceName("");
+      setListName("");
+      setSheetUrl("");
+    },
+  });
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!sheetUrl.trim() || !spaceName.trim() || !listName.trim()) return;
+    start.mutate({
+      workspaceId,
+      spaceName: spaceName.trim(),
+      listName: listName.trim(),
+      sheetUrl: sheetUrl.trim(),
+    });
+  }
+
+  return (
+    <Card data-testid="google-sheet-import-section">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-1.5">
+          <Sheet className="h-4 w-4" aria-hidden />
+          Import from Google Sheets
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-muted-foreground text-xs">
+          Paste a sheet published to the web as CSV (File → Share → Publish to web → CSV). Same
+          result as the computer upload above — one new space with one new list.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-2">
+          <Input
+            value={sheetUrl}
+            onChange={(e) => setSheetUrl(e.target.value)}
+            placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv"
+            className="h-8 text-sm"
+            data-testid="sheet-url"
+          />
+          <Input
+            value={spaceName}
+            onChange={(e) => setSpaceName(e.target.value)}
+            placeholder="New space name"
+            className="h-8 text-sm"
+            data-testid="sheet-space-name"
+          />
+          <Input
+            value={listName}
+            onChange={(e) => setListName(e.target.value)}
+            placeholder="New list name"
+            className="h-8 text-sm"
+            data-testid="sheet-list-name"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={start.isPending || !sheetUrl.trim() || !spaceName.trim() || !listName.trim()}
+            data-testid="sheet-import-start"
+            className="gap-1.5"
+          >
+            {start.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <UploadCloud className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {start.isPending ? "Starting…" : "Import"}
+          </Button>
+        </form>
+        {start.error && <p className="text-xs text-red-500">{start.error.message}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Seri (trekuartista's internal task tool) isn't wired up yet — building a
+// real importer needs to know what Seri can actually expose (a REST API to
+// call, or a file it can export), which wasn't available when this page
+// was built. Left as a visible placeholder rather than a silent gap.
+function SeriImportNotice() {
+  return (
+    <Card className="border-dashed" data-testid="seri-import-notice">
+      <CardContent className="flex items-start gap-2 p-4">
+        <Info className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        <p className="text-muted-foreground text-xs">
+          <span className="text-foreground font-medium">Importing from Seri isn't built yet.</span>{" "}
+          To wire this up we need to know what Seri can expose — either a REST API (endpoint + auth)
+          we can call directly, or a file it can export that we can parse. Once that's known, this
+          becomes a third import option here.
+        </p>
       </CardContent>
     </Card>
   );
@@ -274,7 +314,7 @@ function ImportHistorySection({ workspaceId }: { workspaceId: string }) {
                 <div key={row.id} data-testid={`import-row-${row.id}`} className="px-3 py-2">
                   <div className="flex items-center justify-between">
                     <span>
-                      {row.source === "clickup_api" ? "ClickUp" : `CSV (${row.sourceDetail})`}
+                      {row.sourceDetail === "google_sheets" ? "Google Sheets" : "Computer upload"}
                     </span>
                     <span
                       className={`flex items-center gap-1 ${STATUS_COLOR[status]}`}

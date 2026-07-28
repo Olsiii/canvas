@@ -54,7 +54,7 @@ Calendar view, Table view, Gantt/Timeline view, Workload view, Everything view; 
 Docs/wikis with collaborative real-time editing (CRDT via Yjs); doc → task linking; channel-based chat with threads; image proofing/annotation on attachments (pin comments to image regions — pairs naturally with the Image Brain); forms that create tasks; clips (screen recording upload).
 
 ### Phase 5 — Automation & platform
-Automations engine (trigger → condition → action, incl. "generate image" as an action); dashboards with widgets (charts over tasks, time, usage); goals/OKRs; public REST API + API keys; webhooks; import from ClickUp/Asana/Trello (CSV + API); integrations: Slack, Google Drive, GitHub (start with these 3).
+Automations engine (trigger → condition → action, incl. "generate image" as an action); dashboards with widgets (charts over tasks, time, usage); goals/OKRs; public REST API + API keys; webhooks; import from a computer-uploaded CSV or a published Google Sheet (tool-agnostic column-alias parsing, not tied to any specific PM tool's export format); integrations: Slack, Google Drive, GitHub (start with these 3).
 
 ### Phase 6 — Enterprise & polish
 SSO (SAML) & SCIM; granular permissions & custom roles; audit log; guest permission controls; mobile (React Native or PWA first); desktop wrapper (Tauri); connected/semantic search across tasks+docs+images (pgvector embeddings, incl. image embeddings for visual search); data export.

@@ -34,5 +34,11 @@ export const removeMemberSchema = z.object({
   userId: z.string().uuid(),
 });
 
+export const setOperationsManagerSchema = z.object({
+  workspaceId: z.string().uuid(),
+  userId: z.string().uuid(),
+  isOperationsManager: z.boolean(),
+});
+
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;

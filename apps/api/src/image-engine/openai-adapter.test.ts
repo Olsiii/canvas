@@ -15,6 +15,17 @@ describe("OpenAIImageAdapter", () => {
     expect(images).toHaveLength(2);
     expect(images[0]!.buffer.length).toBeGreaterThan(0);
   });
+
+  it("produces a different image when reference image URLs are given", async () => {
+    const engine = new OpenAIImageAdapter();
+    const [withoutRefs] = await engine.generate({ prompt: "bottle", size: "square" });
+    const [withRefs] = await engine.generate({
+      prompt: "bottle",
+      size: "square",
+      referenceImageUrls: ["https://example.com/ref.png"],
+    });
+    expect(withoutRefs!.buffer.equals(withRefs!.buffer)).toBe(false);
+  });
 });
 
 describe("getImageEngine", () => {

@@ -97,6 +97,16 @@ describe("can", () => {
     expect(can(user, "imageAsset:view", { type: "workspace", role: "guest" })).toBe(true);
     expect(can(user, "imageAsset:create", { type: "workspace", role: "guest" })).toBe(false);
     expect(can(user, "imageAsset:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "imageAsset:delete", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "imageAsset:delete", { type: "workspace", role: "member" })).toBe(true);
+  });
+
+  it("allows guests to view Library folders, but only members can create/delete them", () => {
+    expect(can(user, "imageFolder:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "imageFolder:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "imageFolder:create", { type: "workspace", role: "member" })).toBe(true);
+    expect(can(user, "imageFolder:delete", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "imageFolder:delete", { type: "workspace", role: "member" })).toBe(true);
   });
 
   it("allows guests to view Brain conversations, but only members can send chat messages", () => {

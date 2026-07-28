@@ -11,13 +11,13 @@ import {
   type WorkspaceAction,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { isGrantable } from "../../auth/can";
 import { logActivity } from "../../lib/activity";
 import { requireSpace } from "../../lib/hierarchy";
 import { getMembershipRole } from "../../lib/membership";
-import { assertCan } from "../../lib/permissions";
-import { principalKey } from "../../lib/space-overrides";
+import { assertCan, assertCanInAnyWorkspace } from "../../lib/permissions";
+import { isRoleVisibleInWorkspace, principalKey } from "../../lib/space-overrides";
 import { protectedProcedure, router } from "../trpc";
 
 function assertGrantable(actions: WorkspaceAction[]) {
@@ -38,13 +38,44 @@ async function requireCustomRole(customRoleId: string) {
   return role;
 }
 
+// A role has no single workspace of its own anymore (see PROGRESS.md's
+// 2026-07-28 account-level decision), but the activity log is workspace-
+// scoped by design — so an edit/delete gets logged into every workspace
+// the role is currently visible in (every workspace its creator belongs
+// to), rather than not logged at all.
+async function logActivityEverywhereVisible(
+  creatorId: string,
+  actorId: string,
+  entityId: string,
+  verb: string,
+) {
+  const memberships = await db.query.memberships.findMany({
+    where: eq(schema.memberships.userId, creatorId),
+  });
+  for (const membership of memberships) {
+    await logActivity(membership.workspaceId, actorId, "custom_role", entityId, verb);
+  }
+}
+
 export const roleRouter = router({
+  // Account-level: every non-deleted role whose creator currently belongs
+  // to this workspace, not just roles "created in" it — see
+  // isRoleVisibleInWorkspace. A team running several workspaces sees the
+  // same role library in each one instead of redefining it per workspace.
   list: protectedProcedure.input(listCustomRolesSchema).query(async ({ ctx, input }) => {
     await assertCan(ctx.user, input.workspaceId, "customRole:view");
 
+    const creatorIds = (
+      await db
+        .select({ userId: schema.memberships.userId })
+        .from(schema.memberships)
+        .where(eq(schema.memberships.workspaceId, input.workspaceId))
+    ).map((m) => m.userId);
+    if (creatorIds.length === 0) return [];
+
     return db.query.customRoles.findMany({
       where: and(
-        eq(schema.customRoles.workspaceId, input.workspaceId),
+        inArray(schema.customRoles.createdBy, creatorIds),
         isNull(schema.customRoles.deletedAt),
       ),
       orderBy: (roles, { asc }) => asc(roles.name),
@@ -58,7 +89,7 @@ export const roleRouter = router({
     const [role] = await db
       .insert(schema.customRoles)
       .values({
-        workspaceId: input.workspaceId,
+        createdBy: ctx.user.id,
         name: input.name,
         baseRole: input.baseRole,
         grants: input.grants,
@@ -73,7 +104,20 @@ export const roleRouter = router({
 
   update: protectedProcedure.input(updateCustomRoleSchema).mutation(async ({ ctx, input }) => {
     const role = await requireCustomRole(input.customRoleId);
-    await assertCan(ctx.user, role.workspaceId, "customRole:update");
+    // Ownership-based, not workspace-based — the role can be visible in
+    // several workspaces at once, so "does the caller manage this
+    // workspace" isn't a meaningful question here; only its creator edits
+    // it, same as no one else being able to rename another user's saved
+    // view or template. Ownership alone isn't enough on its own, though —
+    // also require the creator to *currently* hold customRole:update
+    // somewhere, so being demoted/removed from every workspace they once
+    // administered actually revokes this, rather than leaving a stale
+    // creator with permanent edit power over a role that's still assigned
+    // to other people in workspaces they no longer belong to.
+    if (role.createdBy !== ctx.user.id) {
+      throw new TRPCError({ code: "FORBIDDEN" });
+    }
+    await assertCanInAnyWorkspace(ctx.user, "customRole:update");
     if (input.grants) assertGrantable(input.grants);
 
     const [updated] = await db
@@ -89,13 +133,16 @@ export const roleRouter = router({
       .returning();
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-    await logActivity(role.workspaceId, ctx.user.id, "custom_role", role.id, "customRole.updated");
+    await logActivityEverywhereVisible(role.createdBy, ctx.user.id, role.id, "customRole.updated");
     return updated;
   }),
 
   delete: protectedProcedure.input(deleteCustomRoleSchema).mutation(async ({ ctx, input }) => {
     const role = await requireCustomRole(input.customRoleId);
-    await assertCan(ctx.user, role.workspaceId, "customRole:delete");
+    if (role.createdBy !== ctx.user.id) {
+      throw new TRPCError({ code: "FORBIDDEN" });
+    }
+    await assertCanInAnyWorkspace(ctx.user, "customRole:delete");
 
     // Members holding this role fall back to their base `role` rank — role
     // is NOT NULL on memberships regardless, so there's no floor to
@@ -111,7 +158,7 @@ export const roleRouter = router({
         .where(eq(schema.customRoles.id, role.id));
     });
 
-    await logActivity(role.workspaceId, ctx.user.id, "custom_role", role.id, "customRole.deleted");
+    await logActivityEverywhereVisible(role.createdBy, ctx.user.id, role.id, "customRole.deleted");
     return { id: role.id };
   }),
 
@@ -122,10 +169,10 @@ export const roleRouter = router({
 
       if (input.customRoleId) {
         const role = await requireCustomRole(input.customRoleId);
-        if (role.workspaceId !== input.workspaceId) {
+        if (!(await isRoleVisibleInWorkspace(role.createdBy, input.workspaceId))) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Role belongs to a different workspace",
+            message: "Role isn't available in this workspace",
           });
         }
       }
@@ -191,10 +238,10 @@ export const roleRouter = router({
       let principal: string;
       if (input.customRoleId) {
         const role = await requireCustomRole(input.customRoleId);
-        if (role.workspaceId !== space.workspaceId) {
+        if (!(await isRoleVisibleInWorkspace(role.createdBy, space.workspaceId))) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Role belongs to a different workspace",
+            message: "Role isn't available in this workspace",
           });
         }
         principal = principalKey({ customRoleId: input.customRoleId });
