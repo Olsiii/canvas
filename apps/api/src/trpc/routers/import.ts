@@ -9,7 +9,7 @@ import { TRPCError } from "@trpc/server";
 import { desc, eq } from "drizzle-orm";
 import { parseImportCsv } from "../../lib/csv-import";
 import { assertCan } from "../../lib/permissions";
-import { assertSafeOutboundUrl } from "../../lib/safe-outbound-url";
+import { assertSafeOutboundUrl, safeFetch } from "../../lib/safe-outbound-url";
 import { importQueue } from "../../queues/import-queue";
 import { protectedProcedure, router } from "../trpc";
 
@@ -84,9 +84,8 @@ export const importRouter = router({
         });
       }
 
-      let url: URL;
       try {
-        url = await assertSafeOutboundUrl(input.sheetUrl);
+        await assertSafeOutboundUrl(input.sheetUrl);
       } catch (err) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -94,7 +93,13 @@ export const importRouter = router({
         });
       }
 
-      const response = await fetch(url, {
+      // safeFetch re-validates (cheap — one extra DNS lookup on this
+      // low-frequency, admin-triggered path) and, unlike the plain fetch()
+      // this replaced, pins the request to the exact address it just
+      // validated — closing the gap where a separate assertSafeOutboundUrl
+      // call followed by an independent fetch() could resolve somewhere
+      // different (DNS rebinding) the second time around.
+      const response = await safeFetch(input.sheetUrl, {
         redirect: "error",
         signal: AbortSignal.timeout(GOOGLE_SHEET_FETCH_TIMEOUT_MS),
       }).catch(() => null);

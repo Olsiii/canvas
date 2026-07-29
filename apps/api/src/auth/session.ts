@@ -12,6 +12,8 @@ export interface SessionUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  bio: string | null;
+  title: string | null;
 }
 
 export async function createSession(userId: string) {
@@ -33,6 +35,8 @@ export async function validateSession(
         email: schema.users.email,
         name: schema.users.name,
         avatarUrl: schema.users.avatarUrl,
+        bio: schema.users.bio,
+        title: schema.users.title,
       },
     })
     .from(schema.sessions)

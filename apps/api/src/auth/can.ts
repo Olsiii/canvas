@@ -53,6 +53,11 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // task that has it, a bigger blast radius).
   "imageFolder:create": "member",
   "imageFolder:delete": "member",
+  // Own dedicated tier (was reusing imageFolder:view/delete) — same rank
+  // either way, kept separate so these two entities' policies can diverge
+  // later without one silently changing the other's behavior.
+  "libraryCopyItem:view": "guest",
+  "libraryCopyItem:delete": "member",
   "brain:view": "guest",
   // Sending a chat message costs real money (ai_usage), same reasoning as
   // imageAsset:create.
@@ -78,6 +83,12 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // Same reasoning as comment:create: posting in a channel you can already
   // see is participation, not a workspace mutation.
   "message:create": "guest",
+  // Starting a DM just opens a conversation with someone already visible in
+  // this workspace's member list (workspace.members, guest-tier
+  // hierarchy:view) — same "participation, not workspace mutation"
+  // reasoning as message:create/comment:create, not channel:create's
+  // member tier (which mutates a shared, named, discoverable resource).
+  "dm:create": "guest",
   // Same tiers as doc:* — a form is ordinary workspace content, not a
   // shared cross-cutting resource like a tag or template. (Public,
   // unauthenticated submission goes through form.submitPublic, which has

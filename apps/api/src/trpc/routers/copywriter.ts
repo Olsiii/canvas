@@ -14,6 +14,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { AiQuotaError, assertAiQuota } from "../../lib/ai-quota";
+import { resolveAiReferences } from "../../lib/ai-references";
 import { assertCan } from "../../lib/permissions";
 import { publishCopyGenerationJob } from "../../lib/copy-generation-realtime";
 import { ensureCopyLibraryFolder } from "../../lib/copy-library";
@@ -85,6 +86,11 @@ export const copywriterRouter = router({
       });
     }
 
+    // Same reference-attachment ownership check Brain's messages.send already
+    // does — without it, frameAttachmentIds from another workspace would be
+    // fetched and described by the AI (a cross-workspace data leak).
+    await resolveAiReferences(input.workspaceId, input.frameAttachmentIds);
+
     const [generation] = await db
       .insert(schema.copyGenerations)
       .values({
@@ -137,6 +143,9 @@ export const copywriterRouter = router({
     if (!generation.variantsJson || !generation.variantsJson[input.variantIndex]) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "Variant index out of range" });
     }
+
+    // Same cross-workspace check as generate() above.
+    await resolveAiReferences(generation.workspaceId, input.frameAttachmentIds);
 
     await copywriterQueue.add("refine", {
       kind: "refine",
@@ -261,7 +270,7 @@ export const copywriterRouter = router({
         ),
       });
       if (!folder) throw new TRPCError({ code: "NOT_FOUND" });
-      await assertCan(ctx.user, folder.workspaceId, "imageFolder:view");
+      await assertCan(ctx.user, folder.workspaceId, "libraryCopyItem:view");
 
       return db.query.libraryCopyItems.findMany({
         where: and(
@@ -282,7 +291,7 @@ export const copywriterRouter = router({
         ),
       });
       if (!item) throw new TRPCError({ code: "NOT_FOUND" });
-      await assertCan(ctx.user, item.workspaceId, "imageFolder:delete");
+      await assertCan(ctx.user, item.workspaceId, "libraryCopyItem:delete");
 
       await db
         .update(schema.libraryCopyItems)

@@ -1,5 +1,6 @@
 import { BrainChatPanel } from "@/components/brain-chat-panel";
 import { CanvasLogo } from "@/components/canvas-logo";
+import { DmToastContainer } from "@/components/dm-toast-container";
 import { GenerationPanel } from "@/components/generation-panel";
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
 import { LoginSummaryPanel } from "@/components/login-summary-panel";
@@ -9,12 +10,16 @@ import { RunningTimerWidget } from "@/components/running-timer-widget";
 import { SearchBox } from "@/components/search-box";
 import { Button } from "@/components/ui/button";
 import { WorkspaceNav } from "@/components/workspace-nav";
+import { useDmNotifications } from "@/hooks/use-dm-notifications";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useSession } from "@/hooks/use-session";
+import { Avatar } from "@/lib/avatar";
+import { primeDmSoundOnFirstInteraction } from "@/lib/dm-sound";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronLeft, LogOut, Sparkles, Wand2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { rootRoute } from "./__root";
 
 export const workspaceShellRoute = createRoute({
@@ -39,8 +44,16 @@ function WorkspaceShell() {
   });
   const [brainOpen, setBrainOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const { containerRef: generatePanelRef, onKeyDown: generatePanelOnKeyDown } = useModalA11y(
+    () => setGenerateOpen(false),
+    generateOpen,
+  );
 
-  useRealtime(workspaceId);
+  const handleDmNotificationEvent = useDmNotifications(workspaceId);
+  useRealtime(workspaceId, handleDmNotificationEvent);
+  useEffect(() => {
+    primeDmSoundOnFirstInteraction();
+  }, []);
 
   return (
     <div className="flex h-svh">
@@ -104,15 +117,22 @@ function WorkspaceShell() {
         </div>
 
         <div className="border-border flex items-center gap-2 border-t px-3 py-2.5">
-          <span className="bg-muted text-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
-            {(user?.name ?? user?.email ?? "?").slice(0, 1).toUpperCase()}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user?.name ?? user?.email}</p>
-            {membership && (
-              <p className="text-muted-foreground truncate text-xs capitalize">{membership.role}</p>
-            )}
-          </div>
+          <Link
+            to="/account"
+            className="hover:bg-muted flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 -m-1"
+            aria-label="Account settings"
+            title="Account settings"
+          >
+            <Avatar name={user?.name ?? user?.email ?? "?"} avatarUrl={user?.avatarUrl} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{user?.name ?? user?.email}</p>
+              {membership && (
+                <p className="text-muted-foreground truncate text-xs capitalize">
+                  {membership.role}
+                </p>
+              )}
+            </div>
+          </Link>
           <Button
             type="button"
             variant="ghost"
@@ -129,6 +149,7 @@ function WorkspaceShell() {
         <Outlet />
       </main>
       {workspaceId && <LoginSummaryPanel workspaceId={workspaceId} />}
+      <DmToastContainer />
       {brainOpen && workspaceId && (
         <BrainChatPanel
           workspaceId={workspaceId}
@@ -145,7 +166,15 @@ function WorkspaceShell() {
             className="absolute inset-0 bg-black/20"
             onClick={() => setGenerateOpen(false)}
           />
-          <div className="border-border bg-background relative h-full w-full max-w-md overflow-y-auto border-l p-4 shadow-xl">
+          <div
+            ref={generatePanelRef}
+            onKeyDown={generatePanelOnKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Generate image"
+            tabIndex={-1}
+            className="border-border bg-background relative h-full w-full max-w-md overflow-y-auto border-l p-4 shadow-xl outline-none"
+          >
             <GenerationPanel
               workspaceId={workspaceId}
               listId={listId}

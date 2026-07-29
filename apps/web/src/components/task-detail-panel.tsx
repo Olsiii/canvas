@@ -21,6 +21,7 @@ import { TagsSection } from "@/components/tags-section";
 import { TimeTrackingSection } from "@/components/time-tracking-section";
 import { Input } from "@/components/ui/input";
 import { useOptimisticChecklistItemUpdate } from "@/hooks/use-checklist-mutations";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { trpc } from "@/lib/trpc";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -77,6 +78,7 @@ export function TaskDetailPanel({
 
   const [title, setTitle] = useState("");
   const [brainOpen, setBrainOpen] = useState(false);
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
   const taskTitle = task.data?.title;
   useEffect(() => {
     if (taskTitle !== undefined) setTitle(taskTitle);
@@ -110,7 +112,15 @@ export function TaskDetailPanel({
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="border-border bg-background relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l p-6 shadow-xl">
+      <div
+        ref={containerRef}
+        onKeyDown={onKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label={taskTitle ? `Task: ${taskTitle}` : "Task details"}
+        tabIndex={-1}
+        className="border-border bg-background relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l p-6 shadow-xl outline-none"
+      >
         <div className="absolute top-4 right-4 flex items-center gap-3">
           {task.data && doneStatus && !isFinished && (
             <button

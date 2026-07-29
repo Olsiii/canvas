@@ -15,5 +15,22 @@ export const logInSchema = z.object({
   password: z.string().min(1),
 });
 
+// Requires re-typing your own email as an explicit confirmation step for a
+// destructive, irreversible action — same "type to confirm" pattern used
+// for other hard-to-reverse actions elsewhere in the product.
+export const deleteAccountSchema = z.object({
+  confirmEmail: z.string().trim(),
+});
+
+// Full-replace, not partial-update: bio/title always sent (empty string
+// allowed, coerced to null server-side) rather than optional/nullable —
+// avoids "field omitted" vs. "field cleared" ambiguity in the client form.
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  bio: z.string().trim().max(500),
+  title: z.string().trim().max(100),
+});
+
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type LogInInput = z.infer<typeof logInSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

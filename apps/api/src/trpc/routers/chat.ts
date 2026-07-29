@@ -9,11 +9,18 @@ import {
   listChannelsSchema,
   listMessagesSchema,
   removeChannelMemberSchema,
+  startOrGetDmSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
-import { isChannelMember, requireChannel, requireMessage } from "../../lib/chat-queries";
+import {
+  isChannelMember,
+  otherDmParticipants,
+  requireChannel,
+  requireMessage,
+} from "../../lib/chat-queries";
+import { buildDmKey } from "../../lib/dm-key";
 import { getMembershipRole } from "../../lib/membership";
 import { extractMentionedUserIds } from "../../lib/mentions";
 import { notifyUsers } from "../../lib/notify";
@@ -41,6 +48,7 @@ export const chatRouter = router({
       return db.query.channels.findMany({
         where: and(
           eq(schema.channels.workspaceId, input.workspaceId),
+          eq(schema.channels.isDm, false),
           isNull(schema.channels.deletedAt),
           visible,
         ),
@@ -51,6 +59,9 @@ export const chatRouter = router({
     get: protectedProcedure.input(getChannelSchema).query(async ({ ctx, input }) => {
       const channel = await requireChannel(input.channelId);
       await assertCan(ctx.user, channel.workspaceId, "channel:view");
+      // Defense-in-depth: a DM must only ever be reached through dm.get,
+      // never this endpoint (see chat.dm.list/get below).
+      if (channel.isDm) throw new TRPCError({ code: "NOT_FOUND" });
       if (channel.isPrivate && !(await isChannelMember(channel.id, ctx.user.id))) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
@@ -159,6 +170,128 @@ export const chatRouter = router({
           );
           return { ok: true as const };
         }),
+    }),
+  }),
+
+  dm: router({
+    // Same shape as channel.list (my channelIds via channelMembers), just
+    // filtered to isDm and joined to the other participant instead of
+    // returning a channel name — a DM has none.
+    list: protectedProcedure.input(listChannelsSchema).query(async ({ ctx, input }) => {
+      await assertCan(ctx.user, input.workspaceId, "channel:view");
+
+      const myMemberships = await db
+        .select({ channelId: schema.channelMembers.channelId })
+        .from(schema.channelMembers)
+        .where(eq(schema.channelMembers.userId, ctx.user.id));
+      const myChannelIds = myMemberships.map((m) => m.channelId);
+      if (myChannelIds.length === 0) return [];
+
+      const channels = await db.query.channels.findMany({
+        where: and(
+          eq(schema.channels.workspaceId, input.workspaceId),
+          eq(schema.channels.isDm, true),
+          isNull(schema.channels.deletedAt),
+          inArray(schema.channels.id, myChannelIds),
+        ),
+        orderBy: desc(schema.channels.createdAt),
+      });
+
+      const others = await otherDmParticipants(
+        channels.map((c) => c.id),
+        ctx.user.id,
+      );
+
+      return channels.map((c) => ({
+        channelId: c.id,
+        workspaceId: c.workspaceId,
+        createdAt: c.createdAt,
+        otherUser: others.get(c.id) ?? null,
+      }));
+    }),
+
+    get: protectedProcedure.input(getChannelSchema).query(async ({ ctx, input }) => {
+      const channel = await requireChannel(input.channelId);
+      await assertCan(ctx.user, channel.workspaceId, "channel:view");
+      if (!channel.isDm) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!(await isChannelMember(channel.id, ctx.user.id))) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const others = await otherDmParticipants([channel.id], ctx.user.id);
+      const otherUser = others.get(channel.id);
+      if (!otherUser) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      return { channelId: channel.id, workspaceId: channel.workspaceId, otherUser };
+    }),
+
+    startOrGet: protectedProcedure.input(startOrGetDmSchema).mutation(async ({ ctx, input }) => {
+      await assertCan(ctx.user, input.workspaceId, "dm:create");
+      if (input.otherUserId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot start a DM with yourself" });
+      }
+      const otherRole = await getMembershipRole(input.workspaceId, input.otherUserId);
+      if (!otherRole) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "User is not a workspace member" });
+      }
+
+      const dmKey = buildDmKey(ctx.user.id, input.otherUserId);
+      const lookup = and(
+        eq(schema.channels.workspaceId, input.workspaceId),
+        eq(schema.channels.isDm, true),
+        eq(schema.channels.dmKey, dmKey),
+        isNull(schema.channels.deletedAt),
+      );
+
+      const existing = await db.query.channels.findFirst({ where: lookup });
+      let channel = existing;
+      let isNew = false;
+
+      if (!channel) {
+        // Race-safe find-or-create, same pattern as brain.ts's
+        // getOrCreateConversation: the partial unique index on
+        // (workspaceId, dmKey) makes a concurrent loser's insert a no-op
+        // instead of a duplicate row, and it falls back to fetching the
+        // winner's row instead of erroring.
+        const [created] = await db
+          .insert(schema.channels)
+          .values({
+            workspaceId: input.workspaceId,
+            name: null,
+            isPrivate: true,
+            isDm: true,
+            dmKey,
+          })
+          .onConflictDoNothing()
+          .returning();
+
+        if (created) {
+          channel = created;
+          isNew = true;
+        } else {
+          const winner = await db.query.channels.findFirst({ where: lookup });
+          if (!winner) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          channel = winner;
+        }
+      }
+
+      // Idempotent on the composite PK, so safe to run whether the channel
+      // was just created or already existed.
+      await db
+        .insert(schema.channelMembers)
+        .values([
+          { channelId: channel.id, userId: ctx.user.id },
+          { channelId: channel.id, userId: input.otherUserId },
+        ])
+        .onConflictDoNothing();
+
+      if (isNew) {
+        await logActivity(input.workspaceId, ctx.user.id, "channel", channel.id, "dm.created", {
+          otherUserId: input.otherUserId,
+        });
+      }
+
+      return { channelId: channel.id };
     }),
   }),
 

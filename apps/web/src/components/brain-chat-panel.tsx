@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ReferenceAttachZone, type AiReference } from "@/components/reference-attach-zone";
 import { useBrainStream } from "@/hooks/use-brain-stream";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { trpc } from "@/lib/trpc";
 import {
   History,
@@ -64,6 +65,7 @@ export function BrainChatPanel({
   const [statusLine, setStatusLine] = useState<string | null>(null);
   const [brandKitId, setBrandKitId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
 
   const brandKits = trpc.brandKit.list.useQuery({ workspaceId });
   const setBrandKit = trpc.brain.setBrandKit.useMutation();
@@ -236,7 +238,15 @@ export function BrainChatPanel({
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
+      <div
+        ref={containerRef}
+        onKeyDown={onKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl outline-none"
+      >
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="bg-accent-soft text-accent flex h-8 w-8 items-center justify-center rounded-md">

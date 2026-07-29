@@ -8,6 +8,12 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   avatarUrl: text("avatar_url"),
+  bio: text("bio"),
+  // Cosmetic profile tag (e.g. "Product Designer") — deliberately NOT named
+  // `role`: that word already means the governed workspace-membership rank
+  // (owner/admin/member/guest) that can()/ROLE_RANK check. This field has
+  // no effect on permissions.
+  title: text("title"),
   passwordHash: text("password_hash"),
   // M3.9: the cursor for the email digest — only notifications created
   // after this (or after createdAt, if never sent) go into the next

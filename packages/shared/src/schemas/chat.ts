@@ -45,3 +45,8 @@ export const createMessageSchema = z.object({
 export const deleteMessageSchema = z.object({
   messageId: z.string().uuid(),
 });
+
+export const startOrGetDmSchema = z.object({
+  workspaceId: z.string().uuid(),
+  otherUserId: z.string().uuid(),
+});

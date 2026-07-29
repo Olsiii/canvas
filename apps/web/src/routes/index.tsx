@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/use-session";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link, useNavigate } from "@tanstack/react-router";
-import { LayoutGrid, LogOut, Sparkles } from "lucide-react";
+import { LayoutGrid, LogOut, Sparkles, User } from "lucide-react";
 import { useState } from "react";
 import { rootRoute } from "./__root";
 
@@ -54,10 +54,21 @@ function Dashboard() {
             <p className="text-muted-foreground text-sm">{user?.email}</p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => logOut.mutate()}>
-          <LogOut className="h-3.5 w-3.5" aria-hidden />
-          Log out
-        </Button>
+        <div className="flex items-center gap-1">
+          <Link
+            to="/account"
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm"
+            aria-label="Account settings"
+            title="Account settings"
+          >
+            <User className="h-3.5 w-3.5" aria-hidden />
+            Account
+          </Link>
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => logOut.mutate()}>
+            <LogOut className="h-3.5 w-3.5" aria-hidden />
+            Log out
+          </Button>
+        </div>
       </Card>
 
       <Card>

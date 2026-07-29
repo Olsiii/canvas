@@ -103,6 +103,16 @@ function LoginPage() {
           </Link>
         </p>
       </Card>
+
+      <p className="text-muted-foreground text-center text-xs">
+        <Link to="/privacy" className="underline">
+          Privacy Policy
+        </Link>{" "}
+        ·{" "}
+        <Link to="/terms" className="underline">
+          Terms of Service
+        </Link>
+      </p>
     </main>
   );
 }

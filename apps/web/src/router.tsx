@@ -1,9 +1,12 @@
 import { createRouter } from "@tanstack/react-router";
 import { rootRoute } from "./routes/__root";
 import { indexRoute } from "./routes/index";
+import { accountRoute } from "./routes/account";
 import { inviteRoute } from "./routes/invite.$inviteId";
 import { loginRoute } from "./routes/login";
 import { signupRoute } from "./routes/signup";
+import { privacyRoute } from "./routes/privacy";
+import { termsRoute } from "./routes/terms";
 import { publicFormRoute } from "./routes/forms.$publicToken";
 import { workspaceShellRoute } from "./routes/workspace.$workspaceId";
 import { workspaceHomeRoute } from "./routes/workspace.$workspaceId.index";
@@ -14,6 +17,7 @@ import { docsListRoute } from "./routes/workspace.$workspaceId.docs";
 import { docEditorRoute } from "./routes/workspace.$workspaceId.docs.$docId";
 import { chatChannelListRoute, chatIndexRoute } from "./routes/workspace.$workspaceId.chat";
 import { chatChannelRoute } from "./routes/workspace.$workspaceId.chat.$channelId";
+import { chatDmRoute } from "./routes/workspace.$workspaceId.chat.dm.$channelId";
 import { formsListRoute } from "./routes/workspace.$workspaceId.forms";
 import { formEditorRoute } from "./routes/workspace.$workspaceId.forms.$formId";
 import { automationsListRoute } from "./routes/workspace.$workspaceId.automations";
@@ -37,8 +41,11 @@ import { newWorkspaceRoute } from "./routes/workspaces.new";
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  accountRoute,
   loginRoute,
   signupRoute,
+  privacyRoute,
+  termsRoute,
   newWorkspaceRoute,
   inviteRoute,
   publicFormRoute,
@@ -49,7 +56,7 @@ const routeTree = rootRoute.addChildren([
     workloadRoute,
     docsListRoute,
     docEditorRoute,
-    chatChannelListRoute.addChildren([chatIndexRoute, chatChannelRoute]),
+    chatChannelListRoute.addChildren([chatIndexRoute, chatChannelRoute, chatDmRoute]),
     formsListRoute,
     formEditorRoute,
     automationsListRoute,

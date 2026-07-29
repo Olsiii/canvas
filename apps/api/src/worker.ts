@@ -1,6 +1,6 @@
 import { db, schema } from "@canvas/db";
 import { Worker } from "bullmq";
-import { asc, and, eq, isNull } from "drizzle-orm";
+import { asc, and, eq, isNull, ne } from "drizzle-orm";
 import { getChatClient, type ProviderMessage, type ToolCall } from "./brain";
 import { executeTool } from "./brain/execute-tool";
 import { BRAIN_TOOLS } from "./brain/tools";
@@ -20,7 +20,7 @@ import { runSchedulerTick } from "./lib/scheduler";
 import { captureException, initSentry } from "./lib/sentry";
 import { ensureBucketExists, getObject } from "./lib/storage";
 import { signWebhookPayload } from "./lib/webhook-signature";
-import { assertSafeOutboundUrl } from "./lib/safe-outbound-url";
+import { safeFetch } from "./lib/safe-outbound-url";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
 import { COPYWRITER_QUEUE_NAME, type CopywriterJobData } from "./queues/copywriter-queue";
@@ -206,13 +206,34 @@ async function buildDocSystemPrompt(docId: string, brand: BrandContext | null): 
 
 async function buildChannelSystemPrompt(
   channelId: string,
+  requestingUserId: string,
   brand: BrandContext | null,
 ): Promise<string> {
   const channel = await db.query.channels.findFirst({
     where: and(eq(schema.channels.id, channelId), isNull(schema.channels.deletedAt)),
   });
   if (!channel) return buildSystemPrompt({ type: "global" }, brand);
-  return buildSystemPrompt({ type: "channel", name: channel.name }, brand);
+
+  if (channel.isDm) {
+    const otherMember = await db
+      .select({ name: schema.users.name })
+      .from(schema.channelMembers)
+      .innerJoin(schema.users, eq(schema.users.id, schema.channelMembers.userId))
+      .where(
+        and(
+          eq(schema.channelMembers.channelId, channelId),
+          ne(schema.channelMembers.userId, requestingUserId),
+        ),
+      )
+      .limit(1);
+    const otherUserName = otherMember[0]?.name ?? "another member";
+    return buildSystemPrompt({ type: "dm", otherUserName }, brand);
+  }
+
+  // Only DM channels ever have a null name (see channels.dmKey/isDm in
+  // packages/db/src/schema/chat.ts) — the branch above always returns first
+  // for those, so `channel.name` here is guaranteed non-null.
+  return buildSystemPrompt({ type: "channel", name: channel.name as string }, brand);
 }
 
 const brainWorker = new Worker<BrainJobData>(
@@ -246,7 +267,7 @@ const brainWorker = new Worker<BrainJobData>(
         : conversation.contextType === "doc" && conversation.contextId
           ? await buildDocSystemPrompt(conversation.contextId, brand)
           : conversation.contextType === "channel" && conversation.contextId
-            ? await buildChannelSystemPrompt(conversation.contextId, brand)
+            ? await buildChannelSystemPrompt(conversation.contextId, conversation.createdBy, brand)
             : buildSystemPrompt({ type: "global" }, brand);
 
     const chatClient = getChatClient();
@@ -422,11 +443,10 @@ const webhookWorker = new Worker<WebhookJobData>(
     }
 
     try {
-      await assertSafeOutboundUrl(url);
       const body = JSON.stringify(payload);
       const signature = signWebhookPayload(secret, body);
 
-      const response = await fetch(url, {
+      const response = await safeFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -487,8 +507,7 @@ const slackWorker = new Worker<SlackJobData>(
   SLACK_QUEUE_NAME,
   async (job) => {
     const { webhookUrl, text } = job.data;
-    await assertSafeOutboundUrl(webhookUrl);
-    const response = await fetch(webhookUrl, {
+    const response = await safeFetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),

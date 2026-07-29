@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { useSession } from "@/hooks/use-session";
 import { trpc } from "@/lib/trpc";
 import { Users, X } from "lucide-react";
@@ -22,6 +23,7 @@ export function ChannelMembersPanel({
   const removeMember = trpc.chat.channel.members.remove.useMutation({ onSuccess: invalidate });
 
   const [selectedUserId, setSelectedUserId] = useState("");
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
 
   const memberIds = new Set((members.data ?? []).map((m) => m.userId));
   const addable = (workspaceMembers.data ?? []).filter((m) => !memberIds.has(m.userId));
@@ -44,7 +46,15 @@ export function ChannelMembersPanel({
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
+      <div
+        ref={containerRef}
+        onKeyDown={onKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Channel members"
+        tabIndex={-1}
+        className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl outline-none"
+      >
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="bg-accent-soft text-accent flex h-8 w-8 items-center justify-center rounded-md">

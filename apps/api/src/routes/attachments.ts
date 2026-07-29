@@ -7,7 +7,9 @@ import { getSessionUser } from "../auth/session";
 import { can } from "../auth/can";
 import { logActivity } from "../lib/activity";
 import { isChannelMember, requireChannel, requireMessage } from "../lib/chat-queries";
+import { sanitizeFilenameForKey, sanitizeForHeader } from "../lib/filename";
 import { processImage } from "../lib/image-processing";
+import { isInlineSafeMimeType, safeContentType } from "../lib/mime-safety";
 import { getMembershipRole } from "../lib/membership";
 import { getObject, putObject } from "../lib/storage";
 import { requireTask, workspaceIdForTask } from "../lib/task-queries";
@@ -65,7 +67,7 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
     // S3 key namespaces objects by attachment id and must be known before
     // the row is inserted — one insert, no partial/placeholder row.
     const attachmentId = uuidv7();
-    const originalKey = `attachments/${workspaceId}/${attachmentId}/${file.filename}`;
+    const originalKey = `attachments/${workspaceId}/${attachmentId}/${sanitizeFilenameForKey(file.filename)}`;
     await putObject(originalKey, file.buffer, file.mimetype);
 
     let thumbKey: string | null = null;
@@ -116,14 +118,6 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
   );
 }
 
-// Header values can't contain CRLF/quotes without breaking the header (or,
-// worse, injecting one) — strip control characters and quotes from a
-// user-supplied filename before it goes into Content-Disposition.
-function sanitizeForHeader(fileName: string): string {
-  // eslint-disable-next-line no-control-regex -- deliberately stripping control chars from a header value
-  return fileName.replace(/["\r\n\x00-\x1f]/g, "");
-}
-
 async function streamAttachment(
   req: FastifyRequest<{ Params: { attachmentId: string }; Querystring?: { download?: string } }>,
   reply: FastifyReply,
@@ -157,7 +151,16 @@ async function streamAttachment(
   if (!key) return reply.code(404).send({ error: "Not found" });
 
   const object = await getObject(key);
-  reply.header("Content-Type", object.ContentType ?? attachment.mime);
+  const rawContentType = object.ContentType ?? attachment.mime;
+  // Thumbnails are always server-generated (processImage → webp), so their
+  // content type is trustworthy regardless; the original "file" upload's
+  // mime came straight from the uploader's multipart request and is never
+  // verified against the actual bytes — serving it back with that claimed
+  // type, inline, is a stored-XSS vector (upload text/html or
+  // image/svg+xml with a <script>, then open the file's direct URL).
+  const inlineSafe = kind === "thumb" || isInlineSafeMimeType(rawContentType);
+  reply.header("Content-Type", inlineSafe ? rawContentType : safeContentType(rawContentType));
+  reply.header("X-Content-Type-Options", "nosniff");
   reply.header("Cache-Control", "private, max-age=3600");
   // Video playback (M4.6 clips) needs a known length upfront to report
   // duration/seek correctly — images/other files get it for free too.
@@ -165,7 +168,7 @@ async function streamAttachment(
     reply.header("Content-Length", String(object.ContentLength));
   }
   if (kind === "file") {
-    const disposition = req.query?.download ? "attachment" : "inline";
+    const disposition = req.query?.download || !inlineSafe ? "attachment" : "inline";
     reply.header(
       "Content-Disposition",
       `${disposition}; filename="${sanitizeForHeader(attachment.fileName)}"`,

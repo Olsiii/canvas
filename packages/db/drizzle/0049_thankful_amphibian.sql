@@ -1,0 +1,1 @@
+CREATE INDEX "activity_entity_idx" ON "activity" USING btree ("entity_type","entity_id");

@@ -70,6 +70,8 @@ async function authenticateApiRequest(
       email: creator.email,
       name: creator.name,
       avatarUrl: creator.avatarUrl,
+      bio: creator.bio,
+      title: creator.title,
     },
     workspaceId: apiKey.workspaceId,
   };

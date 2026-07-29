@@ -112,6 +112,18 @@ function SignupPage() {
             Log in
           </Link>
         </p>
+
+        <p className="text-muted-foreground text-center text-xs">
+          By signing up, you agree to the{" "}
+          <Link to="/terms" className="underline">
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link to="/privacy" className="underline">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </Card>
     </main>
   );

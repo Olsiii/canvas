@@ -51,6 +51,13 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("Title:");
   });
 
+  it("includes the other participant's name for a DM conversation", () => {
+    const prompt = buildSystemPrompt({ type: "dm", otherUserName: "Ada Lovelace" });
+    expect(prompt).toContain("direct message conversation with Ada Lovelace");
+    expect(prompt).not.toContain("#");
+    expect(prompt).not.toContain("Title:");
+  });
+
   it("omits any brand section when no brand is attached", () => {
     const prompt = buildSystemPrompt({ type: "global" }, null);
     expect(prompt).not.toContain("brand kit");

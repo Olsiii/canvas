@@ -3,7 +3,9 @@ import { BlurhashThumb } from "@/components/blurhash-thumb";
 import { Lightbox } from "@/components/lightbox";
 import type { MentionCandidate } from "@/components/mention-list";
 import { Button } from "@/components/ui/button";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { useSession } from "@/hooks/use-session";
+import { Avatar } from "@/lib/avatar";
 import { shouldStartNewGroup } from "@/lib/chat-grouping";
 import { formatBytes, formatRelativeTime } from "@/lib/format";
 import { createMentionExtension } from "@/lib/mention-extension";
@@ -24,36 +26,6 @@ const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };
 function isEmptyDoc(json: unknown): boolean {
   const doc = json as { content?: { content?: unknown[] }[] } | undefined;
   return !doc?.content?.some((node) => (node.content?.length ?? 0) > 0);
-}
-
-function initials(name: string): string {
-  return name.trim().slice(0, 1).toUpperCase() || "?";
-}
-
-// A small deterministic set of accent tints so avatars aren't all one flat
-// color, without needing per-user color storage — hashed from the name.
-const AVATAR_TINTS = [
-  "bg-accent-soft text-accent",
-  "bg-status-good/15 text-status-good",
-  "bg-status-warning/20 text-status-warning",
-  "bg-status-serious/15 text-status-serious",
-];
-
-function avatarTint(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return AVATAR_TINTS[hash % AVATAR_TINTS.length]!;
-}
-
-function Avatar({ name }: { name: string }) {
-  return (
-    <span
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${avatarTint(name)}`}
-      aria-hidden
-    >
-      {initials(name)}
-    </span>
-  );
 }
 
 export function ChannelMessages({
@@ -109,6 +81,11 @@ export function ChannelMessages({
 
   const threadParent = openThreadId ? all.find((m) => m.id === openThreadId) : undefined;
   const threadReplies = openThreadId ? (repliesByParent.get(openThreadId) ?? []) : [];
+  const threadOpen = !!(openThreadId && threadParent);
+  const { containerRef: threadPanelRef, onKeyDown: threadPanelOnKeyDown } = useModalA11y(
+    () => setOpenThreadId(null),
+    threadOpen,
+  );
 
   return (
     <>
@@ -191,7 +168,15 @@ export function ChannelMessages({
             className="absolute inset-0 bg-black/20"
             onClick={() => setOpenThreadId(null)}
           />
-          <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
+          <div
+            ref={threadPanelRef}
+            onKeyDown={threadPanelOnKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Thread"
+            tabIndex={-1}
+            className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl outline-none"
+          >
             <div className="border-border flex items-center justify-between border-b px-4 py-3">
               <h2 className="text-sm font-semibold">Thread</h2>
               <Button
@@ -286,7 +271,7 @@ function MessageRow({
       {compact ? (
         <span className="w-8 shrink-0" aria-hidden />
       ) : (
-        <Avatar name={message.author.name} />
+        <Avatar name={message.author.name} avatarUrl={message.author.avatarUrl} />
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

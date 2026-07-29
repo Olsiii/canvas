@@ -24,6 +24,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   doc: "Docs",
   channel: "Chat channels",
   message: "Chat messages",
+  dm: "Direct messages",
   form: "Forms",
   automation: "Automations",
   dashboard: "Dashboards",

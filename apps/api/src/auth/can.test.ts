@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { can, isGrantable } from "./can";
 import type { SessionUser } from "./session";
 
-const user: SessionUser = { id: "u1", email: "a@example.com", name: "A", avatarUrl: null };
+const user: SessionUser = {
+  id: "u1",
+  email: "a@example.com",
+  name: "A",
+  avatarUrl: null,
+  bio: null,
+  title: null,
+};
 
 describe("can", () => {
   it("denies non-members", () => {
@@ -109,6 +116,12 @@ describe("can", () => {
     expect(can(user, "imageFolder:delete", { type: "workspace", role: "member" })).toBe(true);
   });
 
+  it("allows guests to view saved Copywriter library items, but only members can delete them", () => {
+    expect(can(user, "libraryCopyItem:view", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "libraryCopyItem:delete", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "libraryCopyItem:delete", { type: "workspace", role: "member" })).toBe(true);
+  });
+
   it("allows guests to view Brain conversations, but only members can send chat messages", () => {
     expect(can(user, "brain:view", { type: "workspace", role: "guest" })).toBe(true);
     expect(can(user, "brain:chat", { type: "workspace", role: "guest" })).toBe(false);
@@ -147,6 +160,11 @@ describe("can", () => {
     expect(can(user, "channel:create", { type: "workspace", role: "guest" })).toBe(false);
     expect(can(user, "channel:create", { type: "workspace", role: "member" })).toBe(true);
     expect(can(user, "message:create", { type: "workspace", role: "guest" })).toBe(true);
+  });
+
+  it("allows guests to start a DM, same tier as posting a message", () => {
+    expect(can(user, "dm:create", { type: "workspace", role: "guest" })).toBe(true);
+    expect(can(user, "dm:create", { type: "workspace", role: null })).toBe(false);
   });
 
   describe("custom role grants/revokes (Phase 6)", () => {

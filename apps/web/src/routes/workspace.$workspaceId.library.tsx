@@ -2,6 +2,7 @@ import type { AppRouter } from "@canvas/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ImageVersionThumb } from "@/components/image-version-thumb";
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { trpc } from "@/lib/trpc";
 import { IMAGE_LIBRARY_ORIGINS, type ImageLibraryOrigin } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
@@ -565,6 +566,7 @@ function LibraryCopyItemDetailPanel({
   deleting: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
 
   async function handleCopy() {
     const bodyText = item.text ?? [item.designCopy, item.caption].filter(Boolean).join("\n\n");
@@ -582,7 +584,15 @@ function LibraryCopyItemDetailPanel({
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
+      <div
+        ref={containerRef}
+        onKeyDown={onKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label={item.label}
+        tabIndex={-1}
+        className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl outline-none"
+      >
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-sm font-semibold">{item.label}</h2>
           <Button
@@ -668,6 +678,8 @@ function LibraryDetailPanel({
   onMove: (folderId: string | null) => void;
   moving: boolean;
 }) {
+  const { containerRef, onKeyDown } = useModalA11y(onClose);
+
   return (
     <div data-testid="library-detail-panel" className="fixed inset-0 z-[60] flex justify-end">
       <button
@@ -677,7 +689,15 @@ function LibraryDetailPanel({
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
+      <div
+        ref={containerRef}
+        onKeyDown={onKeyDown}
+        role="dialog"
+        aria-modal="true"
+        aria-label={asset.altText ?? "Image detail"}
+        tabIndex={-1}
+        className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl outline-none"
+      >
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-sm font-semibold">Image</h2>
           <Button

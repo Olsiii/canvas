@@ -1,11 +1,8 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { Agent, fetch as undiciFetch, type BodyInit, type HeadersInit } from "undici";
 
-/**
- * Blocks outbound fetches to private/link-local/metadata targets (SSRF).
- * Used before webhook + Slack deliveries that take admin-configured URLs.
- */
-export async function assertSafeOutboundUrl(rawUrl: string): Promise<URL> {
+async function resolveAndValidate(rawUrl: string): Promise<{ url: URL; address: string }> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -42,7 +39,58 @@ export async function assertSafeOutboundUrl(rawUrl: string): Promise<URL> {
     }
   }
 
+  return { url, address: addresses[0]! };
+}
+
+/**
+ * Blocks outbound fetches to private/link-local/metadata targets (SSRF).
+ * Used before webhook + Slack deliveries that take admin-configured URLs.
+ *
+ * Note this only validates — it doesn't perform the request, so a caller
+ * that validates here and then calls plain `fetch()` separately has a
+ * DNS-rebinding TOCTOU gap (a fresh lookup at fetch time could resolve
+ * somewhere different than what was just validated). Prefer `safeFetch`
+ * below, which closes that gap; this export stays for the one caller
+ * (import.ts) that needs the validated URL before deciding how to proceed,
+ * not to fetch it immediately.
+ */
+export async function assertSafeOutboundUrl(rawUrl: string): Promise<URL> {
+  const { url } = await resolveAndValidate(rawUrl);
   return url;
+}
+
+/**
+ * Validates `rawUrl` via the same rules as `assertSafeOutboundUrl`, then
+ * fetches it pinned to the exact IP address that was just validated —
+ * closing the DNS-rebinding TOCTOU gap a separate assertSafeOutboundUrl()
+ * + fetch() would have (the second, independent DNS lookup `fetch()` does
+ * internally could resolve a different, private address if an attacker's
+ * DNS server changes its answer between the two lookups). `Host`/SNI still
+ * use the original hostname — only the connection's IP is pinned.
+ */
+export async function safeFetch(
+  rawUrl: string,
+  init?: {
+    method?: string;
+    headers?: HeadersInit;
+    body?: BodyInit;
+    signal?: AbortSignal;
+    redirect?: "follow" | "error" | "manual";
+  },
+): Promise<Response> {
+  const { url, address } = await resolveAndValidate(rawUrl);
+  const family = isIP(address) === 6 ? 6 : 4;
+  const dispatcher = new Agent({
+    connect: {
+      lookup: (_hostname, _options, callback) => callback(null, address, family),
+    },
+  });
+
+  try {
+    return (await undiciFetch(url, { ...init, dispatcher })) as unknown as Response;
+  } finally {
+    void dispatcher.close();
+  }
 }
 
 export function isPrivateOrReservedIp(ip: string): boolean {

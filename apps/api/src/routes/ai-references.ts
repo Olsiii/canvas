@@ -5,6 +5,7 @@ import { uuidv7 } from "uuidv7";
 import { can } from "../auth/can";
 import { getSessionUser } from "../auth/session";
 import { logActivity } from "../lib/activity";
+import { sanitizeFilenameForKey } from "../lib/filename";
 import { processImage } from "../lib/image-processing";
 import { getMembershipRole } from "../lib/membership";
 import { putObject } from "../lib/storage";
@@ -47,7 +48,7 @@ export function registerAiReferenceRoutes(app: FastifyInstance) {
     }
 
     const attachmentId = uuidv7();
-    const originalKey = `ai-references/${workspaceId}/${attachmentId}/${file.filename}`;
+    const originalKey = `ai-references/${workspaceId}/${attachmentId}/${sanitizeFilenameForKey(file.filename)}`;
     await putObject(originalKey, file.buffer, file.mimetype);
 
     let imageAssetId: string | null = null;
@@ -62,7 +63,7 @@ export function registerAiReferenceRoutes(app: FastifyInstance) {
       if (processed) {
         const assetId = uuidv7();
         const versionId = uuidv7();
-        const assetOriginalKey = `image-assets/${workspaceId}/${assetId}/${file.filename}`;
+        const assetOriginalKey = `image-assets/${workspaceId}/${assetId}/${sanitizeFilenameForKey(file.filename)}`;
         thumbKey = `image-assets/${workspaceId}/${assetId}/thumb.webp`;
         await putObject(assetOriginalKey, file.buffer, file.mimetype);
         await putObject(thumbKey, processed.thumbBuffer, processed.thumbContentType);

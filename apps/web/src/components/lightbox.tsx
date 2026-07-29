@@ -1,3 +1,4 @@
+import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { useEffect } from "react";
 
 interface LightboxImage {
@@ -20,23 +21,29 @@ export function Lightbox({
   onIndexChange: (index: number) => void;
 }) {
   const image = images[index];
+  const { containerRef, onKeyDown: onModalKeyDown } = useModalA11y(onClose);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
       if (e.key === "ArrowRight") onIndexChange((index + 1) % images.length);
       if (e.key === "ArrowLeft") onIndexChange((index - 1 + images.length) % images.length);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [index, images.length, onClose, onIndexChange]);
+  }, [index, images.length, onIndexChange]);
 
   if (!image) return null;
 
   return (
     <div
+      ref={containerRef}
+      onKeyDown={onModalKeyDown}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Image: ${image.fileName}`}
+      tabIndex={-1}
       data-testid="lightbox"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 outline-none"
     >
       <a
         href={`/uploads/${image.id}?download=1`}

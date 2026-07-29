@@ -5,7 +5,9 @@ Conventions: UUIDv7 PKs (`id`), `created_at`/`updated_at` timestamptz on all tab
 ## Core
 
 ```sql
-users            (id, email uniq, name, avatar_url, password_hash null, created_at, updated_at)
+users            (id, email uniq, name, avatar_url, bio null, title null, -- title is a cosmetic
+                  password_hash null, created_at, updated_at)              -- profile tag, unrelated
+                                                                            -- to memberships.role
 sessions         (id, user_id fk, expires_at)
 workspaces       (id, name, slug uniq, plan text default 'internal', created_at)
 memberships      (id, workspace_id fk, user_id fk, role enum('owner','admin','member','guest'),
@@ -128,7 +130,10 @@ task_templates   (id, workspace_id fk, name, payload_json jsonb)
 
 docs             (id, workspace_id fk, space_id fk null, title, ydoc_state bytea, deleted_at)
 doc_task_links   (doc_id fk, task_id fk, uniq pair)
-channels         (id, workspace_id fk, name, is_private bool)
+channels         (id, workspace_id fk, name null, is_private bool,     -- name null for DMs (see below)
+                  is_dm bool, dm_key text null uniq per (workspace_id, dm_key) where is_dm)
+                  -- a DM is a channel row: is_dm=true, is_private=true, name=null,
+                  -- dm_key = the 2 participants' user ids sorted+joined (lib/dm-key.ts)
 channel_members  (channel_id fk, user_id fk, uniq pair)
 messages         (id, channel_id fk, author_id fk, parent_message_id fk null,
                   body_json jsonb, deleted_at)

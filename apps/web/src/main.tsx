@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { httpBatchLink } from "@trpc/client";
+import * as Sentry from "@sentry/react";
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { router } from "./router";
+import { ErrorFallback } from "./components/error-fallback";
 import { initSentry } from "./lib/sentry";
 import { trpc } from "./lib/trpc";
 import "./styles/globals.css";
@@ -29,6 +31,8 @@ function App() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <Sentry.ErrorBoundary fallback={ErrorFallback}>
+      <App />
+    </Sentry.ErrorBoundary>
   </StrictMode>,
 );

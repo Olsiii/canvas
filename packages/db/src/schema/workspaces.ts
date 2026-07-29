@@ -131,7 +131,14 @@ export const activity = pgTable(
     payloadJson: jsonb("payload_json"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("activity_workspace_id_idx").on(table.workspaceId)],
+  (table) => [
+    index("activity_workspace_id_idx").on(table.workspaceId),
+    // Task-detail (and similar) activity feeds filter by exactly this pair
+    // (activity.ts's list query) — every mutation writes a row here, so
+    // this table grows unbounded and needs a supporting index rather than
+    // relying on the workspace-scoped one above to narrow it down.
+    index("activity_entity_idx").on(table.entityType, table.entityId),
+  ],
 );
 
 export const notifications = pgTable(

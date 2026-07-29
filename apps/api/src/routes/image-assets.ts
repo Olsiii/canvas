@@ -6,7 +6,9 @@ import { uuidv7 } from "uuidv7";
 import { can } from "../auth/can";
 import { getSessionUser } from "../auth/session";
 import { logActivity } from "../lib/activity";
+import { sanitizeFilenameForKey, sanitizeForHeader } from "../lib/filename";
 import { processImage } from "../lib/image-processing";
+import { isInlineSafeMimeType, safeContentType } from "../lib/mime-safety";
 import { getMembershipRole } from "../lib/membership";
 import { getObject, putObject } from "../lib/storage";
 
@@ -39,7 +41,11 @@ export function registerImageAssetRoutes(app: FastifyInstance) {
     if (!workspaceId || !file) {
       return reply.code(400).send({ error: "Missing file or workspaceId" });
     }
-    if (!file.mimetype.startsWith("image/")) {
+    // svg starts with "image/" but can embed <script> and execute it when
+    // its direct URL is opened as a top-level document — no legitimate use
+    // case here (this library is photos/renders, not vector graphics), so
+    // it's rejected outright rather than merely downgraded at serve time.
+    if (!file.mimetype.startsWith("image/") || file.mimetype.toLowerCase() === "image/svg+xml") {
       return reply.code(400).send({ error: "File must be an image" });
     }
 
@@ -66,7 +72,7 @@ export function registerImageAssetRoutes(app: FastifyInstance) {
     // the S3 keys are namespaced by asset id and must be known before insert.
     const assetId = uuidv7();
     const versionId = uuidv7();
-    const originalKey = `image-assets/${workspaceId}/${assetId}/${file.filename}`;
+    const originalKey = `image-assets/${workspaceId}/${assetId}/${sanitizeFilenameForKey(file.filename)}`;
     const thumbKey = `image-assets/${workspaceId}/${assetId}/thumb.webp`;
     await putObject(originalKey, file.buffer, file.mimetype);
     await putObject(thumbKey, processed.thumbBuffer, processed.thumbContentType);
@@ -125,13 +131,6 @@ export function registerImageAssetRoutes(app: FastifyInstance) {
   );
 }
 
-// Header values can't contain CRLF/quotes without breaking the header (or,
-// worse, injecting one) — same sanitizer as attachments.ts's downloader.
-function sanitizeForHeader(fileName: string): string {
-  // eslint-disable-next-line no-control-regex -- deliberately stripping control chars from a header value
-  return fileName.replace(/["\r\n\x00-\x1f]/g, "");
-}
-
 async function streamVersion(
   req: FastifyRequest<{ Params: { versionId: string }; Querystring?: { download?: string } }>,
   reply: FastifyReply,
@@ -159,15 +158,19 @@ async function streamVersion(
   if (!key) return reply.code(404).send({ error: "Not found" });
 
   const object = await getObject(key);
-  reply.header(
-    "Content-Type",
-    object.ContentType ?? (kind === "thumb" ? "image/webp" : "image/png"),
-  );
+  const rawContentType = object.ContentType ?? (kind === "thumb" ? "image/webp" : "image/png");
+  // Thumbnails and AI-generated originals are always server-produced
+  // (processImage / the image engine adapters, always PNG) — only an
+  // uploaded original's mime is user-controlled and needs downgrading if
+  // it isn't actually a safe-to-render-inline type (see mime-safety.ts).
+  const inlineSafe = kind === "thumb" || isInlineSafeMimeType(rawContentType);
+  reply.header("Content-Type", inlineSafe ? rawContentType : safeContentType(rawContentType));
+  reply.header("X-Content-Type-Options", "nosniff");
   reply.header("Cache-Control", "private, max-age=3600");
   // "Save to your PC" from the Library detail panel — this is the library
   // for everyone, so anyone who can view the asset can pull a local copy,
   // same guard tier as the inline view above (imageAsset:view).
-  if (kind === "file" && req.query?.download) {
+  if (kind === "file" && (req.query?.download || !inlineSafe)) {
     const fileName = key.split("/").pop() ?? `${asset.id}.png`;
     reply.header("Content-Disposition", `attachment; filename="${sanitizeForHeader(fileName)}"`);
   }

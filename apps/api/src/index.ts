@@ -1,6 +1,7 @@
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
+import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify";
@@ -15,6 +16,7 @@ import { registerAiReferenceRoutes } from "./routes/ai-references";
 import { registerApiV1Routes } from "./routes/api-v1";
 import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
+import { registerAvatarRoutes } from "./routes/avatars";
 import { registerBrainRealtimeRoutes } from "./routes/brain-realtime";
 import { registerCopyGenerationRealtimeRoutes } from "./routes/copy-generation-realtime";
 import { registerDocRealtimeRoutes } from "./routes/doc-realtime";
@@ -49,6 +51,17 @@ const app = Fastify({
   routerOptions: { maxParamLength: 5000 },
 });
 
+// This is a pure JSON/binary API (no HTML views of its own), but two of its
+// own routes serve arbitrary user-uploaded bytes (attachments, image-assets
+// — see lib/mime-safety.ts's inline-vs-download content-type guard). Helmet
+// is the second, independent layer: X-Frame-Options stops any of those
+// responses from being framed by an external site, and the default CSP/
+// nosniff/HSTS headers are standard baseline hardening even though most
+// responses here are JSON. crossOriginEmbedderPolicy is off — this API is
+// never embedded as a cross-origin subresource of another origin's COEP'd
+// page, and leaving it on has no benefit here while being a common source
+// of breakage for exactly this kind of cross-origin file-serving route.
+await app.register(helmet, { crossOriginEmbedderPolicy: false });
 await app.register(cors, { origin: env.WEB_URL, credentials: true });
 await app.register(cookie);
 await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
@@ -66,6 +79,7 @@ await app.register(fastifyTRPCPlugin, {
 registerAuthRoutes(app);
 registerApiV1Routes(app);
 registerAttachmentRoutes(app);
+registerAvatarRoutes(app);
 registerImageAssetRoutes(app);
 registerAiReferenceRoutes(app);
 registerImportRoutes(app);

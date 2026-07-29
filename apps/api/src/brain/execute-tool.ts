@@ -31,9 +31,12 @@ export type ToolExecutionContext = {
 
 async function assertWorkerCan(userId: string, workspaceId: string, action: WorkspaceAction) {
   const role = await getMembershipRole(workspaceId, userId);
-  // can() only reads user.id for identity; email/name unused for workspace actions.
+  // can() only reads user.id for identity; the rest are unused for workspace actions.
   if (
-    !can({ id: userId, email: "", name: "", avatarUrl: null }, action, { type: "workspace", role })
+    !can({ id: userId, email: "", name: "", avatarUrl: null, bio: null, title: null }, action, {
+      type: "workspace",
+      role,
+    })
   ) {
     throw new Error(`Forbidden: ${action}`);
   }

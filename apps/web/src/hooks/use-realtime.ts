@@ -1,6 +1,6 @@
-import { realtimeEventSchema } from "@canvas/shared";
+import { realtimeEventSchema, type RealtimeEvent } from "@canvas/shared";
 import { trpc } from "@/lib/trpc";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const RECONNECT_DELAY_MS = 2000;
 
@@ -12,9 +12,20 @@ const RECONNECT_DELAY_MS = 2000;
  * Query. Reconnects on drop with a fixed short delay — without it, a
  * network hiccup would silently and permanently end live updates for the
  * rest of the tab's session, which defeats the point of "live."
+ *
+ * `onEvent`, if given, fires for every parsed event in addition to the
+ * built-in invalidation above — e.g. the DM notification sound needs to
+ * react to the same "message created" events without opening a second
+ * socket. Held in a ref so passing a fresh inline callback each render
+ * doesn't tear down and reconnect the socket.
  */
-export function useRealtime(workspaceId: string | undefined) {
+export function useRealtime(
+  workspaceId: string | undefined,
+  onEvent?: (event: RealtimeEvent) => void,
+) {
   const utils = trpc.useUtils();
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -45,6 +56,8 @@ export function useRealtime(workspaceId: string | undefined) {
         } else if (event.entity === "message") {
           utils.chat.message.list.invalidate({ channelId: event.channelId });
         }
+
+        onEventRef.current?.(event);
       };
 
       socket.onclose = () => {
