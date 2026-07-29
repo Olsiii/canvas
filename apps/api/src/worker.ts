@@ -4,10 +4,14 @@ import { asc, and, eq, isNull } from "drizzle-orm";
 import { getChatClient, type ProviderMessage, type ToolCall } from "./brain";
 import { executeTool } from "./brain/execute-tool";
 import { BRAIN_TOOLS } from "./brain/tools";
+import { getCopyClient, type CopyImage, type CopyVariant } from "./copywriter";
 import { estimateChatCostUsd } from "./lib/ai-usage";
+import { logActivity } from "./lib/activity";
 import { resolveEffectiveBrandKit } from "./lib/brand-kit";
 import { buildSystemPrompt, type BrandContext } from "./lib/brain-system-prompt";
 import { publish as publishBrainEvent } from "./lib/brain-realtime";
+import { fetchApprovedExamples } from "./lib/copywriter";
+import { publishCopyGenerationJob } from "./lib/copy-generation-realtime";
 import { runEmbedding } from "./lib/embedding-runner";
 import { publishImageAssetJob } from "./lib/image-asset-realtime";
 import { processImageJob } from "./lib/image-job-processor";
@@ -19,6 +23,7 @@ import { signWebhookPayload } from "./lib/webhook-signature";
 import { assertSafeOutboundUrl } from "./lib/safe-outbound-url";
 import { BRAIN_QUEUE_NAME, type BrainJobData } from "./queues/brain-queue";
 import { redisConnection } from "./queues/connection";
+import { COPYWRITER_QUEUE_NAME, type CopywriterJobData } from "./queues/copywriter-queue";
 import { EMBEDDING_QUEUE_NAME, type EmbeddingJobData } from "./queues/embedding-queue";
 import { IMAGE_QUEUE_NAME, type ImageJobData } from "./queues/image-queue";
 import { IMPORT_QUEUE_NAME, type ImportJobData } from "./queues/import-queue";
@@ -518,6 +523,171 @@ embeddingWorker.on("failed", (job, err) => {
   console.error(`[worker] embedding ${job?.data.entityType}/${job?.data.entityId} failed:`, err);
 });
 
+// Resolves each frame attachment's stored bytes into vision-ready base64 —
+// same shape as historyToProviderMessages' loadHistoryImage above, reused
+// here for the Copywriter's design/video-frame attachments instead of Brain
+// history images.
+async function loadFrameImage(attachmentId: string): Promise<CopyImage | null> {
+  const attachment = await db.query.attachments.findFirst({
+    where: eq(schema.attachments.id, attachmentId),
+  });
+  if (!attachment?.fileKey) return null;
+  const mediaType = mediaTypeForKey(attachment.fileKey);
+  if (!mediaType) return null;
+  const obj = await getObject(attachment.fileKey);
+  const bytes = await obj.Body?.transformToByteArray();
+  if (!bytes) return null;
+  return { mediaType, data: Buffer.from(bytes).toString("base64") };
+}
+
+const copywriterWorker = new Worker<CopywriterJobData>(
+  COPYWRITER_QUEUE_NAME,
+  async (job) => {
+    const data = job.data;
+    await publishCopyGenerationJob(data.generationId, {
+      status: "generating",
+      generationId: data.generationId,
+    });
+
+    try {
+      const brandKit = await db.query.brandSettings.findFirst({
+        where: eq(schema.brandSettings.id, data.brandKitId),
+      });
+      if (!brandKit) throw new Error(`brand_settings row ${data.brandKitId} not found`);
+
+      const brand = {
+        name: brandKit.name,
+        voice: brandKit.tone,
+        colors: brandKit.paletteJson.length ? brandKit.paletteJson.join(", ") : null,
+        fonts: brandKit.fonts,
+        notes: brandKit.guidelines,
+      };
+
+      const approvedExamples = await fetchApprovedExamples(data.brandKitId);
+      const copyClient = getCopyClient();
+
+      const images = (await Promise.all(data.frameAttachmentIds.map(loadFrameImage))).filter(
+        (img): img is CopyImage => img !== null,
+      );
+      if (images.length === 0) throw new Error("No usable frame images for this generation");
+
+      if (data.kind === "generate") {
+        const result = await copyClient.generateCopy({
+          brand,
+          approvedExamples,
+          copyType: data.copyType,
+          length: data.length,
+          language: data.language,
+          images,
+          isVideoFrames: images.length > 1,
+          extra: data.extra,
+        });
+
+        await db
+          .update(schema.copyGenerations)
+          .set({
+            designRead: result.designRead,
+            variantsJson: result.variants,
+            status: "completed",
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.copyGenerations.id, data.generationId));
+
+        await db.insert(schema.aiUsage).values({
+          workspaceId: data.workspaceId,
+          userId: data.userId,
+          kind: "chat",
+          provider: copyClient.provider,
+          model: copyClient.model,
+          credits: 1,
+          costUsdEst: estimateChatCostUsd(result.inputChars, result.outputChars),
+        });
+
+        await logActivity(
+          data.workspaceId,
+          data.userId,
+          "copy_generation",
+          data.generationId,
+          "copy_generation.generated",
+        );
+      } else {
+        const existing = await db.query.copyGenerations.findFirst({
+          where: eq(schema.copyGenerations.id, data.generationId),
+        });
+        if (!existing) throw new Error(`copy_generations row ${data.generationId} not found`);
+        const variants = existing.variantsJson ?? [];
+        const target = variants[data.variantIndex];
+        if (!target) throw new Error("Variant index out of range");
+
+        const result = await copyClient.refineCopy({
+          brand,
+          approvedExamples,
+          copyType: existing.copyType,
+          length: existing.length,
+          language: existing.language,
+          images,
+          variant: target,
+          instruction: data.instruction,
+        });
+
+        const nextVariants: CopyVariant[] = variants.map((v, i) =>
+          i === data.variantIndex ? result.variant : v,
+        );
+        await db
+          .update(schema.copyGenerations)
+          .set({ variantsJson: nextVariants, updatedAt: new Date() })
+          .where(eq(schema.copyGenerations.id, data.generationId));
+
+        await db.insert(schema.aiUsage).values({
+          workspaceId: data.workspaceId,
+          userId: data.userId,
+          kind: "chat",
+          provider: copyClient.provider,
+          model: copyClient.model,
+          credits: 1,
+          costUsdEst: estimateChatCostUsd(result.inputChars, result.outputChars),
+        });
+
+        await logActivity(
+          data.workspaceId,
+          data.userId,
+          "copy_generation",
+          data.generationId,
+          "copy_generation.refined",
+        );
+      }
+
+      await publishCopyGenerationJob(data.generationId, {
+        status: "done",
+        generationId: data.generationId,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Copy generation failed";
+      // A failed *refine* leaves the row's already-completed variants alone
+      // — only a failed initial *generate* (which has no variants yet)
+      // should flip the row itself to 'failed'.
+      if (data.kind === "generate") {
+        await db
+          .update(schema.copyGenerations)
+          .set({ status: "failed", errorMessage: message, updatedAt: new Date() })
+          .where(eq(schema.copyGenerations.id, data.generationId));
+      }
+      await publishCopyGenerationJob(data.generationId, {
+        status: "error",
+        generationId: data.generationId,
+        message,
+      });
+      throw err;
+    }
+  },
+  { connection: redisConnection },
+);
+
+copywriterWorker.on("failed", (job, err) => {
+  captureException(err);
+  console.error(`[worker] copywriter job ${job?.id} failed:`, err);
+});
+
 console.log(
-  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}", "${SLACK_QUEUE_NAME}", "${EMBEDDING_QUEUE_NAME}"`,
+  `[worker] listening on queues "${IMAGE_QUEUE_NAME}", "${BRAIN_QUEUE_NAME}", "${SCHEDULER_QUEUE_NAME}", "${WEBHOOK_QUEUE_NAME}", "${IMPORT_QUEUE_NAME}", "${SLACK_QUEUE_NAME}", "${EMBEDDING_QUEUE_NAME}", "${COPYWRITER_QUEUE_NAME}"`,
 );

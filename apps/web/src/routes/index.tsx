@@ -1,4 +1,5 @@
 import { MEMBERSHIP_ROLES, type MembershipRole } from "@canvas/shared";
+import { CanvasLogo } from "@/components/canvas-logo";
 import { RequireAuth } from "@/components/require-auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,9 +48,7 @@ function Dashboard() {
     <main className="mx-auto flex min-h-svh max-w-lg flex-col gap-6 px-4 py-16">
       <Card className="flex items-center justify-between p-4">
         <div className="flex items-center gap-3">
-          <span className="bg-accent text-accent-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg font-semibold">
-            C
-          </span>
+          <CanvasLogo size={72} />
           <div>
             <h1 className="text-xl font-semibold">Canvas</h1>
             <p className="text-muted-foreground text-sm">{user?.email}</p>

@@ -60,9 +60,14 @@ notifications    (id, user_id fk, activity_id fk, read_at null)
 brand_settings   (id, workspace_id fk, name text default 'Default',        -- "brand kits": many per workspace
                   is_default boolean default false,                       -- workspace's fallback kit
                   palette_json jsonb, tone text,
-                  logo_asset_id fk null, guidelines text)
+                  logo_asset_id fk null, guidelines text,
+                  fonts text null,                                        -- Copywriter: brand font names
+                  default_copy_language enum('sq','en','both') default 'sq')
 
-image_folders    (id, workspace_id fk, name, created_by fk, deleted_at)   -- organizes the Library
+image_folders    (id, workspace_id fk, name, created_by fk, deleted_at,
+                  parent_folder_id fk self null,           -- nesting reserved for Copy > brand kit (below)
+                  kind enum('custom','copy_root','copy_client') default 'custom',
+                  brand_kit_id fk brand_settings null)      -- set only on 'copy_client' folders
 
 image_assets     (id, workspace_id fk, created_by fk,
                   origin enum('upload','generation'),
@@ -85,6 +90,32 @@ brain_messages   (id, conversation_id fk, role enum('user','assistant','tool'),
 
 ai_usage         (id, workspace_id fk, user_id fk, kind enum('generate','edit','chat','vision'),
                   provider, model, credits int, cost_usd_est numeric, created_at)
+```
+
+## Copywriter
+
+Ported from a standalone internal tool (trekuartista-copy) into its own Collaborate-section page.
+Reuses `brand_settings` as the "client" brand profile rather than a parallel entity — a copy
+generation's brand voice/colors/fonts/notes come from the brand kit it's linked to.
+
+```sql
+copy_generations (id, workspace_id fk, brand_kit_id fk brand_settings cascade,
+                  created_by fk users null,                              -- attribution only, not ownership gate
+                  source_attachment_id fk attachments null,              -- design thumbnail (first frame if video)
+                  copy_type text, length enum('short','medium','long'),
+                  language enum('sq','en','both'),
+                  status enum('pending','completed','failed') default 'pending',
+                  design_read text null, variants_json jsonb null,       -- Claude's structured output
+                  approved_json jsonb default '[]',                      -- brand-voice flywheel: fed back as few-shot examples
+                  error_message text null, deleted_at, created_at, updated_at)
+
+library_copy_items (id, workspace_id fk, folder_id fk image_folders null,   -- Library > Copy > <brand kit>
+                  brand_kit_id fk brand_settings null, source_generation_id fk copy_generations null,
+                  thumbnail_attachment_id fk attachments null,
+                  label text, copy_type text, length enum('short','medium','long'),
+                  language enum('sq','en','both'),
+                  text text null, design_copy text null, caption text null, -- denormalized from the chosen variant
+                  created_by fk users null, deleted_at, created_at, updated_at)
 ```
 
 ## Phase 3+ (create when the phase starts, listed for foresight)

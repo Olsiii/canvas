@@ -1,4 +1,5 @@
 import { Button, buttonVariants } from "@/components/ui/button";
+import { CanvasLogo } from "@/components/canvas-logo";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -47,13 +48,18 @@ function SignupPage() {
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 px-4">
       <Card className="w-full max-w-sm space-y-6 p-6">
-        <div>
-          <h1 className="text-xl font-semibold">Create your account</h1>
-          {invite.data && (
-            <p className="text-muted-foreground mt-1 text-sm">
-              You've been invited to join <strong>{invite.data.workspaceName}</strong>
-            </p>
-          )}
+        <div className="flex items-center gap-3">
+          <CanvasLogo size={64} />
+          <div>
+            <h1 className="text-xl font-semibold">Create your account</h1>
+            {invite.data ? (
+              <p className="text-muted-foreground mt-1 text-sm">
+                You've been invited to join <strong>{invite.data.workspaceName}</strong>
+              </p>
+            ) : (
+              <p className="text-muted-foreground text-xs">Canvas</p>
+            )}
+          </div>
         </div>
 
         <form

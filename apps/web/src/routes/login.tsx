@@ -1,4 +1,5 @@
 import { JUST_LOGGED_IN_KEY } from "@/components/login-summary-panel";
+import { CanvasLogo } from "@/components/canvas-logo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,13 @@ function LoginPage() {
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 px-4">
       <Card className="w-full max-w-sm space-y-6 p-6">
-        <h1 className="text-xl font-semibold">Log in</h1>
+        <div className="flex items-center gap-3">
+          <CanvasLogo size={64} />
+          <div>
+            <h1 className="text-xl font-semibold">Log in</h1>
+            <p className="text-muted-foreground text-xs">Canvas</p>
+          </div>
+        </div>
 
         <form
           className="space-y-4"

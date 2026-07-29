@@ -7,12 +7,25 @@ import { IMAGE_LIBRARY_ORIGINS, type ImageLibraryOrigin } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { inferRouterOutputs } from "@trpc/server";
-import { Download, FolderPlus, Images, Loader2, Trash2, UploadCloud, X } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  Copy as CopyIcon,
+  Download,
+  FolderPlus,
+  Images,
+  Loader2,
+  Trash2,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type LibraryItem = RouterOutputs["imageAsset"]["library"]["items"][number];
+type LibraryFolder = RouterOutputs["imageFolder"]["list"][number];
+type LibraryCopyItem = RouterOutputs["copywriter"]["listLibraryItems"][number];
 
 export const libraryRoute = createRoute({
   getParentRoute: () => workspaceShellRoute,
@@ -34,6 +47,7 @@ const ORIGIN_TAB_LABELS: Record<ImageLibraryOrigin, string> = {
 const TILE_WIDTH = 128;
 const TILE_GAP = 12;
 const ROW_HEIGHT = 128 + 20 + TILE_GAP; // thumb + caption + gap
+const COPY_ITEM_ROW_HEIGHT = 92; // saved-copy card + gap, in the Copy > brand kit view
 
 function LibraryPage() {
   const { workspaceId } = libraryRoute.useParams();
@@ -75,6 +89,43 @@ function LibraryPage() {
     if (!name) return;
     createFolder.mutate({ workspaceId, name });
   }
+
+  // The Copywriter's "Copy" folder is the one place this page's folders
+  // nest (Copy > one child per brand kit — see lib/copy-library.ts on the
+  // API side). Everywhere else stays flat: the "New folder" button never
+  // creates children, so this is the only nesting ever encountered here.
+  const activeFolder = folders.data?.find((f) => f.id === folderId);
+  const copyRootFolder = folders.data?.find((f) => f.kind === "copy_root");
+  const isBrowsingCopyChildren =
+    activeFolder?.kind === "copy_root" || activeFolder?.kind === "copy_client";
+  // Top level shows every root folder (user-created "custom" ones plus the
+  // system-managed "Copy" root, if it exists yet) side by side; drilling
+  // into "Copy" swaps to its brand-kit children instead.
+  const visibleFolders = isBrowsingCopyChildren
+    ? (folders.data?.filter((f) => f.parentFolderId === copyRootFolder?.id) ?? [])
+    : (folders.data?.filter((f) => f.parentFolderId === null) ?? []);
+
+  const [openCopyItemId, setOpenCopyItemId] = useState<string | null>(null);
+  const copyItems = trpc.copywriter.listLibraryItems.useQuery(
+    { folderId: activeFolder?.id ?? "" },
+    { enabled: activeFolder?.kind === "copy_client" },
+  );
+  const deleteCopyItem = trpc.copywriter.deleteLibraryItem.useMutation({
+    onSuccess: () => {
+      void utils.copywriter.listLibraryItems.invalidate({ folderId: activeFolder?.id ?? "" });
+      setOpenCopyItemId(null);
+    },
+  });
+  const openCopyItem = copyItems.data?.find((i) => i.id === openCopyItemId) ?? null;
+
+  const copyListRef = useRef<HTMLDivElement>(null);
+  const copyItemsList = copyItems.data ?? [];
+  const copyVirtualizer = useVirtualizer({
+    count: copyItemsList.length,
+    getScrollElement: () => copyListRef.current,
+    estimateSize: () => COPY_ITEM_ROW_HEIGHT,
+    overscan: 6,
+  });
 
   const library = trpc.imageAsset.library.useInfiniteQuery(
     { workspaceId, search: debouncedSearch || undefined, origin, folderId },
@@ -179,75 +230,93 @@ function LibraryPage() {
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelected}
-            className="hidden"
-            data-testid="library-upload-input"
-          />
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            data-testid="library-upload-button"
-            className="gap-1.5"
-          >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <UploadCloud className="h-3.5 w-3.5" aria-hidden />
-            )}
-            {uploading ? "Uploading…" : "Upload image"}
-          </Button>
-          {uploadError && <p className="text-status-critical text-xs">{uploadError}</p>}
-        </div>
+        {!isBrowsingCopyChildren && (
+          <div className="flex flex-col items-end gap-1">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelected}
+              className="hidden"
+              data-testid="library-upload-input"
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="library-upload-button"
+              className="gap-1.5"
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <UploadCloud className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {uploading ? "Uploading…" : "Upload image"}
+            </Button>
+            {uploadError && <p className="text-status-critical text-xs">{uploadError}</p>}
+          </div>
+        )}
       </div>
 
-      <div className="mb-3 flex items-center gap-3">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by alt text or tag…"
-          className="h-8 max-w-xs text-sm"
-          data-testid="library-search"
-        />
-        <div className="flex gap-1">
-          {IMAGE_LIBRARY_ORIGINS.map((o) => (
-            <button
-              key={o}
-              type="button"
-              onClick={() => setOrigin(o)}
-              data-testid={`library-origin-${o}`}
-              className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                origin === o
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-border text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {ORIGIN_TAB_LABELS[o]}
-            </button>
-          ))}
+      {!isBrowsingCopyChildren && (
+        <div className="mb-3 flex items-center gap-3">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by alt text or tag…"
+            className="h-8 max-w-xs text-sm"
+            data-testid="library-search"
+          />
+          <div className="flex gap-1">
+            {IMAGE_LIBRARY_ORIGINS.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setOrigin(o)}
+                data-testid={`library-origin-${o}`}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  origin === o
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {ORIGIN_TAB_LABELS[o]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setFolderId(undefined)}
-          data-testid="library-folder-all"
-          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-            folderId === undefined
-              ? "border-accent bg-accent-soft text-accent"
-              : "border-border text-muted-foreground hover:bg-muted"
-          }`}
-        >
-          All folders
-        </button>
-        {folders.data?.map((folder) => (
+        {isBrowsingCopyChildren ? (
+          <button
+            type="button"
+            onClick={() =>
+              setFolderId(activeFolder?.kind === "copy_client" ? copyRootFolder?.id : undefined)
+            }
+            data-testid="library-folder-back"
+            className="border-border text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs"
+          >
+            <ChevronLeft className="h-3 w-3" aria-hidden />
+            Back
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setFolderId(undefined)}
+            data-testid="library-folder-all"
+            className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+              folderId === undefined
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            All folders
+          </button>
+        )}
+        {visibleFolders.map((folder) => (
           <span
             key={folder.id}
             className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
@@ -260,65 +329,119 @@ function LibraryPage() {
               type="button"
               onClick={() => setFolderId(folder.id)}
               data-testid={`library-folder-${folder.id}`}
+              className="flex items-center gap-1"
             >
+              {folder.kind === "copy_root" && <CopyIcon className="h-3 w-3" aria-hidden />}
               {folder.name}
             </button>
-            <button
-              type="button"
-              onClick={() => deleteFolder.mutate({ folderId: folder.id })}
-              aria-label={`Delete folder ${folder.name}`}
-              data-testid={`library-folder-delete-${folder.id}`}
-              className="hover:text-status-critical"
-            >
-              <X className="h-3 w-3" aria-hidden />
-            </button>
+            {/* Copy root/client folders are auto-provisioned by the Copywriter
+                (see lib/copy-library.ts) — not user-deletable from here. */}
+            {folder.kind === "custom" && (
+              <button
+                type="button"
+                onClick={() => deleteFolder.mutate({ folderId: folder.id })}
+                aria-label={`Delete folder ${folder.name}`}
+                data-testid={`library-folder-delete-${folder.id}`}
+                className="hover:text-status-critical"
+              >
+                <X className="h-3 w-3" aria-hidden />
+              </button>
+            )}
           </span>
         ))}
-        {addingFolder ? (
-          <form onSubmit={handleCreateFolder} className="flex items-center gap-1">
-            <Input
-              autoFocus
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              placeholder="Folder name, e.g. Zone Club"
-              className="h-7 w-40 text-xs"
-              data-testid="library-folder-new-name"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              variant="outline"
-              disabled={createFolder.isPending || !newFolderName.trim()}
-              data-testid="library-folder-new-submit"
-            >
-              Add
-            </Button>
-            <Button
+        {!isBrowsingCopyChildren &&
+          (addingFolder ? (
+            <form onSubmit={handleCreateFolder} className="flex items-center gap-1">
+              <Input
+                autoFocus
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="Folder name, e.g. Zone Club"
+                className="h-7 w-40 text-xs"
+                data-testid="library-folder-new-name"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                disabled={createFolder.isPending || !newFolderName.trim()}
+                data-testid="library-folder-new-submit"
+              >
+                Add
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setAddingFolder(false);
+                  setNewFolderName("");
+                }}
+              >
+                Cancel
+              </Button>
+            </form>
+          ) : (
+            <button
               type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setAddingFolder(false);
-                setNewFolderName("");
-              }}
+              onClick={() => setAddingFolder(true)}
+              data-testid="library-folder-new"
+              className="border-border text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs"
             >
-              Cancel
-            </Button>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAddingFolder(true)}
-            data-testid="library-folder-new"
-            className="border-border text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-full border border-dashed px-2.5 py-1 text-xs"
-          >
-            <FolderPlus className="h-3 w-3" aria-hidden />
-            New folder
-          </button>
-        )}
+              <FolderPlus className="h-3 w-3" aria-hidden />
+              New folder
+            </button>
+          ))}
       </div>
 
-      {library.isLoading ? (
+      {activeFolder?.kind === "copy_root" ? (
+        <div
+          className="text-muted-foreground rounded-md border p-6 text-center text-sm"
+          data-testid="library-empty"
+        >
+          Pick a brand kit above to view its saved copy.
+        </div>
+      ) : activeFolder?.kind === "copy_client" ? (
+        copyItems.isLoading ? (
+          <p className="text-muted-foreground text-sm">Loading…</p>
+        ) : copyItemsList.length === 0 ? (
+          <div
+            className="text-muted-foreground rounded-md border p-6 text-center text-sm"
+            data-testid="library-empty"
+          >
+            No copy saved for this brand kit yet — use "Save to Library" from the Copywriter.
+          </div>
+        ) : (
+          <div
+            ref={copyListRef}
+            className="min-h-0 flex-1 overflow-y-auto"
+            data-testid="library-copy-list"
+          >
+            <div style={{ height: copyVirtualizer.getTotalSize(), position: "relative" }}>
+              {copyVirtualizer.getVirtualItems().map((virtualRow) => {
+                const item = copyItemsList[virtualRow.index];
+                if (!item) return null;
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: virtualRow.size,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                    className="pb-2"
+                  >
+                    <CopyItemCard item={item} onSelect={() => setOpenCopyItemId(item.id)} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )
+      ) : library.isLoading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
       ) : items.length === 0 ? (
         <div
@@ -382,7 +505,10 @@ function LibraryPage() {
       {openAsset && (
         <LibraryDetailPanel
           asset={openAsset}
-          folders={folders.data ?? []}
+          // Only user-created folders are offered here — the Copy root/client
+          // folders are Copywriter-managed (see lib/copy-library.ts) and
+          // never hold image assets.
+          folders={folders.data?.filter((f) => f.kind === "custom") ?? []}
           onClose={() => setOpenAssetId(null)}
           onDelete={() => deleteAsset.mutate({ assetId: openAsset.id })}
           deleting={deleteAsset.isPending}
@@ -392,6 +518,126 @@ function LibraryPage() {
           moving={moveAsset.isPending}
         />
       )}
+
+      {openCopyItem && (
+        <LibraryCopyItemDetailPanel
+          item={openCopyItem}
+          onClose={() => setOpenCopyItemId(null)}
+          onDelete={() => deleteCopyItem.mutate({ itemId: openCopyItem.id })}
+          deleting={deleteCopyItem.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function CopyItemCard({ item, onSelect }: { item: LibraryCopyItem; onSelect: () => void }) {
+  const preview = item.text ?? item.designCopy ?? item.caption ?? "";
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      data-testid={`library-copy-item-${item.id}`}
+      className="border-border hover:bg-muted flex w-full flex-col items-start gap-1 rounded-md border p-3 text-left text-xs"
+    >
+      <span className="flex items-center gap-1.5 font-medium">
+        <CopyIcon className="h-3.5 w-3.5" aria-hidden />
+        {item.label}
+      </span>
+      <span className="text-muted-foreground line-clamp-2">{preview}</span>
+      <span className="text-muted-foreground text-[11px]">
+        {item.copyType} · {item.length} · {item.language}
+      </span>
+    </button>
+  );
+}
+
+function LibraryCopyItemDetailPanel({
+  item,
+  onClose,
+  onDelete,
+  deleting,
+}: {
+  item: LibraryCopyItem;
+  onClose: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    const bodyText = item.text ?? [item.designCopy, item.caption].filter(Boolean).join("\n\n");
+    await navigator.clipboard.writeText(bodyText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <div data-testid="library-copy-detail-panel" className="fixed inset-0 z-[60] flex justify-end">
+      <button
+        type="button"
+        aria-label="Close copy detail"
+        className="absolute inset-0 bg-black/20"
+        onClick={onClose}
+      />
+      <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
+        <div className="border-border flex items-center justify-between border-b px-4 py-3">
+          <h2 className="text-sm font-semibold">{item.label}</h2>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-sm">
+          <p className="text-muted-foreground text-xs">
+            {item.copyType} · {item.length} · {item.language} ·{" "}
+            {new Date(item.createdAt).toLocaleString()}
+          </p>
+          {item.text && <p className="whitespace-pre-wrap">{item.text}</p>}
+          {item.designCopy && (
+            <div>
+              <p className="text-xs font-medium">Design copy</p>
+              <p className="whitespace-pre-wrap">{item.designCopy}</p>
+            </div>
+          )}
+          {item.caption && (
+            <div>
+              <p className="text-xs font-medium">Caption</p>
+              <p className="whitespace-pre-wrap">{item.caption}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="border-border flex gap-2 border-t p-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleCopy}
+            className="gap-1.5"
+            data-testid="library-copy-item-copy"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <CopyIcon className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {copied ? "Copied" : "Copy text"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onDelete}
+            disabled={deleting}
+            data-testid="library-copy-item-delete"
+            className="text-status-critical gap-1.5"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -406,7 +652,7 @@ function LibraryDetailPanel({
   moving,
 }: {
   asset: LibraryItem;
-  folders: { id: string; name: string }[];
+  folders: Pick<LibraryFolder, "id" | "name">[];
   onClose: () => void;
   onDelete: () => void;
   deleting: boolean;

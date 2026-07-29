@@ -382,7 +382,7 @@ export function GenerationPanel({
             </div>
           )}
 
-          {(folders.data?.length ?? 0) > 0 && (
+          {(folders.data?.filter((f) => f.kind === "custom").length ?? 0) > 0 && (
             <div>
               <label htmlFor="gen-folder" className="mb-1 block text-xs font-medium">
                 Save to folder
@@ -395,11 +395,13 @@ export function GenerationPanel({
                 className="border-border bg-background h-8 w-full rounded border text-sm"
               >
                 <option value="">Library (no folder)</option>
-                {folders.data?.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
+                {folders.data
+                  ?.filter((folder) => folder.kind === "custom")
+                  .map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
               </select>
             </div>
           )}

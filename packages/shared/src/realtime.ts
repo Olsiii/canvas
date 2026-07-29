@@ -71,3 +71,16 @@ export const imageAssetJobEventSchema = z.object({
 });
 
 export type ImageAssetJobEvent = z.infer<typeof imageAssetJobEventSchema>;
+
+// Copywriter (Collaborate section): live job status for a copy_generations
+// row, same "own WS channel keyed by the row's own id" shape as
+// imageAssetJobEventSchema above — a generate/refine call can take a few
+// seconds (a real Claude round trip), so the UI needs queued -> generating
+// -> done/error without polling, not just a generic board invalidation.
+export const copyGenerationJobEventSchema = z.object({
+  status: z.enum(["queued", "generating", "done", "error"]),
+  generationId: z.string().uuid(),
+  message: z.string().optional(),
+});
+
+export type CopyGenerationJobEvent = z.infer<typeof copyGenerationJobEventSchema>;

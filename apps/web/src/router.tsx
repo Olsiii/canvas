@@ -19,6 +19,9 @@ import { formEditorRoute } from "./routes/workspace.$workspaceId.forms.$formId";
 import { automationsListRoute } from "./routes/workspace.$workspaceId.automations";
 import { automationEditorRoute } from "./routes/workspace.$workspaceId.automations.$automationId";
 import { brandKitsRoute } from "./routes/workspace.$workspaceId.brand-kits";
+import { copywriterListRoute } from "./routes/workspace.$workspaceId.copywriter";
+import { copywriterWorkspaceRoute } from "./routes/workspace.$workspaceId.copywriter.$brandKitId";
+import { copywriterHistoryRoute } from "./routes/workspace.$workspaceId.copywriter.history";
 import { dashboardsListRoute } from "./routes/workspace.$workspaceId.dashboards";
 import { dashboardEditorRoute } from "./routes/workspace.$workspaceId.dashboards.$dashboardId";
 import { goalsListRoute } from "./routes/workspace.$workspaceId.goals";
@@ -63,6 +66,9 @@ const routeTree = rootRoute.addChildren([
     brandKitsRoute,
     semanticSearchRoute,
     libraryRoute,
+    copywriterListRoute,
+    copywriterHistoryRoute,
+    copywriterWorkspaceRoute,
   ]),
 ]);
 

@@ -50,16 +50,38 @@ export const imageFolderRouter = router({
     if (!folder) throw new TRPCError({ code: "NOT_FOUND" });
     await assertCan(ctx.user, folder.workspaceId, "imageFolder:delete");
 
-    // Organization, not ownership — the images themselves stay, just unfiled.
-    await db
-      .update(schema.imageAssets)
-      .set({ folderId: null, updatedAt: new Date() })
-      .where(eq(schema.imageAssets.folderId, folder.id));
+    // Only one level of nesting ever exists (the Copywriter's "Copy" root ->
+    // one child per brand kit — see lib/copy-library.ts), so a plain
+    // (non-recursive) child lookup covers every folder this delete can
+    // possibly cascade into.
+    const children = await db.query.imageFolders.findMany({
+      where: and(
+        eq(schema.imageFolders.parentFolderId, folder.id),
+        isNull(schema.imageFolders.deletedAt),
+      ),
+    });
+    const folderIds = [folder.id, ...children.map((c) => c.id)];
 
-    await db
-      .update(schema.imageFolders)
-      .set({ deletedAt: new Date() })
-      .where(eq(schema.imageFolders.id, folder.id));
+    // Organization, not ownership — the images/saved copy themselves stay,
+    // just unfiled.
+    for (const id of folderIds) {
+      await db
+        .update(schema.imageAssets)
+        .set({ folderId: null, updatedAt: new Date() })
+        .where(eq(schema.imageAssets.folderId, id));
+      await db
+        .update(schema.libraryCopyItems)
+        .set({ folderId: null, updatedAt: new Date() })
+        .where(eq(schema.libraryCopyItems.folderId, id));
+    }
+
+    const now = new Date();
+    for (const id of folderIds) {
+      await db
+        .update(schema.imageFolders)
+        .set({ deletedAt: now })
+        .where(eq(schema.imageFolders.id, id));
+    }
 
     await logActivity(
       folder.workspaceId,

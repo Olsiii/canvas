@@ -55,3 +55,4 @@ export * from "./schemas/roles";
 export * from "./schemas/search";
 export * from "./schemas/ai-usage";
 export * from "./schemas/admin";
+export * from "./schemas/copywriter";

@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   MessageSquare,
   Palette,
+  PenSquare,
   ShieldCheck,
   Sparkles,
   Target,
@@ -45,6 +46,7 @@ const NAV_GROUPS: { label: string; entries: NavEntry[] }[] = [
       { label: "Forms", to: "/w/$workspaceId/forms", icon: ClipboardList },
       { label: "Brand Kits", to: "/w/$workspaceId/brand-kits", icon: Palette },
       { label: "Library", to: "/w/$workspaceId/library", icon: Images },
+      { label: "Copywriter", to: "/w/$workspaceId/copywriter", icon: PenSquare },
     ],
   },
   {

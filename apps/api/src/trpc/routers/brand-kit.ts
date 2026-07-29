@@ -70,6 +70,8 @@ export const brandKitRouter = router({
         guidelines: input.guidelines ?? null,
         logoAssetId: input.logoAssetId ?? null,
         imageProvider: input.imageProvider ?? "gemini",
+        fonts: input.fonts ?? null,
+        ...(input.defaultCopyLanguage ? { defaultCopyLanguage: input.defaultCopyLanguage } : {}),
       })
       .returning();
     if (!created) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -96,6 +98,10 @@ export const brandKitRouter = router({
         ...(input.guidelines !== undefined ? { guidelines: input.guidelines } : {}),
         ...(input.logoAssetId !== undefined ? { logoAssetId: input.logoAssetId } : {}),
         ...(input.imageProvider !== undefined ? { imageProvider: input.imageProvider } : {}),
+        ...(input.fonts !== undefined ? { fonts: input.fonts } : {}),
+        ...(input.defaultCopyLanguage !== undefined
+          ? { defaultCopyLanguage: input.defaultCopyLanguage }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(schema.brandSettings.id, input.brandKitId))

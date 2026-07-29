@@ -316,6 +316,20 @@
       "when": 1785238903117,
       "tag": "0044_bumpy_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1785245852615,
+      "tag": "0045_add_copywriter",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1785248450756,
+      "tag": "0046_add_copy_library",
+      "breakpoints": true
     }
   ]
 }

@@ -84,31 +84,44 @@ export function ChannelMembersPanel({
           )}
         </div>
 
-        {addable.length > 0 && (
-          <form onSubmit={handleAdd} className="border-border flex items-center gap-2 border-t p-3">
-            <select
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              aria-label="Add a member"
-              className="border-border bg-background h-9 flex-1 rounded-md border px-2 text-sm"
+        {!workspaceMembers.isLoading &&
+          (addable.length > 0 ? (
+            <form
+              onSubmit={handleAdd}
+              className="border-border flex items-center gap-2 border-t p-3"
             >
-              <option value="">Add someone…</option>
-              {addable.map((m) => (
-                <option key={m.userId} value={m.userId}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={!selectedUserId || addMember.isPending}
-              data-testid="channel-member-add"
+              <select
+                value={selectedUserId}
+                onChange={(e) => setSelectedUserId(e.target.value)}
+                aria-label="Add a member"
+                className="border-border bg-background h-9 flex-1 rounded-md border px-2 text-sm"
+              >
+                <option value="">Add someone…</option>
+                {addable.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!selectedUserId || addMember.isPending}
+                data-testid="channel-member-add"
+              >
+                Add
+              </Button>
+            </form>
+          ) : (
+            <p
+              className="text-muted-foreground border-border border-t p-3 text-xs"
+              data-testid="channel-members-none-addable"
             >
-              Add
-            </Button>
-          </form>
-        )}
+              {(workspaceMembers.data?.length ?? 0) <= 1
+                ? "You're the only member of this workspace — invite teammates first, then add them here."
+                : "Everyone in this workspace is already in this channel."}
+            </p>
+          ))}
       </div>
     </div>
   );

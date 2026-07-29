@@ -166,6 +166,10 @@ const MIN_ROLE: Record<WorkspaceAction, MembershipRole> = {
   // via a custom role (e.g. a "Finance Manager" template) same as any
   // other admin-tier action above.
   "timeEntry:viewAll": "admin",
+  // Same tier as brain:chat/imageAsset:create — costs real money (ai_usage),
+  // not a workspace-wide concern. Editing the underlying brand kit (voice/
+  // colors/fonts) still requires brandSettings:update (admin).
+  "copyGeneration:create": "member",
 };
 
 // Actions a custom role's grants or a space override's `allow: true` can

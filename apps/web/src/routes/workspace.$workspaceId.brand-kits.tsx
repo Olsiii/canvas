@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import {
+  COPY_LANGUAGES,
   DEFAULT_IMAGE_PROVIDER,
   IMAGE_PROVIDER_LABELS,
   IMAGE_PROVIDERS,
+  type CopyLanguage,
   type ImageProvider,
 } from "@canvas/shared";
 import { createRoute } from "@tanstack/react-router";
@@ -17,6 +19,12 @@ import { workspaceShellRoute } from "./workspace.$workspaceId";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type BrandKit = RouterOutputs["brandKit"]["list"][number];
+
+const COPY_LANGUAGE_LABELS: Record<CopyLanguage, string> = {
+  sq: "Shqip",
+  en: "English",
+  both: "Both",
+};
 
 export const brandKitsRoute = createRoute({
   getParentRoute: () => workspaceShellRoute,
@@ -188,6 +196,10 @@ function BrandKitForm({
   const [imageProvider, setImageProvider] = useState<ImageProvider>(
     (kit?.imageProvider as ImageProvider) ?? DEFAULT_IMAGE_PROVIDER,
   );
+  const [fonts, setFonts] = useState(kit?.fonts ?? "");
+  const [defaultCopyLanguage, setDefaultCopyLanguage] = useState<CopyLanguage>(
+    (kit?.defaultCopyLanguage as CopyLanguage) ?? "sq",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const create = trpc.brandKit.create.useMutation({
@@ -218,6 +230,8 @@ function BrandKitForm({
       tone: tone.trim() || null,
       guidelines: guidelines.trim() || null,
       imageProvider,
+      fonts: fonts.trim() || null,
+      defaultCopyLanguage,
     };
     if (kit) {
       update.mutate({ brandKitId: kit.id, ...fields });
@@ -280,6 +294,36 @@ function BrandKitForm({
           rows={2}
           className="border-border focus-visible:ring-primary w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2"
         />
+      </div>
+      <div>
+        <label htmlFor="brand-kit-fonts" className="mb-1 block text-xs font-medium">
+          Fonts
+        </label>
+        <Input
+          id="brand-kit-fonts"
+          data-testid="brand-kit-fonts"
+          value={fonts}
+          onChange={(e) => setFonts(e.target.value)}
+          placeholder="Poppins Bold, Helvetica"
+        />
+      </div>
+      <div>
+        <label htmlFor="brand-kit-copy-language" className="mb-1 block text-xs font-medium">
+          Default copy language
+        </label>
+        <select
+          id="brand-kit-copy-language"
+          data-testid="brand-kit-copy-language"
+          value={defaultCopyLanguage}
+          onChange={(e) => setDefaultCopyLanguage(e.target.value as CopyLanguage)}
+          className="border-border bg-background h-8 w-full rounded border text-sm"
+        >
+          {COPY_LANGUAGES.map((lang) => (
+            <option key={lang} value={lang}>
+              {COPY_LANGUAGE_LABELS[lang]}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label htmlFor="brand-kit-image-engine" className="mb-1 block text-xs font-medium">

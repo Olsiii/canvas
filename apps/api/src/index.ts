@@ -16,6 +16,7 @@ import { registerApiV1Routes } from "./routes/api-v1";
 import { registerAttachmentRoutes } from "./routes/attachments";
 import { registerAuthRoutes } from "./routes/auth";
 import { registerBrainRealtimeRoutes } from "./routes/brain-realtime";
+import { registerCopyGenerationRealtimeRoutes } from "./routes/copy-generation-realtime";
 import { registerDocRealtimeRoutes } from "./routes/doc-realtime";
 import { registerExportRoutes } from "./routes/export";
 import { registerImageAssetRealtimeRoutes } from "./routes/image-asset-realtime";
@@ -74,6 +75,7 @@ registerScimRoutes(app);
 registerRealtimeRoutes(app);
 registerBrainRealtimeRoutes(app);
 registerImageAssetRealtimeRoutes(app);
+registerCopyGenerationRealtimeRoutes(app);
 registerDocRealtimeRoutes(app);
 
 // Captures unhandled route errors when SENTRY_DSN is set (no-op otherwise).

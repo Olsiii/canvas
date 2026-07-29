@@ -91,6 +91,7 @@ export const WORKSPACE_ACTIONS = [
   "spaceOverride:manage",
   "export:run",
   "timeEntry:viewAll",
+  "copyGeneration:create",
 ] as const;
 
 export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];

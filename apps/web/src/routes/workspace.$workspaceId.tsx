@@ -1,4 +1,5 @@
 import { BrainChatPanel } from "@/components/brain-chat-panel";
+import { CanvasLogo } from "@/components/canvas-logo";
 import { GenerationPanel } from "@/components/generation-panel";
 import { HierarchySidebar } from "@/components/hierarchy-sidebar";
 import { LoginSummaryPanel } from "@/components/login-summary-panel";
@@ -41,18 +42,12 @@ function WorkspaceShell() {
 
   useRealtime(workspaceId);
 
-  const initials = (workspace?.name ?? "C").slice(0, 1).toUpperCase();
-
   return (
     <div className="flex h-svh">
       <aside className="workspace-sidebar border-border bg-card text-foreground flex w-64 shrink-0 flex-col border-r">
-        <div className="border-border flex items-center gap-2 border-b px-3 py-3">
-          <Link
-            to="/"
-            aria-label="Canvas home"
-            className="bg-accent text-accent-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-sm font-semibold"
-          >
-            {initials}
+        <div className="border-border flex items-center gap-3 border-b px-3 py-3">
+          <Link to="/" aria-label="Canvas home" className="shrink-0">
+            <CanvasLogo size={56} />
           </Link>
           <div className="min-w-0 flex-1">
             <Link

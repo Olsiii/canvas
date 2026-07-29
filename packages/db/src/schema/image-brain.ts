@@ -22,10 +22,18 @@ export const imageVersionSource = pgEnum("image_version_source", ["upload", "gen
 export const aiUsageKind = pgEnum("ai_usage_kind", ["generate", "edit", "chat", "vision", "embed"]);
 export const brainContextType = pgEnum("brain_context_type", ["task", "doc", "channel", "global"]);
 export const brainMessageRole = pgEnum("brain_message_role", ["user", "assistant", "tool"]);
+export const copyLanguage = pgEnum("copy_language", ["sq", "en", "both"]);
+// 'custom' is every folder a user creates by hand (still flat, no nesting
+// exposed in that UI). 'copy_root'/'copy_client' are the one system-managed
+// exception: the Copywriter's "Copy" folder and its one auto-created child
+// per brand kit — the only nesting this table supports, and never user-set.
+export const folderKind = pgEnum("folder_kind", ["custom", "copy_root", "copy_client"]);
 
-// Organizes the Library (e.g. "Zone Club") — no nesting, one flat level per
-// workspace, same simplicity tier as tags rather than the space/folder/list
-// hierarchy.
+// Organizes the Library (e.g. "Zone Club") — one flat level for user-created
+// ('custom') folders, same simplicity tier as tags rather than the
+// space/folder/list hierarchy. parentFolderId/kind/brandKitId exist solely
+// for the Copywriter's auto-provisioned "Copy" > brand-kit hierarchy (see
+// lib/copy-library.ts) — never set by the plain "New folder" UI.
 export const imageFolders = pgTable(
   "image_folders",
   {
@@ -36,13 +44,37 @@ export const imageFolders = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    parentFolderId: uuid("parent_folder_id").references((): AnyPgColumn => imageFolders.id, {
+      onDelete: "cascade",
+    }),
+    kind: folderKind("kind").notNull().default("custom"),
+    // Set only on 'copy_client' folders, for direct lookup without a name
+    // string match. onDelete "set null" rather than cascade: if the brand
+    // kit is later deleted, the folder (and whatever copy is saved in it)
+    // stays around instead of silently vanishing.
+    brandKitId: uuid("brand_kit_id").references((): AnyPgColumn => brandSettings.id, {
+      onDelete: "set null",
+    }),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (table) => [index("image_folders_workspace_id_idx").on(table.workspaceId)],
+  (table) => [
+    index("image_folders_workspace_id_idx").on(table.workspaceId),
+    index("image_folders_parent_folder_id_idx").on(table.parentFolderId),
+    // At most one root "Copy" folder per workspace, and at most one child
+    // folder per brand kit — both enforced at the DB level so a race between
+    // two concurrent saves can't create duplicates (same reasoning as
+    // brain_conversations' partial unique indexes).
+    uniqueIndex("image_folders_copy_root_uniq")
+      .on(table.workspaceId)
+      .where(sql`${table.kind} = 'copy_root' and ${table.deletedAt} is null`),
+    uniqueIndex("image_folders_copy_client_uniq")
+      .on(table.workspaceId, table.brandKitId)
+      .where(sql`${table.kind} = 'copy_client' and ${table.deletedAt} is null`),
+  ],
 );
 
 // `imageAssets.currentVersionId` <-> `imageVersions.assetId` is a genuine
@@ -238,6 +270,11 @@ export const brandSettings = pgTable("brand_settings", {
   // text rather than pgEnum so adding adapters later doesn't need an enum
   // migration; validated at the API boundary via IMAGE_PROVIDERS.
   imageProvider: text("image_provider").notNull().default("gemini"),
+  // Copywriter fields (this kit doubling as a "client" brand profile) —
+  // fonts has no equivalent elsewhere on this table; defaultCopyLanguage
+  // just pre-fills the language picker when generating copy for this kit.
+  fonts: text("fonts"),
+  defaultCopyLanguage: copyLanguage("default_copy_language").notNull().default("sq"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

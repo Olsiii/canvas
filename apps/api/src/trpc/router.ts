@@ -10,6 +10,7 @@ import { brandKitRouter } from "./routers/brand-kit";
 import { chatRouter } from "./routers/chat";
 import { checklistRouter } from "./routers/checklist";
 import { commentRouter } from "./routers/comment";
+import { copywriterRouter } from "./routers/copywriter";
 import { customFieldRouter } from "./routers/custom-field";
 import { dashboardRouter } from "./routers/dashboard";
 import { docRouter } from "./routers/doc";
@@ -59,6 +60,7 @@ export const appRouter = router({
   imageFolder: imageFolderRouter,
   brandKit: brandKitRouter,
   brain: brainRouter,
+  copywriter: copywriterRouter,
   doc: docRouter,
   chat: chatRouter,
   form: formRouter,

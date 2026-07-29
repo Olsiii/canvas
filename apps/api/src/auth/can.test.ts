@@ -121,6 +121,11 @@ describe("can", () => {
     expect(can(user, "brandSettings:update", { type: "workspace", role: "admin" })).toBe(true);
   });
 
+  it("requires member+ to generate Copywriter copy", () => {
+    expect(can(user, "copyGeneration:create", { type: "workspace", role: "guest" })).toBe(false);
+    expect(can(user, "copyGeneration:create", { type: "workspace", role: "member" })).toBe(true);
+  });
+
   it("only allows admins+ to delete task templates, but members can create them", () => {
     expect(can(user, "taskTemplate:view", { type: "workspace", role: "guest" })).toBe(true);
     expect(can(user, "taskTemplate:create", { type: "workspace", role: "guest" })).toBe(false);
