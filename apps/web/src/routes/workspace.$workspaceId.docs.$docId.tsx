@@ -75,6 +75,7 @@ function DocEditorPage() {
           variant="outline"
           data-testid="doc-ask-brain"
           aria-label="Ask Brain about this doc"
+          title="Ask Brain about this doc"
           onClick={() => setBrainOpen(true)}
         >
           Ask Brain

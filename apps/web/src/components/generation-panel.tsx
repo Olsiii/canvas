@@ -243,7 +243,14 @@ export function GenerationPanel({
           <h3 className="text-sm font-semibold">Generate image</h3>
         </div>
         {onClose && (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
             <X className="h-4 w-4" aria-hidden />
           </Button>
         )}

@@ -33,6 +33,7 @@ export function BlurhashThumb({
       type="button"
       onClick={onClick}
       aria-label={`Open ${attachment.fileName}`}
+      title={`Open ${attachment.fileName}`}
       className="border-border relative block h-20 w-20 overflow-hidden rounded-md border"
     >
       {attachment.blurhash && (

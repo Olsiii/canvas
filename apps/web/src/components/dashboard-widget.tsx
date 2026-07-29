@@ -62,6 +62,7 @@ export function DashboardWidget({ widget, onRemoved }: { widget: Widget; onRemov
           size="sm"
           onClick={() => remove.mutate({ widgetId: widget.id })}
           aria-label="Remove widget"
+          title="Remove widget"
         >
           <X className="h-3.5 w-3.5" aria-hidden />
         </Button>

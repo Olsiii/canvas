@@ -58,6 +58,7 @@ export function GoalTaskLinks({ goalId, workspaceId }: { goalId: string; workspa
                 type="button"
                 className="text-muted-foreground hover:text-foreground"
                 aria-label={`Unlink ${link.taskTitle}`}
+                title={`Unlink ${link.taskTitle}`}
                 onClick={() => remove.mutate({ goalId, taskId: link.taskId })}
               >
                 ×

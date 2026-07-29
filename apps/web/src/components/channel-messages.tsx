@@ -187,6 +187,7 @@ export function ChannelMessages({
           <button
             type="button"
             aria-label="Close thread"
+            title="Close thread"
             className="absolute inset-0 bg-black/20"
             onClick={() => setOpenThreadId(null)}
           />
@@ -199,6 +200,7 @@ export function ChannelMessages({
                 size="sm"
                 onClick={() => setOpenThreadId(null)}
                 aria-label="Close"
+                title="Close"
               >
                 <X className="h-4 w-4" aria-hidden />
               </Button>
@@ -300,6 +302,7 @@ function MessageRow({
                 type="button"
                 onClick={onReply}
                 aria-label="Reply"
+                title="Reply"
                 className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
               >
                 <CornerDownRight className="h-3.5 w-3.5" aria-hidden />
@@ -310,6 +313,7 @@ function MessageRow({
               <button
                 type="button"
                 aria-label="Delete message"
+                title="Delete message"
                 onClick={onDelete}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -477,6 +481,7 @@ function MessageComposer({
               <button
                 type="button"
                 aria-label={`Remove ${file.name}`}
+                title={`Remove ${file.name}`}
                 onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}
                 className="text-muted-foreground hover:text-foreground"
               >
@@ -503,6 +508,7 @@ function MessageComposer({
           variant="ghost"
           size="sm"
           aria-label="Choose a file to attach"
+          title="Choose a file to attach"
           onClick={() => fileInputRef.current?.click()}
         >
           <Paperclip className="h-4 w-4" aria-hidden />

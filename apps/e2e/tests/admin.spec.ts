@@ -17,7 +17,7 @@ test("Admin page: status, AI quota, backups, and audit log for workspace owner",
   await expect(page.getByTestId("admin-ai-quota")).toContainText("Brain messages today");
   await expect(page.getByTestId("admin-ai-quota")).toContainText("/ 50");
   await expect(page.getByTestId("admin-ai-quota")).toContainText("/ 20");
-  await expect(page.getByTestId("admin-ai-quota")).toContainText("$25");
+  await expect(page.getByTestId("admin-ai-quota")).toContainText("$50");
 
   await expect(page.getByTestId("admin-backups")).toContainText("pg_dump");
   await expect(page.getByTestId("admin-audit")).toBeVisible();

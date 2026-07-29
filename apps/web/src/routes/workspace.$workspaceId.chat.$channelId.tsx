@@ -47,6 +47,7 @@ function ChatChannelPage() {
               variant="outline"
               data-testid="channel-members"
               aria-label="Channel members"
+              title="Channel members"
               className="gap-1.5"
               onClick={() => setMembersOpen(true)}
             >
@@ -60,6 +61,7 @@ function ChatChannelPage() {
             variant="outline"
             data-testid="channel-ask-brain"
             aria-label="Ask Brain about this channel"
+            title="Ask Brain about this channel"
             className="gap-1.5"
             onClick={() => setBrainOpen(true)}
           >

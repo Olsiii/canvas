@@ -341,6 +341,7 @@ function LibraryPage() {
                 type="button"
                 onClick={() => deleteFolder.mutate({ folderId: folder.id })}
                 aria-label={`Delete folder ${folder.name}`}
+                title={`Delete folder ${folder.name}`}
                 data-testid={`library-folder-delete-${folder.id}`}
                 className="hover:text-status-critical"
               >
@@ -577,13 +578,21 @@ function LibraryCopyItemDetailPanel({
       <button
         type="button"
         aria-label="Close copy detail"
+        title="Close copy detail"
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
       <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-sm font-semibold">{item.label}</h2>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
             <X className="h-4 w-4" aria-hidden />
           </Button>
         </div>
@@ -664,13 +673,21 @@ function LibraryDetailPanel({
       <button
         type="button"
         aria-label="Close image detail"
+        title="Close image detail"
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
       <div className="border-border bg-background relative flex h-full w-full max-w-md flex-col border-l shadow-xl">
         <div className="border-border flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-sm font-semibold">Image</h2>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
             <X className="h-4 w-4" aria-hidden />
           </Button>
         </div>

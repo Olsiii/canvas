@@ -284,6 +284,7 @@ function ScimSection({ workspaceId }: { workspaceId: string }) {
                 size="sm"
                 onClick={() => remove.mutate({ scimTokenId: token.id })}
                 aria-label={`Delete token ${token.name}`}
+                title={`Delete token ${token.name}`}
               >
                 Delete
               </Button>

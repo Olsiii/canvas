@@ -67,6 +67,7 @@ export function ClipsSection({ taskId }: { taskId: string }) {
                   <button
                     type="button"
                     aria-label={`Delete ${clip.fileName}`}
+                    title={`Delete ${clip.fileName}`}
                     onClick={() => del.mutate({ attachmentId: clip.id })}
                     className="text-muted-foreground hover:text-foreground hidden shrink-0 text-xs group-hover:inline"
                   >

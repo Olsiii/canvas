@@ -106,6 +106,7 @@ export function TaskDetailPanel({
       <button
         type="button"
         aria-label="Close task details"
+        title="Close task details"
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
@@ -117,6 +118,7 @@ export function TaskDetailPanel({
               onClick={() => update.mutate({ taskId, statusId: doneStatus.id })}
               disabled={update.isPending}
               aria-label="Finish task"
+              title="Finish task"
               data-testid="finish-task-button"
               className="text-status-good hover:opacity-80 text-sm font-medium"
             >
@@ -127,6 +129,7 @@ export function TaskDetailPanel({
             type="button"
             onClick={() => setSavingTemplate((s) => !s)}
             aria-label="Save as template"
+            title="Save as template"
             className="text-muted-foreground hover:text-foreground text-sm"
           >
             Save as template
@@ -135,6 +138,7 @@ export function TaskDetailPanel({
             type="button"
             onClick={() => setBrainOpen(true)}
             aria-label="Ask Brain about this task"
+            title="Ask Brain about this task"
             className="text-muted-foreground hover:text-foreground text-sm"
           >
             Ask Brain
@@ -143,6 +147,7 @@ export function TaskDetailPanel({
             type="button"
             onClick={onClose}
             aria-label="Close"
+            title="Close"
             className="text-muted-foreground hover:text-foreground text-sm"
           >
             ✕ Close
@@ -296,6 +301,7 @@ export function TaskDetailPanel({
                     <button
                       type="button"
                       aria-label={`Remove ${a.name}`}
+                      title={`Remove ${a.name}`}
                       onClick={() => unassign.mutate({ taskId, userId: a.userId })}
                       className="text-muted-foreground hover:text-foreground"
                     >
@@ -521,6 +527,7 @@ function SubtasksSection({
             <button
               type="button"
               aria-label={`Delete subtask ${s.title}`}
+              title={`Delete subtask ${s.title}`}
               onClick={() => del.mutate({ taskId: s.id })}
               className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
             >
@@ -629,6 +636,7 @@ function DependenciesSection({
         <button
           type="button"
           aria-label={`Remove dependency on ${dep.task.title}`}
+          title={`Remove dependency on ${dep.task.title}`}
           onClick={() => remove.mutate({ dependencyId: dep.id })}
           className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
         >
@@ -747,6 +755,7 @@ function RemindersSection({ taskId }: { taskId: string }) {
             <button
               type="button"
               aria-label="Dismiss reminder"
+              title="Dismiss reminder"
               onClick={() => dismiss.mutate({ reminderId: r.id })}
               className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
             >
@@ -823,6 +832,7 @@ function ChecklistsSection({ taskId }: { taskId: string }) {
                 <button
                   type="button"
                   aria-label={`Delete checklist ${checklist.name}`}
+                  title={`Delete checklist ${checklist.name}`}
                   onClick={() => deleteChecklist.mutate({ checklistId: checklist.id })}
                   className="text-muted-foreground hover:text-foreground ml-auto hidden text-xs group-hover:inline"
                 >
@@ -846,6 +856,7 @@ function ChecklistsSection({ taskId }: { taskId: string }) {
                     <button
                       type="button"
                       aria-label={`Delete item ${item.text}`}
+                      title={`Delete item ${item.text}`}
                       onClick={() => deleteItem.mutate({ itemId: item.id })}
                       className="text-muted-foreground hover:text-foreground ml-auto hidden group-hover:inline"
                     >

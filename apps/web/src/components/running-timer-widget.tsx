@@ -44,6 +44,7 @@ export function RunningTimerWidget() {
       <button
         type="button"
         aria-label="Stop timer"
+        title="Stop timer"
         disabled={stop.isPending}
         onClick={() => stop.mutate()}
         className="text-muted-foreground hover:text-foreground disabled:opacity-50"

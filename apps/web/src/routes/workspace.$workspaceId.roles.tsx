@@ -276,6 +276,7 @@ function CustomRolesSection({ workspaceId }: { workspaceId: string }) {
                       size="sm"
                       onClick={() => deleteRole.mutate({ customRoleId: role.id })}
                       aria-label={`Delete ${role.name}`}
+                      title={`Delete ${role.name}`}
                     >
                       Delete
                     </Button>

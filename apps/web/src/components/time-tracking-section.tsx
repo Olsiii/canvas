@@ -106,6 +106,7 @@ export function TimeTrackingSection({ taskId }: { taskId: string }) {
                 <button
                   type="button"
                   aria-label={`Delete time entry (${entry.durationSec != null ? formatDurationSec(entry.durationSec) : "running"})`}
+                  title={`Delete time entry (${entry.durationSec != null ? formatDurationSec(entry.durationSec) : "running"})`}
                   onClick={() => remove.mutate({ entryId: entry.id })}
                   className="text-muted-foreground hover:text-foreground ml-auto hidden shrink-0 group-hover:inline"
                 >

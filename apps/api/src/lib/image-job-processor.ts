@@ -99,7 +99,7 @@ export async function processImageJob(data: ImageJobData): Promise<ProcessImageJ
     provider: engine.provider,
     model: engine.model,
     credits: generated.length,
-    costUsdEst: estimateImageCostUsd(generated.length),
+    costUsdEst: estimateImageCostUsd(engine.provider, generated.length),
   });
 
   await logActivity(

@@ -30,6 +30,7 @@ export function TemplatesPanel({ workspaceId }: { workspaceId: string }) {
               <button
                 type="button"
                 aria-label={`Delete template ${t.name}`}
+                title={`Delete template ${t.name}`}
                 onClick={() => remove.mutate({ templateId: t.id })}
                 className="text-muted-foreground hover:text-foreground shrink-0 text-xs"
               >

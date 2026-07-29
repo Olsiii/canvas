@@ -141,6 +141,7 @@ function CommentRow({
             <button
               type="button"
               aria-label="Delete comment"
+              title="Delete comment"
               onClick={onDelete}
               className="text-muted-foreground hover:text-foreground text-xs"
             >
@@ -158,6 +159,7 @@ function CommentRow({
               key={emoji}
               type="button"
               aria-label={`React with ${emoji}`}
+              title={`React with ${emoji}`}
               onClick={() => onToggleReaction(emoji, entry?.reactedByMe ?? false)}
               className={`rounded px-1 text-xs ${
                 entry?.reactedByMe ? "bg-muted" : "hover:bg-muted"

@@ -40,6 +40,7 @@ export function ChannelMembersPanel({
       <button
         type="button"
         aria-label="Close members"
+        title="Close members"
         className="absolute inset-0 bg-black/20"
         onClick={onClose}
       />
@@ -51,7 +52,14 @@ export function ChannelMembersPanel({
             </span>
             <h2 className="text-sm font-semibold">Members</h2>
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+          >
             <X className="h-4 w-4" aria-hidden />
           </Button>
         </div>
@@ -73,6 +81,7 @@ export function ChannelMembersPanel({
                   <button
                     type="button"
                     aria-label={`Remove ${m.name}`}
+                    title={`Remove ${m.name}`}
                     onClick={() => removeMember.mutate({ channelId, userId: m.userId })}
                     className="text-muted-foreground hover:text-foreground shrink-0"
                   >

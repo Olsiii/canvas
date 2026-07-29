@@ -1,33 +1,52 @@
-// Rough placeholder, not sourced from real Gemini pricing (no live API
-// access in this environment) — CLAUDE.md: "Verify current model
-// names/pricing at build time — this space moves monthly." Revisit once
-// the adapter makes real calls. Returns a string since Drizzle's `numeric`
-// column type reads/writes strings, not floats (avoids float rounding on a
-// money column).
-const ESTIMATED_COST_PER_IMAGE_USD = 0.02;
+// Per-image cost, keyed by ImageEngine.provider. Gemini has no live calls
+// yet (no GEMINI_API_KEY configured) so its number stays the original rough
+// placeholder — CLAUDE.md: "Verify current model names/pricing at build
+// time — this space moves monthly." OpenAI's is a real, sourced estimate:
+// gpt-image-1 bills per output image token rather than a flat per-image
+// price, but at the "medium" quality OpenAI's own docs use as the default
+// example, a single 1024x1024/1024x1536/1536x1024 image is ~$0.04 — used
+// here as a flat per-image approximation since this adapter doesn't expose
+// a quality parameter to vary the estimate by. Returns a string since
+// Drizzle's `numeric` column type reads/writes strings, not floats (avoids
+// float rounding on a money column).
+const ESTIMATED_COST_PER_IMAGE_USD: Record<string, number> = {
+  gemini: 0.02,
+  openai: 0.04,
+};
+const DEFAULT_ESTIMATED_COST_PER_IMAGE_USD = 0.02;
 
-export function estimateImageCostUsd(imageCount: number): string {
-  return (imageCount * ESTIMATED_COST_PER_IMAGE_USD).toFixed(4);
+export function estimateImageCostUsd(provider: string, imageCount: number): string {
+  const perImage = ESTIMATED_COST_PER_IMAGE_USD[provider] ?? DEFAULT_ESTIMATED_COST_PER_IMAGE_USD;
+  return (imageCount * perImage).toFixed(4);
 }
 
-// Real Claude Opus 4.8 pricing ($5/$25 per MTok, cached 2026-06-24) — more
-// accurate than the image estimate above, but still an *estimate*: without
-// a live API call there's no real `usage.input_tokens`/`output_tokens` to
-// read, so token counts are approximated at ~4 chars/token (a standard
-// rough-order-of-magnitude ratio for English text). Also used, honestly,
-// when MockChatClient ran instead of the real one — the "cost" is real
-// per-token pricing applied to whatever text length was actually produced.
-const OPUS_INPUT_USD_PER_TOKEN = 5 / 1_000_000;
-const OPUS_OUTPUT_USD_PER_TOKEN = 25 / 1_000_000;
+// Real per-token pricing, keyed by ChatClient.provider — more accurate than
+// the image estimate above, but still an *estimate*: without reading the
+// real API response's usage.input_tokens/output_tokens, token counts are
+// approximated at ~4 chars/token (a standard rough-order-of-magnitude ratio
+// for English text). "mock" has no real API behind it and is priced at
+// whichever provider is currently primary (see brain/index.ts's
+// getChatClient selection order) so the AI-quota system still exercises a
+// realistic $ amount when no real key is configured locally.
+const CHAT_RATES: Record<string, { inputUsdPerToken: number; outputUsdPerToken: number }> = {
+  // Claude Opus 4.8 ($5/$25 per MTok, cached 2026-06-24).
+  anthropic: { inputUsdPerToken: 5 / 1_000_000, outputUsdPerToken: 25 / 1_000_000 },
+  // GPT-5.6 Sol ($5/$30 per MTok, standard context — verified via web
+  // search at build time, GA 2026-07-09). Brain's current primary provider.
+  openai: { inputUsdPerToken: 5 / 1_000_000, outputUsdPerToken: 30 / 1_000_000 },
+};
+const DEFAULT_CHAT_RATE = CHAT_RATES.openai!;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
 
-export function estimateChatCostUsd(inputChars: number, outputChars: number): string {
+export function estimateChatCostUsd(
+  provider: string,
+  inputChars: number,
+  outputChars: number,
+): string {
+  const rate = CHAT_RATES[provider] ?? DEFAULT_CHAT_RATE;
   const inputTokens = inputChars / CHARS_PER_TOKEN_ESTIMATE;
   const outputTokens = outputChars / CHARS_PER_TOKEN_ESTIMATE;
-  return (
-    inputTokens * OPUS_INPUT_USD_PER_TOKEN +
-    outputTokens * OPUS_OUTPUT_USD_PER_TOKEN
-  ).toFixed(4);
+  return (inputTokens * rate.inputUsdPerToken + outputTokens * rate.outputUsdPerToken).toFixed(4);
 }
 
 // Rough placeholder (same caveat as ESTIMATED_COST_PER_IMAGE_USD above) —

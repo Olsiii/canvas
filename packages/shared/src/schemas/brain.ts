@@ -22,3 +22,15 @@ export const setBrainConversationBrandKitSchema = z.object({
   conversationId: z.string().uuid(),
   brandKitId: z.string().uuid().nullable(),
 });
+
+// Same shape as getOrCreateBrainConversationSchema — newConversation always
+// inserts a fresh row for this context instead of resuming one.
+export const newBrainConversationSchema = getOrCreateBrainConversationSchema;
+
+export const listBrainConversationsSchema = z.object({
+  workspaceId: z.string().uuid(),
+});
+
+export const deleteBrainConversationSchema = z.object({
+  conversationId: z.string().uuid(),
+});

@@ -159,6 +159,7 @@ function ApiKeysSection({ workspaceId }: { workspaceId: string }) {
                 size="sm"
                 onClick={() => remove.mutate({ apiKeyId: key.id })}
                 aria-label={`Delete key ${key.name}`}
+                title={`Delete key ${key.name}`}
               >
                 Delete
               </Button>
@@ -261,6 +262,7 @@ function WebhooksSection({ workspaceId }: { workspaceId: string }) {
                   size="sm"
                   onClick={() => remove.mutate({ webhookId: webhook.id })}
                   aria-label={`Delete webhook ${webhook.url}`}
+                  title={`Delete webhook ${webhook.url}`}
                 >
                   Delete
                 </Button>

@@ -7,9 +7,9 @@ import {
 } from "./image-providers";
 
 describe("image providers", () => {
-  it("defaults unknown values to gemini", () => {
+  it("defaults unknown values to the default provider (openai)", () => {
     expect(parseImageProvider(undefined)).toBe(DEFAULT_IMAGE_PROVIDER);
-    expect(parseImageProvider("fal")).toBe("gemini");
+    expect(parseImageProvider("fal")).toBe("openai");
   });
 
   it("accepts known providers", () => {

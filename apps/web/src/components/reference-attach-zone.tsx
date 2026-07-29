@@ -130,6 +130,7 @@ export function ReferenceAttachZone({
               <button
                 type="button"
                 aria-label={`Remove ${ref.fileName}`}
+                title={`Remove ${ref.fileName}`}
                 disabled={disabled || uploading}
                 onClick={() => onChange(references.filter((r) => r.id !== ref.id))}
                 className="text-muted-foreground hover:text-foreground"

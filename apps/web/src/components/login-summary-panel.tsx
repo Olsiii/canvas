@@ -34,6 +34,7 @@ export function LoginSummaryPanel({ workspaceId }: { workspaceId: string }) {
       <button
         type="button"
         aria-label="Close summary"
+        title="Close summary"
         className="absolute inset-0 bg-black/20"
         onClick={() => setOpen(false)}
       />
@@ -54,6 +55,7 @@ export function LoginSummaryPanel({ workspaceId }: { workspaceId: string }) {
             size="sm"
             onClick={() => setOpen(false)}
             aria-label="Close"
+            title="Close"
           >
             <X className="h-4 w-4" aria-hidden />
           </Button>

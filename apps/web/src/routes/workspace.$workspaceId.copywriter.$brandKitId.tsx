@@ -353,6 +353,7 @@ function CopywriterWorkspacePage() {
                 type="button"
                 onClick={clearMedia}
                 aria-label="Remove media"
+                title="Remove media"
                 className="bg-background/80 absolute top-2 right-2 rounded-full p-1.5"
               >
                 <X className="h-4 w-4" aria-hidden />

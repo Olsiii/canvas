@@ -75,6 +75,7 @@ export function ImageProofing({
             className="h-6 px-2 text-xs"
             data-testid="proofing-ask-brain"
             aria-label="Ask Brain to critique this image"
+            title="Ask Brain to critique this image"
             onClick={onAskBrain}
           >
             Critique with Brain
@@ -96,6 +97,7 @@ export function ImageProofing({
             type="button"
             data-testid={`proofing-pin-${pin.id}`}
             aria-label="Pin comment"
+            title="Pin comment"
             style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
             onClick={() => setSelectedPinId(selectedPinId === pin.id ? null : pin.id)}
             className={`absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white ${
@@ -166,6 +168,7 @@ export function ImageProofing({
               <button
                 type="button"
                 aria-label="Delete pin comment"
+                title="Delete pin comment"
                 onClick={() => removeComment.mutate({ commentId: pin.comment.id })}
                 className="text-muted-foreground hover:text-foreground text-[11px]"
               >

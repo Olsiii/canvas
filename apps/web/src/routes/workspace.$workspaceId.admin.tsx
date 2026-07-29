@@ -134,7 +134,7 @@ function AiQuotaSection({ workspaceId }: { workspaceId: string }) {
           </span>
         </li>
         <li className="flex justify-between px-3 py-2">
-          <span>Est. spend this month</span>
+          <span>Est. spend this month (Canvas-wide, all users)</span>
           <span className="font-mono text-xs">
             ${q.costUsdSpentThisMonth.toFixed(2)} / ${q.costUsdPerMonth}
           </span>

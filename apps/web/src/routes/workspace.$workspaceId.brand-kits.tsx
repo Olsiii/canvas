@@ -162,6 +162,7 @@ function BrandKitsSection({ workspaceId }: { workspaceId: string }) {
                   variant="ghost"
                   size="sm"
                   aria-label={`Delete ${kit.name}`}
+                  title={`Delete ${kit.name}`}
                   onClick={() => deleteKit.mutate({ brandKitId: kit.id })}
                 >
                   <Trash2 className="h-3.5 w-3.5" aria-hidden />

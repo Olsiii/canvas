@@ -57,7 +57,7 @@ export async function applyImageUnderstanding(opts: {
     provider: "anthropic",
     model: "claude-vision-mock",
     credits: 1,
-    costUsdEst: estimateChatCostUsd(seedChars + 200, understanding.altText.length),
+    costUsdEst: estimateChatCostUsd("anthropic", seedChars + 200, understanding.altText.length),
   });
 
   await logActivity(

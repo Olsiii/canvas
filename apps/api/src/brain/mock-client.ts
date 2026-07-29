@@ -36,7 +36,8 @@ function hasPendingToolUse(messages: ProviderMessage[]): boolean {
   return messages.at(-1)?.role === "tool";
 }
 
-// Selected whenever ANTHROPIC_API_KEY is unset. Keyword heuristics simulate
+// Selected whenever neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is set (see
+// getChatClient's selection order). Keyword heuristics simulate
 // tool_use so M2.3's agent loop / executors / WS status are fully testable
 // without a live Claude key. Plain echo preserved for non-tool prompts so
 // M2.2's Playwright spec stays green.
@@ -158,7 +159,7 @@ export class MockChatClient implements ChatClient {
       return;
     }
 
-    const reply = `You said: "${userText}". This is a placeholder reply — no ANTHROPIC_API_KEY is configured yet.`;
+    const reply = `You said: "${userText}". This is a placeholder reply — no OPENAI_API_KEY or ANTHROPIC_API_KEY is configured yet.`;
     yield* emitWords(reply);
     yield { type: "message_stop", stopReason: "end_turn" };
   }

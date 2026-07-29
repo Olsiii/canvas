@@ -57,6 +57,7 @@ export function TagsSection({
             <button
               type="button"
               aria-label={`Remove tag ${tag.name}`}
+              title={`Remove tag ${tag.name}`}
               onClick={() => removeTag.mutate({ taskId, tagId: tag.id })}
               className="hover:opacity-75"
             >
@@ -118,6 +119,7 @@ export function TagsSection({
                 key={color}
                 type="button"
                 aria-label={`Color ${color}`}
+                title={`Color ${color}`}
                 onClick={() => setNewTagColor(color)}
                 className={`h-4 w-4 shrink-0 rounded-full ${
                   newTagColor === color ? "ring-foreground ring-2 ring-offset-1" : ""

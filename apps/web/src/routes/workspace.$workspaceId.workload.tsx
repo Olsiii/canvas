@@ -79,6 +79,7 @@ function WorkloadPage() {
             type="button"
             data-testid="workload-prev-week"
             aria-label="Previous week"
+            title="Previous week"
             onClick={() => setWeekStart((w) => addDaysToDateOnly(w, -7))}
             className="border-border hover:bg-muted rounded border p-1.5"
           >
@@ -91,6 +92,7 @@ function WorkloadPage() {
             type="button"
             data-testid="workload-next-week"
             aria-label="Next week"
+            title="Next week"
             onClick={() => setWeekStart((w) => addDaysToDateOnly(w, 7))}
             className="border-border hover:bg-muted rounded border p-1.5"
           >

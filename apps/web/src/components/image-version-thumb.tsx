@@ -35,6 +35,7 @@ export function ImageVersionThumb({
       onClick={onSelect}
       data-testid={`image-version-${version.id}`}
       aria-label={selected ? "Current variant" : "Select this variant"}
+      title={selected ? "Current variant" : "Select this variant"}
       aria-pressed={selected}
       className={`relative block h-28 w-28 overflow-hidden rounded-md border ${
         selected ? "border-primary ring-primary ring-2" : "border-border"

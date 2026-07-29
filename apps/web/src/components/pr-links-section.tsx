@@ -70,6 +70,7 @@ export function PrLinksSection({ taskId }: { taskId: string }) {
             <button
               type="button"
               aria-label={`Refresh status for ${link.owner}/${link.repo}#${link.number}`}
+              title={`Refresh status for ${link.owner}/${link.repo}#${link.number}`}
               onClick={() => refresh.mutate({ prLinkId: link.id })}
               className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
             >
@@ -78,6 +79,7 @@ export function PrLinksSection({ taskId }: { taskId: string }) {
             <button
               type="button"
               aria-label={`Remove PR link ${link.owner}/${link.repo}#${link.number}`}
+              title={`Remove PR link ${link.owner}/${link.repo}#${link.number}`}
               onClick={() => remove.mutate({ prLinkId: link.id })}
               className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
             >

@@ -1,7 +1,7 @@
 import { db, schema } from "@canvas/db";
 import {
   AI_BRAIN_MESSAGES_PER_DAY,
-  AI_COST_USD_PER_USER_PER_MONTH,
+  AI_COST_USD_PER_MONTH_TOTAL,
   AI_IMAGE_GENERATIONS_PER_DAY,
 } from "@canvas/shared";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
@@ -27,11 +27,28 @@ function startOfUtcMonth(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
+// The $ cap is a single app-wide total (see AI_COST_USD_PER_MONTH_TOTAL's
+// doc comment) — summed with no userId/workspaceId filter at all, unlike
+// the two daily counters below which stay per-user.
+async function getAppWideMonthlySpendUsd(): Promise<number> {
+  const monthStart = startOfUtcMonth();
+  const [row] = await db
+    .select({
+      total: sql<string>`coalesce(sum(${schema.aiUsage.costUsdEst}::numeric), 0)`,
+    })
+    .from(schema.aiUsage)
+    .where(gte(schema.aiUsage.createdAt, monthStart));
+  return parseFloat(row?.total ?? "0");
+}
+
 /**
- * Per-user AI budgets (defaults in @canvas/shared ai-quotas):
- * - 50 Brain messages / UTC day
- * - 20 image generate+edit requests / UTC day
- * - $25 estimated cost / UTC calendar month
+ * AI budgets (defaults in @canvas/shared ai-quotas):
+ * - 50 Brain messages / UTC day, per user
+ * - 20 image generate+edit requests / UTC day, per user
+ * - $50 estimated cost / UTC calendar month, shared app-wide (every user,
+ *   every workspace) — not per-user. The per-user daily counters above
+ *   still apply on top of it, so no single user can exhaust the whole
+ *   shared budget in one day.
  *
  * Daily counters live in Redis (request-time, via the shared checkRateLimit
  * fixed-window limiter). Monthly $ uses summed ai_usage.
@@ -59,18 +76,10 @@ export async function assertAiQuota(userId: string, kind: AiQuotaKind) {
     }
   }
 
-  const monthStart = startOfUtcMonth();
-  const [row] = await db
-    .select({
-      total: sql<string>`coalesce(sum(${schema.aiUsage.costUsdEst}::numeric), 0)`,
-    })
-    .from(schema.aiUsage)
-    .where(and(eq(schema.aiUsage.userId, userId), gte(schema.aiUsage.createdAt, monthStart)));
-
-  const spent = parseFloat(row?.total ?? "0");
-  if (spent >= AI_COST_USD_PER_USER_PER_MONTH) {
+  const spent = await getAppWideMonthlySpendUsd();
+  if (spent >= AI_COST_USD_PER_MONTH_TOTAL) {
     throw new AiQuotaError(
-      `Monthly AI spend cap reached (≈$${AI_COST_USD_PER_USER_PER_MONTH}). Contact an admin if you need more.`,
+      `Canvas-wide monthly AI budget reached (≈$${AI_COST_USD_PER_MONTH_TOTAL}). Contact an admin if you need more.`,
     );
   }
 }
@@ -84,17 +93,11 @@ export async function getAiQuotaSnapshot(userId: string) {
     (await redisConnection.get(rateLimitBucketKey(`aiquota:generate:${userId}`, now, DAY_MS))) ?? 0,
   );
 
-  const monthStart = startOfUtcMonth();
-  const [row] = await db
-    .select({
-      total: sql<string>`coalesce(sum(${schema.aiUsage.costUsdEst}::numeric), 0)`,
-    })
-    .from(schema.aiUsage)
-    .where(and(eq(schema.aiUsage.userId, userId), gte(schema.aiUsage.createdAt, monthStart)));
+  const spentUsd = await getAppWideMonthlySpendUsd();
 
-  const spentUsd = parseFloat(row?.total ?? "0");
-
-  // Also surface today's completed generate/edit rows for the admin view.
+  // Also surface today's completed generate/edit rows for the admin view —
+  // this one stays scoped to the requesting admin's own usage, distinct
+  // from the app-wide $ total above.
   const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const [genRow] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -113,7 +116,7 @@ export async function getAiQuotaSnapshot(userId: string) {
     imageGenerationsPerDay: AI_IMAGE_GENERATIONS_PER_DAY,
     imageGenerationsUsedToday: generateUsed,
     imageGenerationsCompletedToday: genRow?.count ?? 0,
-    costUsdPerMonth: AI_COST_USD_PER_USER_PER_MONTH,
+    costUsdPerMonth: AI_COST_USD_PER_MONTH_TOTAL,
     costUsdSpentThisMonth: spentUsd,
   };
 }

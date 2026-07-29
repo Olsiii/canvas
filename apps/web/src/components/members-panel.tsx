@@ -107,6 +107,7 @@ export function MembersPanel({ workspaceId }: { workspaceId: string }) {
                   <button
                     type="button"
                     aria-label={`Remove ${m.name}`}
+                    title={`Remove ${m.name}`}
                     onClick={() => removeMember.mutate({ workspaceId, userId: m.userId })}
                     className="text-muted-foreground hover:text-foreground text-xs"
                   >

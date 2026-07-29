@@ -44,6 +44,7 @@ export function DocTaskLinks({ docId, workspaceId }: { docId: string; workspaceI
                 type="button"
                 className="text-muted-foreground hover:text-foreground"
                 aria-label={`Unlink ${link.taskTitle}`}
+                title={`Unlink ${link.taskTitle}`}
                 onClick={() => remove.mutate({ docId, taskId: link.taskId })}
               >
                 ×

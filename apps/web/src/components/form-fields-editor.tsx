@@ -101,6 +101,7 @@ export function FormFieldsEditor({
               size="sm"
               onClick={() => remove(field.id)}
               aria-label={`Remove field ${field.label || field.id}`}
+              title={`Remove field ${field.label || field.id}`}
             >
               ✕
             </Button>

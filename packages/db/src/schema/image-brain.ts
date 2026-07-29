@@ -188,6 +188,21 @@ export const aiUsage = pgTable(
 // PROGRESS.md M3.4's CI investigation). These two partial unique indexes
 // are the real backstop; the API layer pairs them with
 // insert(...).onConflictDoNothing().
+//
+// **Revised again (2026-07-29, Brain history).** A user can now have
+// several conversations per context over time (browsable/deletable — see
+// PROGRESS.md), so "one row per context" no longer holds forever. What
+// still must hold, to preserve the StrictMode-race protection above: at
+// most one *active, non-deleted* row per (workspace, context, user) at a
+// time. `isActive` marks which row that is; starting a new conversation
+// flips the old one to `isActive: false` (it stays in history) rather than
+// deleting it. `deletedAt` is a fully separate concern — actual deletion,
+// hiding a conversation from history regardless of its isActive value. The
+// two partial unique indexes below are narrowed to `isActive AND NOT
+// deletedAt` so getOrCreateConversation's find-the-active-row query is
+// still guaranteed at most one match (keeping its plain, unordered
+// findFirst() safe, per the race above) — the same
+// insert(...).onConflictDoNothing() backstop still applies.
 export const brainConversations = pgTable(
   "brain_conversations",
   {
@@ -209,15 +224,30 @@ export const brainConversations = pgTable(
     brandKitId: uuid("brand_kit_id").references((): AnyPgColumn => brandSettings.id, {
       onDelete: "set null",
     }),
+    // The one conversation per (workspace, context, user) that
+    // getOrCreateConversation resumes and new messages append to. Flipped
+    // to false (never back to true) when a "new conversation" is started;
+    // never touched by delete.
+    isActive: boolean("is_active").notNull().default(true),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("brain_conversations_task_uniq")
       .on(table.workspaceId, table.contextId, table.createdBy)
-      .where(sql`${table.contextType} != 'global'`),
+      .where(
+        sql`${table.contextType} != 'global' and ${table.isActive} and ${table.deletedAt} is null`,
+      ),
     uniqueIndex("brain_conversations_global_uniq")
       .on(table.workspaceId, table.createdBy)
-      .where(sql`${table.contextType} = 'global'`),
+      .where(
+        sql`${table.contextType} = 'global' and ${table.isActive} and ${table.deletedAt} is null`,
+      ),
+    index("brain_conversations_history_idx").on(
+      table.workspaceId,
+      table.createdBy,
+      table.deletedAt,
+    ),
   ],
 );
 
@@ -268,8 +298,11 @@ export const brandSettings = pgTable("brand_settings", {
   guidelines: text("guidelines"),
   // M2.7: workspace default ImageEngine ("gemini" | "openai"). Stored as
   // text rather than pgEnum so adding adapters later doesn't need an enum
-  // migration; validated at the API boundary via IMAGE_PROVIDERS.
-  imageProvider: text("image_provider").notNull().default("gemini"),
+  // migration; validated at the API boundary via IMAGE_PROVIDERS. Default
+  // switched to "openai" 2026-07-29 (see PROGRESS.md) — OpenAI has a real
+  // configured key and a live adapter; existing rows previously defaulted
+  // to "gemini" were backfilled to "openai" in the same migration.
+  imageProvider: text("image_provider").notNull().default("openai"),
   // Copywriter fields (this kit doubling as a "client" brand profile) —
   // fonts has no equivalent elsewhere on this table; defaultCopyLanguage
   // just pre-fills the language picker when generating copy for this kit.

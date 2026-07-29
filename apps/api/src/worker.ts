@@ -361,7 +361,7 @@ const brainWorker = new Worker<BrainJobData>(
       provider: chatClient.provider,
       model: chatClient.model,
       credits: 1,
-      costUsdEst: estimateChatCostUsd(totalInputChars, totalOutputChars),
+      costUsdEst: estimateChatCostUsd(chatClient.provider, totalInputChars, totalOutputChars),
     });
 
     await publishBrainEvent(data.conversationId, {
@@ -600,7 +600,11 @@ const copywriterWorker = new Worker<CopywriterJobData>(
           provider: copyClient.provider,
           model: copyClient.model,
           credits: 1,
-          costUsdEst: estimateChatCostUsd(result.inputChars, result.outputChars),
+          costUsdEst: estimateChatCostUsd(
+            copyClient.provider,
+            result.inputChars,
+            result.outputChars,
+          ),
         });
 
         await logActivity(
@@ -645,7 +649,11 @@ const copywriterWorker = new Worker<CopywriterJobData>(
           provider: copyClient.provider,
           model: copyClient.model,
           credits: 1,
-          costUsdEst: estimateChatCostUsd(result.inputChars, result.outputChars),
+          costUsdEst: estimateChatCostUsd(
+            copyClient.provider,
+            result.inputChars,
+            result.outputChars,
+          ),
         });
 
         await logActivity(

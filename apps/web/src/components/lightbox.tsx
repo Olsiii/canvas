@@ -50,6 +50,7 @@ export function Lightbox({
       <button
         type="button"
         aria-label="Close"
+        title="Close"
         onClick={onClose}
         className="absolute top-4 right-4 text-2xl text-white hover:opacity-75"
       >
@@ -61,6 +62,7 @@ export function Lightbox({
           <button
             type="button"
             aria-label="Previous image"
+            title="Previous image"
             onClick={() => onIndexChange((index - 1 + images.length) % images.length)}
             className="absolute left-4 text-3xl text-white hover:opacity-75"
           >
@@ -69,6 +71,7 @@ export function Lightbox({
           <button
             type="button"
             aria-label="Next image"
+            title="Next image"
             onClick={() => onIndexChange((index + 1) % images.length)}
             className="absolute right-4 text-3xl text-white hover:opacity-75"
           >

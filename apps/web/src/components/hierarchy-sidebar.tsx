@@ -47,6 +47,7 @@ export function HierarchySidebar({
           onClick={() => setAddingSpace((v) => !v)}
           className="text-muted-foreground hover:text-foreground"
           aria-label="New space"
+          title="New space"
         >
           <Plus className="h-3.5 w-3.5" aria-hidden />
         </button>
@@ -131,6 +132,7 @@ function SpaceSection({
           onClick={() => setExpanded((v) => !v)}
           className="text-muted-foreground flex w-3 items-center justify-center"
           aria-label={expanded ? "Collapse" : "Expand"}
+          title={expanded ? "Collapse" : "Expand"}
         >
           {expanded ? (
             <ChevronDown className="h-3 w-3" aria-hidden />
@@ -266,6 +268,7 @@ function FolderSection({
           onClick={() => setExpanded((v) => !v)}
           className="text-muted-foreground flex w-3 items-center justify-center"
           aria-label={expanded ? "Collapse" : "Expand"}
+          title={expanded ? "Collapse" : "Expand"}
         >
           {expanded ? (
             <ChevronDown className="h-3 w-3" aria-hidden />

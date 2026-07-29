@@ -72,6 +72,7 @@ function WorkspaceShell() {
               className="flex-1 gap-1.5"
               onClick={() => setGenerateOpen(true)}
               aria-label="Generate image"
+              title="Generate image"
             >
               <Wand2 className="h-3.5 w-3.5" aria-hidden />
               Generate
@@ -83,6 +84,7 @@ function WorkspaceShell() {
               className="flex-1 gap-1.5"
               onClick={() => setBrainOpen(true)}
               aria-label="Open Brain"
+              title="Open Brain"
             >
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
               Brain
@@ -139,6 +141,7 @@ function WorkspaceShell() {
           <button
             type="button"
             aria-label="Close generate panel"
+            title="Close generate panel"
             className="absolute inset-0 bg-black/20"
             onClick={() => setGenerateOpen(false)}
           />

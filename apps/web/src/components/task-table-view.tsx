@@ -129,6 +129,7 @@ export function TaskTableView({
           <button
             type="button"
             aria-label="Open task details"
+            title="Open task details"
             onClick={() => onOpenTask(row.original.id)}
             className="text-muted-foreground hover:text-foreground text-xs"
           >

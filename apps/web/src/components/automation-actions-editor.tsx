@@ -148,6 +148,7 @@ export function AutomationActionsEditor({
             size="sm"
             onClick={() => remove(i)}
             aria-label={`Remove action ${i + 1}`}
+            title={`Remove action ${i + 1}`}
           >
             ✕
           </Button>

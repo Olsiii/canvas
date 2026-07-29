@@ -246,6 +246,7 @@ export function TaskListView({
                     onClick={row.getToggleExpandedHandler()}
                     className="w-3"
                     aria-label={row.getIsExpanded() ? "Collapse group" : "Expand group"}
+                    title={row.getIsExpanded() ? "Collapse group" : "Expand group"}
                   >
                     {row.getIsExpanded() ? "▾" : "▸"}
                   </button>

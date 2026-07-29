@@ -2,6 +2,7 @@ import { db, schema } from "@canvas/db";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { can, type WorkspaceAction } from "../auth/can";
 import { logActivity } from "../lib/activity";
+import { assertAiQuota } from "../lib/ai-quota";
 import { publish as publishBrainEvent } from "../lib/brain-realtime";
 import { critiqueImage } from "../lib/image-critique";
 import { processImageJob } from "../lib/image-job-processor";
@@ -68,6 +69,11 @@ async function resolveTaskId(
 
 async function executeGenerateImage(ctx: ToolExecutionContext, input: GenerateImageInput) {
   await assertWorkerCan(ctx.userId, ctx.workspaceId, "imageAsset:create");
+  // Same gate the direct Generate panel's imageAsset.generate mutation
+  // uses (image-asset.ts) — without this, Brain's tool call bypassed the
+  // daily image-generation quota entirely (found 2026-07-29, see
+  // PROGRESS.md).
+  await assertAiQuota(ctx.userId, "generate");
 
   const [asset] = await db
     .insert(schema.imageAssets)
@@ -128,6 +134,9 @@ async function executeGenerateImage(ctx: ToolExecutionContext, input: GenerateIm
 
 async function executeEditImage(ctx: ToolExecutionContext, input: EditImageInput) {
   await assertWorkerCan(ctx.userId, ctx.workspaceId, "imageAsset:create");
+  // Same gate the direct Generate panel's imageAsset.edit mutation uses —
+  // see executeGenerateImage's comment above.
+  await assertAiQuota(ctx.userId, "generate");
 
   const parent = await db.query.imageVersions.findFirst({
     where: eq(schema.imageVersions.id, input.image_version_id),

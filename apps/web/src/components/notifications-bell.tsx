@@ -71,6 +71,7 @@ export function NotificationsBell() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label="Notifications"
+        title="Notifications"
         className="text-muted-foreground hover:text-foreground relative text-xs"
       >
         🔔

@@ -88,6 +88,7 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
                 <button
                   type="button"
                   aria-label={`Delete ${a.fileName}`}
+                  title={`Delete ${a.fileName}`}
                   onClick={() => del.mutate({ attachmentId: a.id })}
                   className="bg-background/90 text-muted-foreground hover:text-foreground absolute top-1 right-1 hidden rounded-full px-1.5 text-xs group-hover:inline"
                 >
@@ -119,6 +120,7 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
                 <button
                   type="button"
                   aria-label={`Delete ${a.fileName}`}
+                  title={`Delete ${a.fileName}`}
                   onClick={() => del.mutate({ attachmentId: a.id })}
                   className="text-muted-foreground hover:text-foreground hidden shrink-0 group-hover:inline"
                 >
