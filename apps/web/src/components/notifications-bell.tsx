@@ -13,7 +13,10 @@ const TASK_LINK_VERBS = new Set([
   "task.assigned",
   "task.priority_urgent",
   "task.completed",
+  "task.completed_via_form",
 ]);
+
+const COMPLETED_VERBS = new Set(["task.completed", "task.completed_via_form"]);
 
 function taskLink(payload: unknown): { taskId: string; listId: string } | null {
   if (!payload || typeof payload !== "object") return null;
@@ -34,6 +37,15 @@ function completedTaskTitle(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const title = (payload as { title?: unknown }).title;
   return typeof title === "string" && title ? title : null;
+}
+
+// Only set on task.completed_via_form — the self-reported name of an
+// external, session-less form submitter, since there's no real user to
+// read an actor name off of for that verb.
+function formSubmitterName(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const name = (payload as { submitterName?: unknown }).submitterName;
+  return typeof name === "string" && name ? name : null;
 }
 
 export function NotificationsBell() {
@@ -103,8 +115,11 @@ export function NotificationsBell() {
             {entries.map((n) => {
               const link = TASK_LINK_VERBS.has(n.verb) ? taskLink(n.payloadJson) : null;
               const note = n.verb === "reminder.fired" ? reminderNote(n.payloadJson) : null;
-              const completedTitle =
-                n.verb === "task.completed" ? completedTaskTitle(n.payloadJson) : null;
+              const completedTitle = COMPLETED_VERBS.has(n.verb)
+                ? completedTaskTitle(n.payloadJson)
+                : null;
+              const submitterName =
+                n.verb === "task.completed_via_form" ? formSubmitterName(n.payloadJson) : null;
               return (
                 <button
                   key={n.id}
@@ -128,7 +143,7 @@ export function NotificationsBell() {
                     <span className="font-medium">{NOTIFICATION_VERB_LABELS[n.verb]}</span>
                   ) : completedTitle ? (
                     <>
-                      <span className="font-medium">{n.actorName}</span> finished{" "}
+                      <span className="font-medium">{submitterName ?? n.actorName}</span> finished{" "}
                       <span className="font-medium">&ldquo;{completedTitle}&rdquo;</span>
                     </>
                   ) : (

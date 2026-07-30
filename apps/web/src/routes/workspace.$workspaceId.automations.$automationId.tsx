@@ -16,7 +16,7 @@ import {
   type StatusKind,
   type TaskPriority,
 } from "@canvas/shared";
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -98,6 +98,13 @@ function AutomationEditorPage() {
 
   return (
     <div className="max-w-2xl space-y-4 p-6" data-testid="automation-editor-page">
+      <Link
+        to="/w/$workspaceId/automations"
+        params={{ workspaceId }}
+        className="text-muted-foreground hover:text-foreground text-xs"
+      >
+        ← Automations
+      </Link>
       <h1 className="text-lg font-semibold">Edit automation</h1>
 
       <form onSubmit={handleSave} className="space-y-3">

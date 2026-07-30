@@ -11,4 +11,9 @@ export const NOTIFICATION_VERB_LABELS: Record<string, string> = {
   "task.assigned": "assigned you a task",
   "task.priority_urgent": "flagged a task as urgent",
   "task.completed": "finished a task",
+  // A task bound to a public "task completion" form (form.ts's
+  // submitPublic) was marked done by an external, session-less submitter
+  // — same shape as task.completed's payload plus a self-reported
+  // submitterName, since there's no real user to read a name off of.
+  "task.completed_via_form": "finished a task",
 };

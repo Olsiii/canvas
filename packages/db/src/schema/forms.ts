@@ -1,6 +1,7 @@
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { lists } from "./hierarchy";
+import { tasks } from "./tasks";
 import { users } from "./auth";
 import { workspaces } from "./workspaces";
 
@@ -11,6 +12,16 @@ import { workspaces } from "./workspaces";
 // resulting task to (see form.ts's submitPublic, which uses createdBy the
 // same way M3.5's scheduler attributes a spawned recurring task to
 // template.createdBy).
+//
+// `taskId` (nullable, added later than the rest of the table): when set,
+// the form is in "task completion" mode instead of "intake" mode — the
+// public page shows that one task's info + a file-attach widget instead of
+// custom fields, and submitting marks the task done rather than creating a
+// new one. `set null` on the task's own deletion rather than cascading the
+// form away, since the form (and whatever got attached through it) is
+// still worth keeping around as a record even if its task is later
+// deleted. `listId` stays required either way — a form is still organized
+// under a list for permission/listing purposes even in completion mode.
 export const forms = pgTable("forms", {
   id: uuid("id")
     .primaryKey()
@@ -21,6 +32,7 @@ export const forms = pgTable("forms", {
   listId: uuid("list_id")
     .notNull()
     .references(() => lists.id, { onDelete: "cascade" }),
+  taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   schemaJson: jsonb("schema_json").$type<unknown>().notNull(),
   publicToken: text("public_token")

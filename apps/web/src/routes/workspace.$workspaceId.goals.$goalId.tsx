@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { goalMetricSchema } from "@canvas/shared";
-import { createRoute, useNavigate } from "@tanstack/react-router";
+import { createRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
@@ -71,6 +71,13 @@ function GoalEditorPage() {
 
   return (
     <div className="max-w-lg space-y-4 p-6" data-testid="goal-editor-page">
+      <Link
+        to="/w/$workspaceId/goals"
+        params={{ workspaceId }}
+        className="text-muted-foreground hover:text-foreground text-xs"
+      >
+        ← Goals
+      </Link>
       <h1 className="text-lg font-semibold">{goal.data.name}</h1>
       <GoalProgressBar progress={goal.data.progress} />
 

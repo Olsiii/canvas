@@ -108,6 +108,88 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
     return reply.send(attachment);
   });
 
+  // Public, unauthenticated counterpart to POST /uploads above — for a
+  // task-bound form's external submitter (form.ts's getPublic/submitPublic
+  // never require a session either), gated by the form's own publicToken
+  // instead of getSessionUser. Same trust boundary the rest of forms.md's
+  // public surface already accepts: anyone with the link can act on it.
+  app.post("/public-forms/uploads", async (req, reply) => {
+    let publicToken: string | undefined;
+    let file: { buffer: Buffer; filename: string; mimetype: string } | undefined;
+
+    for await (const part of req.parts()) {
+      if (part.type === "file") {
+        file = { buffer: await part.toBuffer(), filename: part.filename, mimetype: part.mimetype };
+      } else if (part.fieldname === "publicToken" && typeof part.value === "string") {
+        publicToken = part.value;
+      }
+    }
+
+    if (!publicToken || !file) {
+      return reply.code(400).send({ error: "Missing file or publicToken" });
+    }
+
+    const form = await db.query.forms.findFirst({
+      where: eq(schema.forms.publicToken, publicToken),
+    });
+    if (!form) return reply.code(404).send({ error: "Form not found" });
+    if (!form.taskId) return reply.code(400).send({ error: "This form isn't bound to a task" });
+
+    const task = await requireTask(form.taskId).catch(() => null);
+    if (!task) return reply.code(404).send({ error: "Task not found" });
+
+    const attachmentId = uuidv7();
+    const originalKey = `attachments/${form.workspaceId}/${attachmentId}/${sanitizeFilenameForKey(file.filename)}`;
+    await putObject(originalKey, file.buffer, file.mimetype);
+
+    let thumbKey: string | null = null;
+    let blurhash: string | null = null;
+    let width: number | null = null;
+    let height: number | null = null;
+    if (file.mimetype.startsWith("image/")) {
+      const processed = await processImage(file.buffer);
+      if (processed) {
+        thumbKey = `attachments/${form.workspaceId}/${attachmentId}/thumb.webp`;
+        await putObject(thumbKey, processed.thumbBuffer, processed.thumbContentType);
+        ({ blurhash, width, height } = processed);
+      }
+    }
+
+    const [attachment] = await db
+      .insert(schema.attachments)
+      .values({
+        id: attachmentId,
+        workspaceId: form.workspaceId,
+        taskId: form.taskId,
+        uploaderId: form.createdBy,
+        fileKey: originalKey,
+        fileName: file.filename,
+        mime: file.mimetype,
+        sizeBytes: file.buffer.byteLength,
+        thumbKey,
+        blurhash,
+        width,
+        height,
+      })
+      .returning();
+    if (!attachment) return reply.code(500).send({ error: "Failed to save attachment" });
+
+    await logActivity(
+      form.workspaceId,
+      form.createdBy,
+      "attachment",
+      attachment.id,
+      "attachment.created",
+    );
+
+    return reply.send({
+      id: attachment.id,
+      fileName: attachment.fileName,
+      mime: attachment.mime,
+      sizeBytes: attachment.sizeBytes,
+    });
+  });
+
   app.get<{ Params: { attachmentId: string }; Querystring: { download?: string } }>(
     "/uploads/:attachmentId",
     (req, reply) => streamAttachment(req, reply, "file"),

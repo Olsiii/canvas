@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { WIDGET_TYPES, type WidgetType } from "@canvas/shared";
-import { createRoute } from "@tanstack/react-router";
+import { createRoute, Link } from "@tanstack/react-router";
 import { LayoutGrid, Plus } from "lucide-react";
 import { useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
@@ -32,7 +32,7 @@ const NO_CONFIG_TYPES = new Set<WidgetType>([
 ]);
 
 function DashboardEditorPage() {
-  const { dashboardId } = dashboardEditorRoute.useParams();
+  const { workspaceId, dashboardId } = dashboardEditorRoute.useParams();
   const utils = trpc.useUtils();
   const dashboard = trpc.dashboard.get.useQuery({ dashboardId });
 
@@ -57,6 +57,13 @@ function DashboardEditorPage() {
 
   return (
     <div className="space-y-6 p-6" data-testid="dashboard-editor-page">
+      <Link
+        to="/w/$workspaceId/dashboards"
+        params={{ workspaceId }}
+        className="text-muted-foreground hover:text-foreground text-xs"
+      >
+        ← Dashboards
+      </Link>
       <div className="flex items-center gap-2">
         <span className="bg-accent-soft text-accent flex h-9 w-9 items-center justify-center rounded-md">
           <LayoutGrid className="h-5 w-5" aria-hidden />

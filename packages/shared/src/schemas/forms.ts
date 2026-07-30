@@ -28,33 +28,53 @@ export const formFieldSchema = z
   });
 export type FormField = z.infer<typeof formFieldSchema>;
 
+// Pure shape validation for what's actually stored in `schema_json` — no
+// mode-specific business rule (an intake form needing a title field) here,
+// since a task-completion form's stored schema legitimately has zero
+// fields. That rule lives in createFormSchema/the form.update handler,
+// which know whether the form being written is bound to a task.
 export const formSchemaSchema = z
-  .object({ fields: z.array(formFieldSchema).min(1).max(20) })
-  .refine((s) => s.fields.some((f) => f.id === TITLE_FIELD_ID), {
-    message: `Form must include a "${TITLE_FIELD_ID}" field`,
-    path: ["fields"],
-  })
+  .object({ fields: z.array(formFieldSchema).max(20) })
   .refine((s) => new Set(s.fields.map((f) => f.id)).size === s.fields.length, {
     message: "Field ids must be unique",
     path: ["fields"],
   });
 export type FormSchema = z.infer<typeof formSchemaSchema>;
 
+export function hasTitleField(fields: FormField[]): boolean {
+  return fields.length > 0 && fields.some((f) => f.id === TITLE_FIELD_ID);
+}
+
 export const listFormsSchema = z.object({ workspaceId: z.string().uuid() });
 
 export const getFormSchema = z.object({ formId: z.string().uuid() });
 
-export const createFormSchema = z.object({
-  workspaceId: z.string().uuid(),
-  listId: z.string().uuid(),
-  name: z.string().trim().min(1).max(200),
-  fields: z.array(formFieldSchema).min(1).max(20),
-});
+export const createFormSchema = z
+  .object({
+    workspaceId: z.string().uuid(),
+    listId: z.string().uuid(),
+    name: z.string().trim().min(1).max(200),
+    // Bind to one existing task ("task completion" mode) instead of
+    // building a new one from fields ("intake" mode, the default).
+    taskId: z.string().uuid().optional(),
+    fields: z.array(formFieldSchema).max(20),
+  })
+  .refine((v) => v.taskId !== undefined || hasTitleField(v.fields), {
+    message: `An intake form must include a "${TITLE_FIELD_ID}" field`,
+    path: ["fields"],
+  })
+  .refine((v) => new Set(v.fields.map((f) => f.id)).size === v.fields.length, {
+    message: "Field ids must be unique",
+    path: ["fields"],
+  });
 
 export const updateFormSchema = z.object({
   formId: z.string().uuid(),
   name: z.string().trim().min(1).max(200).optional(),
-  fields: z.array(formFieldSchema).min(1).max(20).optional(),
+  // undefined = leave the task binding untouched; null = unbind back to
+  // intake mode; a uuid = bind (or rebind) to that task.
+  taskId: z.string().uuid().nullable().optional(),
+  fields: z.array(formFieldSchema).max(20).optional(),
 });
 
 export const deleteFormSchema = z.object({ formId: z.string().uuid() });
@@ -63,5 +83,8 @@ export const getPublicFormSchema = z.object({ publicToken: z.string().uuid() });
 
 export const submitPublicFormSchema = z.object({
   publicToken: z.string().uuid(),
-  values: z.record(z.string(), z.string().max(5000)),
+  // Intake-mode forms require these; a task-completion form has no custom
+  // fields, so both are omitted from that submission entirely.
+  values: z.record(z.string(), z.string().max(5000)).optional(),
+  submitterName: z.string().trim().min(1).max(200).optional(),
 });

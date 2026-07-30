@@ -5,6 +5,7 @@ import {
   assignTaskSchema,
   bulkUpdateTasksSchema,
   clearTaskRecurrenceSchema,
+  completeTaskSchema,
   createTaskSchema,
   deleteTaskSchema,
   getTaskSchema,
@@ -21,11 +22,12 @@ import {
   type StatusKind,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, exists, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { runAutomationsForTrigger } from "../../lib/automation-runner";
 import { embeddingQueue } from "../../queues/embedding-queue";
 import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
+import { completeTaskWithDefaultStatus } from "../../lib/task-completion";
 import {
   getOperationsManagerIds,
   notifyOperationsManagers,
@@ -291,17 +293,25 @@ export const taskRouter = router({
         ),
     );
 
+    // Excludes done/closed tasks so a task the caller (or anyone else, via
+    // realtime) just completed drops out instead of lingering here until
+    // it ages out of "recent" — the whole point of the Home page's and the
+    // login panel's quick-complete checkbox.
+    const notDone = notInArray(schema.statuses.kind, ["done", "closed"]);
+
     const [priorityRows, recentRows] = await Promise.all([
       db
         .select(baseSelection)
         .from(schema.tasks)
         .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
         .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .innerJoin(schema.statuses, eq(schema.statuses.id, schema.tasks.statusId))
         .where(
           and(
             eq(schema.spaces.workspaceId, input.workspaceId),
             isNull(schema.tasks.deletedAt),
             isNull(schema.tasks.parentTaskId),
+            notDone,
             or(eq(schema.tasks.priority, "urgent"), assignedToMe),
           ),
         )
@@ -312,11 +322,13 @@ export const taskRouter = router({
         .from(schema.tasks)
         .innerJoin(schema.lists, eq(schema.lists.id, schema.tasks.listId))
         .innerJoin(schema.spaces, eq(schema.spaces.id, schema.lists.spaceId))
+        .innerJoin(schema.statuses, eq(schema.statuses.id, schema.tasks.statusId))
         .where(
           and(
             eq(schema.spaces.workspaceId, input.workspaceId),
             isNull(schema.tasks.deletedAt),
             isNull(schema.tasks.parentTaskId),
+            notDone,
           ),
         )
         .orderBy(desc(schema.tasks.createdAt))
@@ -501,6 +513,17 @@ export const taskRouter = router({
       kind: "updated",
     });
     return updated;
+  }),
+
+  // Marks a task done via its list's own default done status — the Home
+  // page's quick-complete checkbox, which doesn't offer a status picker.
+  // `update` (above) stays the path for choosing a specific status.
+  complete: protectedProcedure.input(completeTaskSchema).mutation(async ({ ctx, input }) => {
+    const task = await requireTask(input.taskId);
+    const workspaceId = await workspaceIdForList(task.listId);
+    const spaceId = await spaceIdForList(task.listId);
+    await assertCan(ctx.user, workspaceId, "task:update", { spaceId });
+    return completeTaskWithDefaultStatus(input.taskId, ctx.user.id);
   }),
 
   bulkUpdate: protectedProcedure.input(bulkUpdateTasksSchema).mutation(async ({ ctx, input }) => {

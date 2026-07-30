@@ -51,7 +51,16 @@ export function useRealtime(
 
         if (event.entity === "task" || event.entity === "status") {
           utils.task.list.invalidate({ listId: event.listId });
-          if (event.entity === "task") utils.task.get.invalidate({ taskId: event.id });
+          if (event.entity === "task") {
+            utils.task.get.invalidate({ taskId: event.id });
+            utils.task.highlights.invalidate();
+            // A task's completion can move any goal it's linked to (goal
+            // progress is derived from linked tasks' completedAt, not
+            // pushed) — no per-goal id on the wire, so invalidate broadly
+            // rather than tracking goal_links client-side.
+            utils.goal.list.invalidate();
+            utils.goal.get.invalidate();
+          }
           if (event.entity === "status") utils.status.list.invalidate({ listId: event.listId });
         } else if (event.entity === "message") {
           utils.chat.message.list.invalidate({ channelId: event.channelId });

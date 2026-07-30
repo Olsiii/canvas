@@ -38,3 +38,36 @@ export function useOptimisticTaskUpdate(listId: string) {
     onSettled: () => utils.task.list.invalidate({ listId }),
   });
 }
+
+/**
+ * The Home page's and login panel's quick-complete checkbox — marks a task
+ * done via its list's default done status and drops it from the cached
+ * `task.highlights` result immediately (rather than waiting on a refetch),
+ * rolling back on error. Both surfaces read the same `task.highlights`
+ * query, so one hook covers both.
+ */
+export function useCompleteHighlightTask(workspaceId: string) {
+  const utils = trpc.useUtils();
+
+  return trpc.task.complete.useMutation({
+    onMutate: async (input) => {
+      await utils.task.highlights.cancel({ workspaceId });
+      const previous = utils.task.highlights.getData({ workspaceId });
+
+      utils.task.highlights.setData({ workspaceId }, (old) =>
+        old
+          ? {
+              priority: old.priority.filter((t) => t.id !== input.taskId),
+              recent: old.recent.filter((t) => t.id !== input.taskId),
+            }
+          : old,
+      );
+
+      return { previous };
+    },
+    onError: (_err, _input, context) => {
+      if (context?.previous) utils.task.highlights.setData({ workspaceId }, context.previous);
+    },
+    onSettled: () => utils.task.highlights.invalidate({ workspaceId }),
+  });
+}

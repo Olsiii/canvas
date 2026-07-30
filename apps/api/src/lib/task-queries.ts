@@ -1,6 +1,6 @@
 import { db, schema } from "@canvas/db";
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { requireList, requireSpace } from "./hierarchy";
 
 export async function requireTask(taskId: string) {
@@ -44,6 +44,27 @@ export async function firstStatusForList(listId: string) {
   });
   if (!status) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "This list has no statuses yet" });
+  }
+  return status;
+}
+
+// A list's own notion of "the" done status, for flows that mark a task
+// finished without letting the caller pick among possibly-several
+// done/closed statuses (e.g. "Done" vs "Archived") — the Home page's
+// quick-complete checkbox and a task-bound public form's submission.
+export async function firstDoneStatusForList(listId: string) {
+  const status = await db.query.statuses.findFirst({
+    where: and(
+      eq(schema.statuses.listId, listId),
+      or(eq(schema.statuses.kind, "done"), eq(schema.statuses.kind, "closed")),
+    ),
+    orderBy: asc(schema.statuses.orderKey),
+  });
+  if (!status) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This list has no done status to complete into",
+    });
   }
   return status;
 }

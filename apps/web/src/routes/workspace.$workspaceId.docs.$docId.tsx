@@ -38,6 +38,8 @@ function DocEditorPage() {
   });
   const [title, setTitle] = useState("");
   const [brainOpen, setBrainOpen] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const editorRef = useRef<Editor | null>(null);
 
   useEffect(() => {
@@ -69,17 +71,46 @@ function DocEditorPage() {
         >
           ← Docs
         </Link>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          data-testid="doc-ask-brain"
-          aria-label="Ask Brain about this doc"
-          title="Ask Brain about this doc"
-          onClick={() => setBrainOpen(true)}
-        >
-          Ask Brain
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="doc-copy-text"
+            onClick={() => {
+              const text = editorRef.current?.getText() ?? "";
+              void navigator.clipboard.writeText(text);
+              setCopiedText(true);
+              setTimeout(() => setCopiedText(false), 1500);
+            }}
+          >
+            {copiedText ? "Copied" : "Copy text"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="doc-copy-link"
+            onClick={() => {
+              void navigator.clipboard.writeText(window.location.href);
+              setCopiedLink(true);
+              setTimeout(() => setCopiedLink(false), 1500);
+            }}
+          >
+            {copiedLink ? "Copied" : "Copy link"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            data-testid="doc-ask-brain"
+            aria-label="Ask Brain about this doc"
+            title="Ask Brain about this doc"
+            onClick={() => setBrainOpen(true)}
+          >
+            Ask Brain
+          </Button>
+        </div>
       </div>
       <form
         className="flex gap-2"

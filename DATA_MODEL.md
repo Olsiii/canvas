@@ -139,7 +139,7 @@ messages         (id, channel_id fk, author_id fk, parent_message_id fk null,
                   body_json jsonb, deleted_at)
 annotations      (id, image_version_id fk, comment_id fk, x pct, y pct, w pct null, h pct null)
 
-forms            (id, workspace_id fk, list_id fk, schema_json jsonb, public_token uniq)
+forms            (id, workspace_id fk, list_id fk, task_id fk null, schema_json jsonb, public_token uniq)
 automations      (id, workspace_id fk, name, trigger_json, conditions_json, actions_json, enabled)
 automation_runs  (id, automation_id fk, status, log_json, created_at)
 dashboards       (id, workspace_id fk, name); widgets (id, dashboard_id fk, type, config_json, order_key)

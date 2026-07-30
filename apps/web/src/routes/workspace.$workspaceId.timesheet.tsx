@@ -6,6 +6,7 @@ import {
   sumDurations,
   todayDateOnly,
 } from "@canvas/shared";
+import { TaskDetailPanel } from "@/components/task-detail-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { createRoute } from "@tanstack/react-router";
@@ -21,6 +22,7 @@ export const timesheetRoute = createRoute({
 
 function TimesheetPage() {
   const { workspaceId } = timesheetRoute.useParams();
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [weekStart, setWeekStart] = useState(() => startOfWeekSunday(todayDateOnly()));
   const weekEnd = addDaysToDateOnly(weekStart, 6);
 
@@ -97,14 +99,22 @@ function TimesheetPage() {
               </div>
               <Card className="divide-y overflow-hidden p-0">
                 {day.entries.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between p-3 text-sm">
-                    <span className="truncate">{entry.taskTitle}</span>
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => setOpenTaskId(entry.taskId)}
+                    data-testid={`timesheet-entry-${entry.id}`}
+                    className="hover:bg-muted flex w-full items-center justify-between p-3 text-left text-sm transition-colors"
+                  >
+                    <span className="truncate underline-offset-2 hover:underline">
+                      {entry.taskTitle}
+                    </span>
                     <span className="text-muted-foreground shrink-0 text-xs">
                       {entry.durationSec != null
                         ? formatDurationSec(entry.durationSec)
                         : "running…"}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </Card>
             </div>
@@ -113,6 +123,15 @@ function TimesheetPage() {
       )}
 
       <TeamOverviewSection workspaceId={workspaceId} start={weekStart} end={weekEnd} />
+
+      {openTaskId && (
+        <TaskDetailPanel
+          taskId={openTaskId}
+          workspaceId={workspaceId}
+          onClose={() => setOpenTaskId(null)}
+          onOpenTask={setOpenTaskId}
+        />
+      )}
     </div>
   );
 }

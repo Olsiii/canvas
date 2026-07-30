@@ -1,6 +1,8 @@
+import { useCompleteHighlightTask } from "@/hooks/use-task-mutations";
 import type { AppRouter } from "@canvas/api";
 import { Link } from "@tanstack/react-router";
 import type { inferRouterOutputs } from "@trpc/server";
+import { Check } from "lucide-react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type HighlightTask = RouterOutputs["task"]["highlights"]["priority"][number];
@@ -26,6 +28,7 @@ export function TaskHighlightRow({
   onNavigate?: () => void;
 }) {
   const assigneeNames = task.assigneeIds.map((id) => memberNamesById.get(id) ?? "Someone");
+  const complete = useCompleteHighlightTask(workspaceId);
 
   return (
     <Link
@@ -43,6 +46,21 @@ export function TaskHighlightRow({
       aria-label={`Open ${task.title}`}
       className="border-border hover:bg-muted flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors"
     >
+      <button
+        type="button"
+        aria-label={`Mark ${task.title} done`}
+        title="Mark done"
+        data-testid={`task-highlight-complete-${task.id}`}
+        disabled={complete.isPending}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          complete.mutate({ taskId: task.id });
+        }}
+        className="border-border hover:border-accent hover:bg-accent-soft flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-transparent transition-colors hover:text-accent"
+      >
+        <Check className="h-3 w-3" aria-hidden />
+      </button>
       {task.priority && (
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${PRIORITY_TONE[task.priority] ?? PRIORITY_TONE.normal}`}
