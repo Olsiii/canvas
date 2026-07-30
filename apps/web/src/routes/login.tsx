@@ -34,7 +34,15 @@ function LoginPage() {
 
   const logIn = trpc.auth.logIn.useMutation({
     onSuccess: async () => {
-      await utils.auth.me.invalidate();
+      // Plain invalidate() only forces a refetch for queries with an
+      // active observer — nobody's subscribed to auth.me from the login
+      // page itself, so it would just mark the pre-login (logged-out)
+      // cache stale without actually waiting for fresh data. RequireAuth
+      // then reads that stale "no user" result on its very first render
+      // and bounces straight back to /login before the real refetch
+      // lands — the "first login attempt just refreshes" bug. Forcing
+      // refetchType: "all" makes invalidate() actually await the refetch.
+      await utils.auth.me.invalidate(undefined, { refetchType: "all" });
       sessionStorage.setItem(JUST_LOGGED_IN_KEY, "1");
       if (redirect) {
         window.location.assign(redirect);

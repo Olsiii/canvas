@@ -1965,3 +1965,16 @@ Built:
 
 - `pnpm check` green (0 errors) across every package; migration `0052` applied with zero drift. 330 API unit tests still passing (no new pure logic warranted its own suite — `firstDoneStatusForList`/`completeTaskWithDefaultStatus` are thin DB-touching helpers in the same style as the existing, also-untested `firstStatusForList`).
 - Extended `forms.spec.ts` with a new task-completion-forms spec: binds a form to a task, an anonymous context attaches a real file (`test-doc.txt` fixture) and submits with a self-reported name, confirms the task lands in the Done column on the board, and confirms the workspace's Operations Manager sees a notification naming the _external submitter_, not the form's owner. Re-ran `forms.spec.ts` (both), `goals.spec.ts`, `home-highlights.spec.ts` (both), `ops-manager-finish-task.spec.ts`, `time-tracking.spec.ts`, `docs-toolbar.spec.ts`, `attachments.spec.ts`, `task-detail-panel.spec.ts` live against a fresh dev server — 10/10 green, no regressions from the `task.highlights` filtering change, the realtime invalidation change, or the Forms schema relaxation.
+
+## 2026-07-30 follow-up #18: fixed "first login attempt just refreshes the page" — done
+
+User reported that logging in sometimes silently fails on the first try (lands back on `/login` with no error) and only works on a second, identical attempt. Root-caused by reading the actual flow rather than guessing — confirmed live in the browser afterward, not just by inspection.
+
+**Cause**: `login.tsx`/`signup.tsx`'s `onSuccess` called `await utils.auth.me.invalidate()` then immediately navigated to `/`. Nothing on the login/signup page itself subscribes to `auth.me`, so React Query v5's `invalidateQueries` (default `refetchType: "active"`) had no active observer to refetch — it just marked the old, pre-login (logged-out) cached result stale and resolved immediately, without waiting for a real refetch. `RequireAuth` then mounted as the _first_ observer of that now-stale query, synchronously read the still-cached "no user" value (`isLoading` is `false` once there's any cached data, even stale), and its effect immediately redirected back to `/login` — before the background refetch it had itself just triggered had a chance to land. The second login attempt works because by then that background refetch has already completed and the cache is correct.
+
+**Fix**: both call sites now use `await utils.auth.me.invalidate(undefined, { refetchType: "all" })`, which forces the refetch regardless of active observers and awaits it — so by the time `navigate("/")` runs, the cache already holds the real logged-in user. A third `auth.me.invalidate()` call site (`index.tsx`'s logout handler) was checked and left alone: it navigates to `/login`, which has no auth gate to bounce from, and its own page (`Dashboard`) is already an active observer via `useSession()`, so it was never affected.
+
+### Verified
+
+- `pnpm check` green, 0 errors.
+- Reproduced and confirmed fixed live: logged out and back in on a real account in the browser — landed on the dashboard on the first attempt, no bounce.

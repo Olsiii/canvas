@@ -39,7 +39,13 @@ function SignupPage() {
 
   const signUp = trpc.auth.signUp.useMutation({
     onSuccess: async () => {
-      await utils.auth.me.invalidate();
+      // See login.tsx's identical fix: refetchType: "all" is required so
+      // this actually awaits the refetch — plain invalidate() only forces
+      // an immediate refetch for queries with an active observer, and
+      // nothing observes auth.me from this page, so RequireAuth would
+      // otherwise read the stale pre-signup cache on its first render and
+      // bounce back to /login before the real refetch resolves.
+      await utils.auth.me.invalidate(undefined, { refetchType: "all" });
       navigate({ to: "/" });
     },
     onError: (err) => setError(err.message),
