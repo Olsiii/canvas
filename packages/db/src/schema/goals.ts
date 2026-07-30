@@ -1,4 +1,13 @@
-import { date, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  date,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { tasks } from "./tasks";
@@ -10,22 +19,26 @@ import { workspaces } from "./workspaces";
 // completed_at, M5.2) or "numeric" (a manually-updated current/target).
 // `createdBy`/timestamps added beyond the compact listing, same as every
 // other M4/M5 workspace-content table (forms, automations, dashboards).
-export const goals = pgTable("goals", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  metricJson: jsonb("metric_json").$type<unknown>().notNull(),
-  dueDate: date("due_date"),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const goals = pgTable(
+  "goals",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    metricJson: jsonb("metric_json").$type<unknown>().notNull(),
+    dueDate: date("due_date"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("goals_workspace_id_idx").on(table.workspaceId)],
+);
 
 // DATA_MODEL.md: goal_links(goal_id, task_id) — same shape as M4.2's
 // doc_task_links.

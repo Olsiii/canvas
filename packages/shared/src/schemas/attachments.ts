@@ -1,14 +1,51 @@
 import { z } from "zod";
 
-// Upload itself is a plain multipart POST to /uploads, not a tRPC mutation
-// — tRPC has no native file-upload transport. See PROGRESS.md (M1.9
-// decisions).
 // Exactly one of taskId/messageId — an attachment belongs to a task or a
 // chat message, never both (enforced server-side in attachment.ts).
 export const listAttachmentsSchema = z.object({
   taskId: z.string().uuid().optional(),
   messageId: z.string().uuid().optional(),
 });
+
+// A sanity ceiling on the presigned-upload flow below, not a technical
+// limit — direct-to-storage uploads no longer pass through the API's
+// memory at all, so this exists only to stop a garbage/malicious request
+// from minting a signed URL for an absurd size. Comfortably above the
+// "a few GB" 3D/video assets this flow was built for.
+export const MAX_ATTACHMENT_UPLOAD_BYTES = 20 * 1024 ** 3;
+
+// Large-file uploads (3D assets, clips) go straight from the browser to
+// S3/MinIO instead of through the API — see storage.ts's
+// getPresignedUploadUrl. `presignUpload` authorizes the upload and mints a
+// short-lived signed PUT url for one exact object key; `confirmUpload`
+// re-checks permission, verifies the object actually landed in storage
+// (via a HEAD request — never trusts the client's say-so), and only then
+// creates the `attachments` row. No file bytes ever pass through a tRPC
+// procedure; those are both plain JSON in/out.
+export const presignUploadSchema = z
+  .object({
+    taskId: z.string().uuid().optional(),
+    messageId: z.string().uuid().optional(),
+    fileName: z.string().trim().min(1).max(300),
+    mime: z.string().trim().min(1).max(200),
+    sizeBytes: z.number().int().positive().max(MAX_ATTACHMENT_UPLOAD_BYTES),
+  })
+  .refine((v) => !!v.taskId !== !!v.messageId, {
+    message: "Provide exactly one of taskId or messageId",
+  });
+
+export const confirmUploadSchema = z
+  .object({
+    attachmentId: z.string().uuid(),
+    key: z.string().min(1),
+    taskId: z.string().uuid().optional(),
+    messageId: z.string().uuid().optional(),
+    fileName: z.string().trim().min(1).max(300),
+    mime: z.string().trim().min(1).max(200),
+  })
+  .refine((v) => !!v.taskId !== !!v.messageId, {
+    message: "Provide exactly one of taskId or messageId",
+  });
 
 export const deleteAttachmentSchema = z.object({
   attachmentId: z.string().uuid(),

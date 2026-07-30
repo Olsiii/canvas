@@ -2,6 +2,7 @@ import type { AppRouter } from "@canvas/api";
 import { BlurhashThumb } from "@/components/blurhash-thumb";
 import { Section } from "@/components/detail-field";
 import { Lightbox } from "@/components/lightbox";
+import { useAttachmentUpload } from "@/hooks/use-attachment-upload";
 import { formatBytes } from "@/lib/format";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -28,6 +29,7 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const { uploadFile, progress } = useAttachmentUpload();
 
   // M5.6 "Google Drive picker": the always-available paste-link path (see
   // PROGRESS.md — the real Picker widget needs frontend-exposed Google
@@ -51,22 +53,16 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
   const images = all.filter(isImage);
   const files = all.filter((a) => !isImage(a));
 
-  // Plain multipart POST to the REST /uploads route, not a tRPC mutation —
-  // tRPC has no file-upload transport. See PROGRESS.md (M1.9 decisions).
+  // Uploads go straight to storage (attachment.presignUpload/confirmUpload
+  // — see use-attachment-upload.ts), not through the API, so a multi-GB
+  // file doesn't get buffered whole in the server's memory.
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
     setUploading(true);
     setUploadError(null);
     try {
       for (const file of Array.from(fileList)) {
-        const form = new FormData();
-        form.append("taskId", taskId);
-        form.append("file", file);
-        const res = await fetch("/uploads", { method: "POST", body: form, credentials: "include" });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error ?? "Upload failed");
-        }
+        await uploadFile(file, { taskId });
       }
       invalidate();
     } catch (err) {
@@ -141,7 +137,13 @@ export function AttachmentsSection({ taskId }: { taskId: string }) {
             onChange={(e) => handleFiles(e.target.files)}
             className="text-muted-foreground text-xs"
           />
-          {uploading && <span className="text-muted-foreground text-xs">Uploading…</span>}
+          {uploading && (
+            <span className="text-muted-foreground text-xs">
+              {Object.values(progress)[0] !== undefined
+                ? `Uploading… ${Object.values(progress)[0]}%`
+                : "Uploading…"}
+            </span>
+          )}
           <button
             type="button"
             data-testid="attach-drive-toggle"

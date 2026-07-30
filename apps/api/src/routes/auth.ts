@@ -4,7 +4,7 @@ import { oauthCookieOptions, setSessionCookie } from "../auth/cookies";
 import { fetchGoogleUserInfo, getGoogleClient } from "../auth/google";
 import { createSession } from "../auth/session";
 import { env } from "../env";
-import { assertAuthRateLimit, AuthRateLimitError } from "../lib/rate-limit";
+import { assertAuthRateLimit, RateLimitError } from "../lib/rate-limit";
 import { findOrCreateUserByEmail } from "../lib/user-provisioning";
 
 const OAUTH_STATE_COOKIE = "canvas_oauth_state";
@@ -16,7 +16,7 @@ export function registerAuthRoutes(app: FastifyInstance) {
     try {
       await assertAuthRateLimit(req.ip);
     } catch (err) {
-      if (err instanceof AuthRateLimitError) {
+      if (err instanceof RateLimitError) {
         return reply.code(429).send({ error: err.message });
       }
       throw err;

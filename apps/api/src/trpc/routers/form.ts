@@ -20,6 +20,12 @@ import { requireList } from "../../lib/hierarchy";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
 import { publish } from "../../lib/realtime";
+import {
+  assertPublicRateLimit,
+  clientIp,
+  PUBLIC_FORM_RATE_LIMIT_MAX,
+  RateLimitError,
+} from "../../lib/rate-limit";
 import { completeTaskWithDefaultStatus } from "../../lib/task-completion";
 import {
   firstStatusForList,
@@ -38,6 +44,13 @@ async function requireForm(formId: string) {
 
 function parseFormSchema(schemaJson: unknown): FormSchema {
   return formSchemaSchema.parse(schemaJson);
+}
+
+function tooManyRequests(): never {
+  throw new TRPCError({
+    code: "TOO_MANY_REQUESTS",
+    message: "Too many attempts. Try again in a minute.",
+  });
 }
 
 // Shared by create/update: a task must belong to the same workspace the
@@ -156,7 +169,14 @@ export const formRouter = router({
   // session, so these two never call `assertCan`/`can` at all. Only what's
   // needed to render/submit the form is exposed; workspaceId/listId stay
   // server-side.
-  getPublic: publicProcedure.input(getPublicFormSchema).query(async ({ input }) => {
+  getPublic: publicProcedure.input(getPublicFormSchema).query(async ({ ctx, input }) => {
+    try {
+      await assertPublicRateLimit(`form:ip:${clientIp(ctx.req)}`, PUBLIC_FORM_RATE_LIMIT_MAX);
+    } catch (err) {
+      if (err instanceof RateLimitError) tooManyRequests();
+      throw err;
+    }
+
     const form = await db.query.forms.findFirst({
       where: eq(schema.forms.publicToken, input.publicToken),
     });
@@ -189,7 +209,18 @@ export const formRouter = router({
     return { name: form.name, fields: parsed.fields, taskId: null, task: null };
   }),
 
-  submitPublic: publicProcedure.input(submitPublicFormSchema).mutation(async ({ input }) => {
+  submitPublic: publicProcedure.input(submitPublicFormSchema).mutation(async ({ ctx, input }) => {
+    // Two independent buckets: one IP hitting many forms, and one form
+    // link being hammered from many (possibly rotating) IPs are both real
+    // abuse shapes worth catching separately.
+    try {
+      await assertPublicRateLimit(`form:ip:${clientIp(ctx.req)}`, PUBLIC_FORM_RATE_LIMIT_MAX);
+      await assertPublicRateLimit(`form:token:${input.publicToken}`, PUBLIC_FORM_RATE_LIMIT_MAX);
+    } catch (err) {
+      if (err instanceof RateLimitError) tooManyRequests();
+      throw err;
+    }
+
     const form = await db.query.forms.findFirst({
       where: eq(schema.forms.publicToken, input.publicToken),
     });

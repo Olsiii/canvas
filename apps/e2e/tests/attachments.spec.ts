@@ -21,15 +21,19 @@ test("upload an image and a file to a task, open the lightbox, reload, and delet
   await page.getByRole("button", { name: "Design homepage" }).click();
   await expect(page.getByLabel("Task title")).toHaveValue("Design homepage");
 
-  const isUploadPost = (res: import("@playwright/test").Response) =>
-    res.url().includes("/uploads") && res.request().method() === "POST";
+  // Uploads now go straight to storage (attachment.presignUpload + a
+  // direct PUT + attachment.confirmUpload) rather than a single POST
+  // /uploads — confirmUpload is the step that actually creates the
+  // attachments row, so it's what the list update waits on.
+  const isConfirmUpload = (res: import("@playwright/test").Response) =>
+    res.url().includes("attachment.confirmUpload");
 
-  const imageUploaded = page.waitForResponse(isUploadPost);
+  const imageUploaded = page.waitForResponse(isConfirmUpload);
   await page.getByLabel("Upload attachment").setInputFiles(IMAGE_FIXTURE);
   await imageUploaded;
   await expect(page.getByText("Attachments (1)")).toBeVisible();
 
-  const docUploaded = page.waitForResponse(isUploadPost);
+  const docUploaded = page.waitForResponse(isConfirmUpload);
   await page.getByLabel("Upload attachment").setInputFiles(DOC_FIXTURE);
   await docUploaded;
   await expect(page.getByText("Attachments (2)")).toBeVisible();

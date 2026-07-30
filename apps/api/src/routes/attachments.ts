@@ -3,117 +3,48 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Readable } from "node:stream";
 import { uuidv7 } from "uuidv7";
-import { getSessionUser } from "../auth/session";
 import { can } from "../auth/can";
+import { getSessionUser } from "../auth/session";
 import { logActivity } from "../lib/activity";
 import { isChannelMember, requireChannel, requireMessage } from "../lib/chat-queries";
 import { sanitizeFilenameForKey, sanitizeForHeader } from "../lib/filename";
 import { processImage } from "../lib/image-processing";
 import { isInlineSafeMimeType, safeContentType } from "../lib/mime-safety";
 import { getMembershipRole } from "../lib/membership";
+import {
+  assertPublicRateLimit,
+  clientIp,
+  PUBLIC_UPLOAD_RATE_LIMIT_MAX,
+  RateLimitError,
+} from "../lib/rate-limit";
 import { getObject, putObject } from "../lib/storage";
-import { requireTask, workspaceIdForTask } from "../lib/task-queries";
+import { requireTask } from "../lib/task-queries";
 
-// File upload/download is a plain multipart/binary REST route, not a tRPC
-// procedure — tRPC has no native file-transport support. See PROGRESS.md
-// (M1.9 decisions).
+// Downloads stay a plain streaming REST route (not tRPC — no native
+// file-transport support there), permission-checked on every request per
+// M1.9's original decision. Task/chat-message *uploads* moved to
+// attachment.presignUpload/confirmUpload (a direct-to-storage flow for
+// multi-GB files) and no longer live here — see that router file's
+// comments for why. The public, session-less form-completion upload below
+// stays a buffered multipart route: those attachments come from an
+// external, unauthenticated submitter and are expected to be normal-sized
+// deliverables, not multi-GB assets.
 export function registerAttachmentRoutes(app: FastifyInstance) {
-  app.post("/uploads", async (req, reply) => {
-    const user = await getSessionUser(req);
-    if (!user) return reply.code(401).send({ error: "Unauthorized" });
-
-    let taskId: string | undefined;
-    let messageId: string | undefined;
-    let file: { buffer: Buffer; filename: string; mimetype: string } | undefined;
-
-    for await (const part of req.parts()) {
-      if (part.type === "file") {
-        file = { buffer: await part.toBuffer(), filename: part.filename, mimetype: part.mimetype };
-      } else if (part.fieldname === "taskId" && typeof part.value === "string") {
-        taskId = part.value;
-      } else if (part.fieldname === "messageId" && typeof part.value === "string") {
-        messageId = part.value;
-      }
-    }
-
-    if ((!taskId && !messageId) || !file) {
-      return reply.code(400).send({ error: "Missing file, and taskId or messageId" });
-    }
-
-    let workspaceId: string;
-    if (messageId) {
-      const message = await requireMessage(messageId).catch(() => null);
-      if (!message) return reply.code(404).send({ error: "Message not found" });
-      const channel = await requireChannel(message.channelId);
-      workspaceId = channel.workspaceId;
-      const role = await getMembershipRole(workspaceId, user.id);
-      if (!can(user, "message:create", { type: "workspace", role })) {
-        return reply.code(403).send({ error: "Forbidden" });
-      }
-      if (channel.isPrivate && !(await isChannelMember(channel.id, user.id))) {
-        return reply.code(403).send({ error: "Forbidden" });
-      }
-    } else {
-      const task = await requireTask(taskId!).catch(() => null);
-      if (!task) return reply.code(404).send({ error: "Task not found" });
-      workspaceId = await workspaceIdForTask(taskId!);
-      const role = await getMembershipRole(workspaceId, user.id);
-      if (!can(user, "attachment:create", { type: "workspace", role })) {
-        return reply.code(403).send({ error: "Forbidden" });
-      }
-    }
-
-    // Generated up front (rather than letting the DB default it) since the
-    // S3 key namespaces objects by attachment id and must be known before
-    // the row is inserted — one insert, no partial/placeholder row.
-    const attachmentId = uuidv7();
-    const originalKey = `attachments/${workspaceId}/${attachmentId}/${sanitizeFilenameForKey(file.filename)}`;
-    await putObject(originalKey, file.buffer, file.mimetype);
-
-    let thumbKey: string | null = null;
-    let blurhash: string | null = null;
-    let width: number | null = null;
-    let height: number | null = null;
-    if (file.mimetype.startsWith("image/")) {
-      const processed = await processImage(file.buffer);
-      if (processed) {
-        thumbKey = `attachments/${workspaceId}/${attachmentId}/thumb.webp`;
-        await putObject(thumbKey, processed.thumbBuffer, processed.thumbContentType);
-        ({ blurhash, width, height } = processed);
-      }
-    }
-
-    const [attachment] = await db
-      .insert(schema.attachments)
-      .values({
-        id: attachmentId,
-        workspaceId,
-        taskId: taskId ?? null,
-        messageId: messageId ?? null,
-        uploaderId: user.id,
-        fileKey: originalKey,
-        fileName: file.filename,
-        mime: file.mimetype,
-        sizeBytes: file.buffer.byteLength,
-        thumbKey,
-        blurhash,
-        width,
-        height,
-      })
-      .returning();
-    if (!attachment) return reply.code(500).send({ error: "Failed to save attachment" });
-
-    await logActivity(workspaceId, user.id, "attachment", attachment.id, "attachment.created");
-
-    return reply.send(attachment);
-  });
-
-  // Public, unauthenticated counterpart to POST /uploads above — for a
-  // task-bound form's external submitter (form.ts's getPublic/submitPublic
-  // never require a session either), gated by the form's own publicToken
-  // instead of getSessionUser. Same trust boundary the rest of forms.md's
-  // public surface already accepts: anyone with the link can act on it.
+  // Public, unauthenticated form-completion upload — for a task-bound
+  // form's external submitter (form.ts's getPublic/submitPublic never
+  // require a session either), gated by the form's own publicToken instead
+  // of getSessionUser. Same trust boundary the rest of forms.md's public
+  // surface already accepts: anyone with the link can act on it.
   app.post("/public-forms/uploads", async (req, reply) => {
+    // Checked before touching the multipart body at all — rejects an
+    // abusive IP before spending any bandwidth/CPU parsing a file.
+    try {
+      await assertPublicRateLimit(`upload:ip:${clientIp(req)}`, PUBLIC_UPLOAD_RATE_LIMIT_MAX);
+    } catch (err) {
+      if (err instanceof RateLimitError) return reply.code(429).send({ error: err.message });
+      throw err;
+    }
+
     let publicToken: string | undefined;
     let file: { buffer: Buffer; filename: string; mimetype: string } | undefined;
 
@@ -127,6 +58,17 @@ export function registerAttachmentRoutes(app: FastifyInstance) {
 
     if (!publicToken || !file) {
       return reply.code(400).send({ error: "Missing file or publicToken" });
+    }
+
+    // A second bucket keyed on the token itself, checked after the parse
+    // (once we actually have it) but before any S3 write — catches a
+    // single form link being hammered from many rotating IPs, which the
+    // IP-only check above can't.
+    try {
+      await assertPublicRateLimit(`upload:token:${publicToken}`, PUBLIC_UPLOAD_RATE_LIMIT_MAX);
+    } catch (err) {
+      if (err instanceof RateLimitError) return reply.code(429).send({ error: err.message });
+      throw err;
     }
 
     const form = await db.query.forms.findFirst({

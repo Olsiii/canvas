@@ -8,6 +8,15 @@ export const RATE_LIMIT_WINDOW_MS = 60_000;
 export const AUTH_RATE_LIMIT_MAX = 20;
 export const AUTH_EMAIL_RATE_LIMIT_MAX = 10;
 
+// The two fully-public, session-less, state-mutating/storage-consuming
+// surfaces (form.getPublic/submitPublic, POST /public-forms/uploads) —
+// gated only by a guessable-length publicToken, with no auth to fall back
+// on. Forms gets the more generous budget since getPublic (a plain read,
+// to render the page) and submitPublic share it; uploads are tighter since
+// each one costs real S3 I/O.
+export const PUBLIC_FORM_RATE_LIMIT_MAX = 30;
+export const PUBLIC_UPLOAD_RATE_LIMIT_MAX = 20;
+
 /** The window a given instant falls into, as a Redis key. */
 export function rateLimitBucketKey(
   bucket: string,
@@ -50,7 +59,7 @@ export async function assertAuthRateLimit(ip: string, email?: string) {
     max: AUTH_RATE_LIMIT_MAX,
   });
   if (ipOver) {
-    throw new AuthRateLimitError();
+    throw new RateLimitError();
   }
   if (email) {
     const { overLimit: emailOver } = await checkRateLimit(
@@ -58,15 +67,48 @@ export async function assertAuthRateLimit(ip: string, email?: string) {
       { max: AUTH_EMAIL_RATE_LIMIT_MAX },
     );
     if (emailOver) {
-      throw new AuthRateLimitError();
+      throw new RateLimitError();
     }
   }
 }
 
-export class AuthRateLimitError extends Error {
+/**
+ * A single-bucket check for the public form/upload surfaces below — unlike
+ * auth's ip+email dual-bucket shape, these each need one or two independent
+ * buckets checked by their own callers (e.g. form.submitPublic checks both
+ * an IP bucket and a publicToken bucket), so this stays a plain
+ * check-and-throw rather than baking in a fixed set of buckets.
+ */
+export async function assertPublicRateLimit(bucket: string, max: number) {
+  const { overLimit } = await checkRateLimit(bucket, { max });
+  if (overLimit) {
+    throw new RateLimitError();
+  }
+}
+
+export class RateLimitError extends Error {
   readonly code = "TOO_MANY_REQUESTS" as const;
   constructor() {
     super("Too many attempts. Try again in a minute.");
-    this.name = "AuthRateLimitError";
+    this.name = "RateLimitError";
   }
+}
+
+// `X-Forwarded-For` is appended-to by each proxy hop, so its FIRST entry is
+// whatever the client itself sent — trusting it unconditionally lets anyone
+// bypass a rate limit by sending a fresh spoofed value on every request.
+// Its LAST entry is the one added by the hop closest to us, which — for the
+// single reverse proxy this app expects in front of it (see index.ts's
+// `trustProxy: true` comment) — is the one we actually control and can
+// trust. If the real deployment ever sits behind more than one hop, this
+// (and `trustProxy`, currently a blanket `true`) needs to change to trust
+// exactly that many hops, not fewer/more.
+export function clientIp(req: { ip?: string; headers: Record<string, unknown> }): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.length > 0) {
+    const hops = forwarded.split(",").map((h) => h.trim());
+    const nearest = hops.at(-1);
+    if (nearest) return nearest;
+  }
+  return req.ip ?? "unknown";
 }

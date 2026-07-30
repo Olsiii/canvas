@@ -54,6 +54,12 @@ export function useRealtime(
           if (event.entity === "task") {
             utils.task.get.invalidate({ taskId: event.id });
             utils.task.highlights.invalidate();
+            // attachment.list is a separate query from task.get/task.list
+            // (attachments-section.tsx, clips-section.tsx) — a new
+            // attachment publishes a plain "task updated" event (see
+            // attachment.ts's confirmUpload), so without this a second
+            // viewer of the same task would never see it land.
+            utils.attachment.list.invalidate({ taskId: event.id });
             // A task's completion can move any goal it's linked to (goal
             // progress is derived from linked tasks' completedAt, not
             // pushed) — no per-goal id on the wire, so invalidate broadly

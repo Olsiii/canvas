@@ -3,6 +3,7 @@ import { BlurhashThumb } from "@/components/blurhash-thumb";
 import { Lightbox } from "@/components/lightbox";
 import type { MentionCandidate } from "@/components/mention-list";
 import { Button } from "@/components/ui/button";
+import { useAttachmentUpload } from "@/hooks/use-attachment-upload";
 import { useModalA11y } from "@/hooks/use-modal-a11y";
 import { useSession } from "@/hooks/use-session";
 import { Avatar } from "@/lib/avatar";
@@ -43,6 +44,8 @@ export function ChannelMessages({
   const invalidate = () => utils.chat.message.list.invalidate({ channelId });
   const createMessage = trpc.chat.message.create.useMutation();
   const deleteMessage = trpc.chat.message.delete.useMutation({ onSuccess: invalidate });
+  const { uploadFile, progress: uploadProgress } = useAttachmentUpload();
+  const [sendingFiles, setSendingFiles] = useState(false);
 
   const candidatesRef = useRef<MentionCandidate[]>([]);
   useEffect(() => {
@@ -55,16 +58,20 @@ export function ChannelMessages({
   );
 
   // The message must exist before a file can be tagged with its id — send
-  // the message first, then upload each selected file against the new id,
-  // then refresh. See attachments-section.tsx for the same /uploads
-  // multipart pattern (tRPC has no file-upload transport).
+  // the message first, then upload each selected file against the new id
+  // (straight to storage, see use-attachment-upload.ts, so a multi-GB
+  // file never gets buffered in the API), then refresh.
   async function sendWithFiles(bodyJson: unknown, files: File[], parentMessageId?: string) {
     const message = await createMessage.mutateAsync({ channelId, parentMessageId, bodyJson });
-    for (const file of files) {
-      const form = new FormData();
-      form.append("messageId", message.id);
-      form.append("file", file);
-      await fetch("/uploads", { method: "POST", body: form, credentials: "include" });
+    if (files.length > 0) {
+      setSendingFiles(true);
+      try {
+        for (const file of files) {
+          await uploadFile(file, { messageId: message.id });
+        }
+      } finally {
+        setSendingFiles(false);
+      }
     }
     invalidate();
   }
@@ -144,7 +151,8 @@ export function ChannelMessages({
           <MessageComposer
             candidatesRef={candidatesRef}
             placeholder="Message this channel… use @ to mention"
-            isPending={createMessage.isPending}
+            isPending={createMessage.isPending || sendingFiles}
+            uploadProgress={sendingFiles ? Object.values(uploadProgress)[0] : undefined}
             onSubmit={(bodyJson, files) => void sendWithFiles(bodyJson, files)}
           />
         </div>
@@ -221,7 +229,8 @@ export function ChannelMessages({
                 candidatesRef={candidatesRef}
                 placeholder="Write a reply…"
                 autoFocus
-                isPending={createMessage.isPending}
+                isPending={createMessage.isPending || sendingFiles}
+                uploadProgress={sendingFiles ? Object.values(uploadProgress)[0] : undefined}
                 onSubmit={(bodyJson, files) => void sendWithFiles(bodyJson, files, openThreadId)}
               />
             </div>
@@ -378,12 +387,17 @@ function MessageComposer({
   placeholder,
   autoFocus,
   isPending,
+  uploadProgress,
   onSubmit,
 }: {
   candidatesRef: React.RefObject<MentionCandidate[]>;
   placeholder: string;
   autoFocus?: boolean;
   isPending: boolean;
+  /** Percent (0-100) of the file currently uploading, if any — a send with
+   * a large attachment can take minutes, so the Send button alone going
+   * disabled isn't enough feedback. */
+  uploadProgress?: number;
   onSubmit: (bodyJson: unknown, files: File[]) => void;
 }) {
   const [extensions] = useState(() => [StarterKit, createMentionExtension(candidatesRef)]);
@@ -498,17 +512,22 @@ function MessageComposer({
         >
           <Paperclip className="h-4 w-4" aria-hidden />
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="gap-1.5"
-          data-testid="message-send"
-          disabled={empty || isPending}
-          onClick={handleSend}
-        >
-          <Send className="h-3.5 w-3.5" aria-hidden />
-          Send
-        </Button>
+        <div className="flex items-center gap-2">
+          {uploadProgress !== undefined && (
+            <span className="text-muted-foreground text-xs">Uploading… {uploadProgress}%</span>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5"
+            data-testid="message-send"
+            disabled={empty || isPending}
+            onClick={handleSend}
+          >
+            <Send className="h-3.5 w-3.5" aria-hidden />
+            Send
+          </Button>
+        </div>
       </div>
     </div>
   );

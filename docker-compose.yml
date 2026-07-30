@@ -42,6 +42,13 @@ services:
     environment:
       MINIO_ROOT_USER: canvas
       MINIO_ROOT_PASSWORD: canvas12345
+      # MinIO doesn't implement the S3 PutBucketCors API (apps/api/src/lib/
+      # storage.ts's ensureBucketExists() call to it 501s and is swallowed)
+      # — this is MinIO's own equivalent, needed so direct browser->MinIO
+      # attachment uploads (attachment.presignUpload) aren't blocked by the
+      # browser's CORS check. Real S3/R2 in prod use actual bucket CORS
+      # instead; this var only matters for local dev.
+      MINIO_API_CORS_ALLOW_ORIGIN: http://localhost:5183
     ports:
       - "9000:9000"
       - "9001:9001"

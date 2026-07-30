@@ -20,8 +20,12 @@ test("M4.6 clips: upload a screen-recording clip, play it, reload, and delete", 
   await page.getByRole("button", { name: "Repro the crash" }).click();
   await expect(page.getByLabel("Task title")).toHaveValue("Repro the crash");
 
-  const clipUploaded = page.waitForResponse(
-    (res) => res.url().includes("/uploads") && res.request().method() === "POST",
+  // Uploads now go straight to storage (attachment.presignUpload + a
+  // direct PUT + attachment.confirmUpload) rather than a single POST
+  // /uploads — confirmUpload is the step that actually creates the
+  // attachments row.
+  const clipUploaded = page.waitForResponse((res) =>
+    res.url().includes("attachment.confirmUpload"),
   );
   await page.getByLabel("Upload clip").setInputFiles(CLIP_FIXTURE);
   await clipUploaded;

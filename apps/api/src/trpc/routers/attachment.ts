@@ -1,18 +1,37 @@
 import { db, schema } from "@canvas/db";
 import {
   attachExternalSchema,
+  confirmUploadSchema,
   deleteAttachmentSchema,
   listAttachmentsSchema,
+  presignUploadSchema,
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { asc, eq } from "drizzle-orm";
+import { uuidv7 } from "uuidv7";
 import { logActivity } from "../../lib/activity";
+import { requireAttachmentTarget } from "../../lib/attachment-auth";
 import { isChannelMember, requireChannel, requireMessage } from "../../lib/chat-queries";
 import { parseDriveLink } from "../../lib/drive-link";
+import { processImage } from "../../lib/image-processing";
+import { sanitizeFilenameForKey } from "../../lib/filename";
 import { assertCan } from "../../lib/permissions";
-import { deleteObject } from "../../lib/storage";
+import { publish } from "../../lib/realtime";
+import {
+  deleteObject,
+  getObject,
+  getPresignedUploadUrl,
+  headObject,
+  putObject,
+} from "../../lib/storage";
 import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
+
+async function bufferFromStream(body: unknown): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Buffer>) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
 
 export const attachmentRouter = router({
   // Exactly one of taskId/messageId — see listAttachmentsSchema.
@@ -62,6 +81,111 @@ export const attachmentRouter = router({
       "attachment.deleted",
     );
     return { id: attachment.id };
+  }),
+
+  // Direct-to-storage upload, step 1 of 2 — see packages/shared's
+  // presignUploadSchema for the full reasoning. Never touches the
+  // database; a browser that gets a URL and never uses it just leaves an
+  // unreferenced (harmless, cheap) object in the bucket, not a phantom
+  // attachment row.
+  presignUpload: protectedProcedure.input(presignUploadSchema).mutation(async ({ ctx, input }) => {
+    const { workspaceId } = await requireAttachmentTarget(ctx.user, {
+      taskId: input.taskId,
+      messageId: input.messageId,
+    });
+
+    const attachmentId = uuidv7();
+    const key = `attachments/${workspaceId}/${attachmentId}/${sanitizeFilenameForKey(input.fileName)}`;
+    const uploadUrl = await getPresignedUploadUrl(key, input.mime);
+
+    return { attachmentId, key, uploadUrl };
+  }),
+
+  // Step 2 — re-checks permission (never trust that a confirm call came
+  // from the same session that got the presigned URL), verifies the
+  // object actually landed in storage rather than trusting the client's
+  // word for it, and only then creates the attachments row. Image
+  // thumbnailing needs the real bytes, so for images this downloads the
+  // object back from storage to run the same processImage() the old
+  // buffered-upload route used inline — a cost only image uploads pay;
+  // the large 3D/video files this flow exists for never hit this branch.
+  confirmUpload: protectedProcedure.input(confirmUploadSchema).mutation(async ({ ctx, input }) => {
+    const { workspaceId } = await requireAttachmentTarget(ctx.user, {
+      taskId: input.taskId,
+      messageId: input.messageId,
+    });
+
+    const head = await headObject(input.key);
+    if (!head) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Upload did not complete" });
+    }
+
+    let thumbKey: string | null = null;
+    let blurhash: string | null = null;
+    let width: number | null = null;
+    let height: number | null = null;
+    if (input.mime.startsWith("image/")) {
+      const object = await getObject(input.key);
+      const buffer = await bufferFromStream(object.Body);
+      const processed = await processImage(buffer);
+      if (processed) {
+        thumbKey = `attachments/${workspaceId}/${input.attachmentId}/thumb.webp`;
+        await putObject(thumbKey, processed.thumbBuffer, processed.thumbContentType);
+        ({ blurhash, width, height } = processed);
+      }
+    }
+
+    const [attachment] = await db
+      .insert(schema.attachments)
+      .values({
+        id: input.attachmentId,
+        workspaceId,
+        taskId: input.taskId ?? null,
+        messageId: input.messageId ?? null,
+        uploaderId: ctx.user.id,
+        fileKey: input.key,
+        fileName: input.fileName,
+        mime: input.mime,
+        sizeBytes: head.ContentLength ?? 0,
+        thumbKey,
+        blurhash,
+        width,
+        height,
+      })
+      .returning();
+    if (!attachment) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await logActivity(workspaceId, ctx.user.id, "attachment", attachment.id, "attachment.created");
+
+    // Pre-existing gap this touches while it's here: neither the old
+    // /uploads route nor this one ever published a realtime event, so
+    // an attachment only ever showed up for the person who uploaded it
+    // — anyone else viewing the same task/message needed a manual
+    // reload. Reusing the task/message entity types rather than
+    // inventing an "attachment" one: both client invalidation branches
+    // already exist (use-realtime.ts), so a task event here also
+    // refreshes attachment.list, and a message event refreshes
+    // chat.message.list, which already embeds each message's
+    // attachments.
+    if (input.taskId) {
+      const task = await requireTask(input.taskId);
+      await publish(workspaceId, {
+        entity: "task",
+        id: input.taskId,
+        listId: task.listId,
+        kind: "updated",
+      });
+    } else if (input.messageId) {
+      const message = await requireMessage(input.messageId);
+      await publish(workspaceId, {
+        entity: "message",
+        id: input.messageId,
+        channelId: message.channelId,
+        kind: "updated",
+      });
+    }
+
+    return attachment;
   }),
 
   // M5.6 Google Drive "picker": a plain tRPC mutation (unlike /uploads —

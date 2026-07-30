@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { users } from "./auth";
 import { workspaces } from "./workspaces";
@@ -12,55 +12,67 @@ import { workspaces } from "./workspaces";
 // effective access follows its creator's current workspace role exactly
 // (if they're removed from the workspace, their keys stop working too) —
 // no separate "service account" concept needed.
-export const apiKeys = pgTable("api_keys", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  hash: text("hash").notNull().unique(),
-  name: text("name").notNull(),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    hash: text("hash").notNull().unique(),
+    name: text("name").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("api_keys_workspace_id_idx").on(table.workspaceId)],
+);
 
 // DATA_MODEL.md: webhooks (id, workspace_id fk, url, events text[], secret).
 // `createdBy` added for the same reason as above (also used as the
 // activity-log actor when a webhook is created/deleted).
-export const webhooks = pgTable("webhooks", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  url: text("url").notNull(),
-  events: text("events").array().notNull(),
-  secret: text("secret").notNull(),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const webhooks = pgTable(
+  "webhooks",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    events: text("events").array().notNull(),
+    secret: text("secret").notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("webhooks_workspace_id_idx").on(table.workspaceId)],
+);
 
 // Delivery attempts for outbound webhooks (success + failure). Not in the
 // compact DATA_MODEL listing — needed so admins can see why a hook failed
 // without digging through worker logs.
-export const webhookDeliveries = pgTable("webhook_deliveries", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  webhookId: uuid("webhook_id")
-    .notNull()
-    .references(() => webhooks.id, { onDelete: "cascade" }),
-  event: text("event").notNull(),
-  status: text("status").notNull(), // 'success' | 'failed'
-  httpStatus: integer("http_status"),
-  error: text("error"),
-  attempt: integer("attempt").notNull().default(1),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    webhookId: uuid("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    event: text("event").notNull(),
+    status: text("status").notNull(), // 'success' | 'failed'
+    httpStatus: integer("http_status"),
+    error: text("error"),
+    attempt: integer("attempt").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("webhook_deliveries_webhook_id_idx").on(table.webhookId)],
+);

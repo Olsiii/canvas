@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { uuidv7 } from "uuidv7";
 import { lists } from "./hierarchy";
 import { tasks } from "./tasks";
@@ -22,26 +22,30 @@ import { workspaces } from "./workspaces";
 // still worth keeping around as a record even if its task is later
 // deleted. `listId` stays required either way — a form is still organized
 // under a list for permission/listing purposes even in completion mode.
-export const forms = pgTable("forms", {
-  id: uuid("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  listId: uuid("list_id")
-    .notNull()
-    .references(() => lists.id, { onDelete: "cascade" }),
-  taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
-  name: text("name").notNull(),
-  schemaJson: jsonb("schema_json").$type<unknown>().notNull(),
-  publicToken: text("public_token")
-    .notNull()
-    .unique()
-    .$defaultFn(() => uuidv7()),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const forms = pgTable(
+  "forms",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    listId: uuid("list_id")
+      .notNull()
+      .references(() => lists.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    schemaJson: jsonb("schema_json").$type<unknown>().notNull(),
+    publicToken: text("public_token")
+      .notNull()
+      .unique()
+      .$defaultFn(() => uuidv7()),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("forms_workspace_id_idx").on(table.workspaceId)],
+);

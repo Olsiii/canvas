@@ -1,15 +1,18 @@
 import { Section } from "@/components/detail-field";
+import { useAttachmentUpload } from "@/hooks/use-attachment-upload";
 import { trpc } from "@/lib/trpc";
 import { useRef, useState } from "react";
 
 /**
- * M4.6 "Clips (screen recording upload)". Reuses the M1.9 `/uploads`
- * REST route and `attachments` table as-is (DATA_MODEL.md has no separate
- * clips table, and `mime` already tells video apart from everything
- * else) — this is purely a video-filtered, video-playing view over the
- * same per-task attachment list AttachmentsSection renders, same shape as
- * M4.4's annotations reusing `comments` instead of inventing a parallel
- * concept.
+ * M4.6 "Clips (screen recording upload)". Reuses the `attachments` table
+ * as-is (DATA_MODEL.md has no separate clips table, and `mime` already
+ * tells video apart from everything else) — this is purely a
+ * video-filtered, video-playing view over the same per-task attachment
+ * list AttachmentsSection renders, same shape as M4.4's annotations
+ * reusing `comments` instead of inventing a parallel concept. Uploads go
+ * straight to storage (see use-attachment-upload.ts) rather than through
+ * the API, since screen recordings are exactly the kind of large file
+ * that shouldn't be buffered whole in server memory.
  */
 export function ClipsSection({ taskId }: { taskId: string }) {
   const utils = trpc.useUtils();
@@ -20,6 +23,7 @@ export function ClipsSection({ taskId }: { taskId: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { uploadFile, progress } = useAttachmentUpload();
 
   const clips = (attachments.data ?? []).filter((a) => a.mime.startsWith("video/"));
 
@@ -29,14 +33,7 @@ export function ClipsSection({ taskId }: { taskId: string }) {
     setUploadError(null);
     try {
       for (const file of Array.from(fileList)) {
-        const form = new FormData();
-        form.append("taskId", taskId);
-        form.append("file", file);
-        const res = await fetch("/uploads", { method: "POST", body: form, credentials: "include" });
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error ?? "Upload failed");
-        }
+        await uploadFile(file, { taskId });
       }
       invalidate();
     } catch (err) {
@@ -90,7 +87,13 @@ export function ClipsSection({ taskId }: { taskId: string }) {
             onChange={(e) => handleFiles(e.target.files)}
             className="text-muted-foreground text-xs"
           />
-          {uploading && <span className="text-muted-foreground text-xs">Uploading…</span>}
+          {uploading && (
+            <span className="text-muted-foreground text-xs">
+              {Object.values(progress)[0] !== undefined
+                ? `Uploading… ${Object.values(progress)[0]}%`
+                : "Uploading…"}
+            </span>
+          )}
         </div>
         {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
       </div>
