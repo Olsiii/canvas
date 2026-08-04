@@ -17,8 +17,15 @@ import { useSession } from "@/hooks/use-session";
 import { Avatar } from "@/lib/avatar";
 import { primeDmSoundOnFirstInteraction } from "@/lib/dm-sound";
 import { trpc } from "@/lib/trpc";
-import { createRoute, Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
-import { ChevronLeft, LogOut, Sparkles, Wand2 } from "lucide-react";
+import {
+  createRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useParams,
+  useRouterState,
+} from "@tanstack/react-router";
+import { ChevronLeft, LogOut, Menu, Sparkles, Wand2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { rootRoute } from "./__root";
 
@@ -49,6 +56,16 @@ function WorkspaceShell() {
     generateOpen,
   );
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { containerRef: sidebarRef, onKeyDown: sidebarOnKeyDown } = useModalA11y(
+    () => setMobileNavOpen(false),
+    mobileNavOpen,
+  );
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   const handleDmNotificationEvent = useDmNotifications(workspaceId);
   useRealtime(workspaceId, handleDmNotificationEvent);
   useEffect(() => {
@@ -56,8 +73,43 @@ function WorkspaceShell() {
   }, []);
 
   return (
-    <div className="flex h-svh">
-      <aside className="workspace-sidebar border-border bg-card text-foreground flex w-64 shrink-0 flex-col border-r">
+    <div className="flex h-svh flex-col md:flex-row">
+      <div className="workspace-sidebar border-border bg-card text-foreground flex items-center gap-2 border-b px-3 py-2 md:hidden">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Open navigation menu"
+          aria-expanded={mobileNavOpen}
+          title="Open navigation menu"
+          onClick={() => setMobileNavOpen(true)}
+        >
+          <Menu className="h-5 w-5" aria-hidden />
+        </Button>
+        <CanvasLogo size={32} />
+      </div>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Dismiss navigation menu overlay"
+          title="Dismiss navigation menu overlay"
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+      <aside
+        ref={sidebarRef}
+        onKeyDown={sidebarOnKeyDown}
+        // Only a real modal dialog while acting as the mobile off-canvas
+        // overlay — on desktop this is a normal persistent, non-modal
+        // sidebar, and asserting aria-modal there would wrongly tell
+        // assistive tech the main content is inert.
+        role={mobileNavOpen ? "dialog" : undefined}
+        aria-modal={mobileNavOpen ? true : undefined}
+        aria-label="Workspace navigation"
+        tabIndex={-1}
+        className={`workspace-sidebar border-border bg-card text-foreground fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shrink-0 -translate-x-full flex-col border-r outline-none transition-transform duration-200 md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0 ${mobileNavOpen ? "translate-x-0" : ""}`}
+      >
         <div className="border-border flex items-center gap-3 border-b px-3 py-3">
           <Link to="/" aria-label="Canvas home" className="shrink-0">
             <CanvasLogo size={56} />
@@ -73,6 +125,17 @@ function WorkspaceShell() {
             <h1 className="truncate text-sm font-semibold">{workspace?.name ?? "Workspace"}</h1>
           </div>
           <NotificationsBell />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Close navigation menu"
+            title="Close navigation menu"
+            className="md:hidden"
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
         </div>
 
         <div className="border-border space-y-2 border-b px-3 py-2.5">

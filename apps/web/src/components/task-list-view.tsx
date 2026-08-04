@@ -195,98 +195,113 @@ export function TaskListView({
         </div>
       </div>
 
-      <div className={`border-border grid ${COLUMNS} gap-2 border-b px-2 pb-1 text-xs font-medium`}>
-        {table.getFlatHeaders().map((header) =>
-          isGroupedByStatus && header.column.id === "statusId" ? (
-            <span key={header.id} />
-          ) : (
-            <button
-              key={header.id}
-              type="button"
-              onClick={header.column.getToggleSortingHandler()}
-              className="hover:text-foreground text-muted-foreground flex items-center gap-1 text-left"
-            >
-              {flexRender(header.column.columnDef.header, header.getContext())}
-              {header.column.getIsSorted() === "asc" && " ▲"}
-              {header.column.getIsSorted() === "desc" && " ▼"}
-            </button>
-          ),
-        )}
-      </div>
+      {/* min-w-0 lets this flex child shrink below its content size so
+          overflow-x-auto can actually kick in on a narrow (mobile) viewport
+          instead of the 1fr Title column being squeezed to unreadable
+          width — the inner min-w-[520px] wrappers below give the header
+          and virtualized rows a shared, scrollable minimum so columns
+          never collapse smaller than usable. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+        <div className="min-w-[520px]">
+          <div
+            className={`border-border grid ${COLUMNS} gap-2 border-b px-2 pb-1 text-xs font-medium`}
+          >
+            {table.getFlatHeaders().map((header) =>
+              isGroupedByStatus && header.column.id === "statusId" ? (
+                <span key={header.id} />
+              ) : (
+                <button
+                  key={header.id}
+                  type="button"
+                  onClick={header.column.getToggleSortingHandler()}
+                  className="hover:text-foreground text-muted-foreground flex items-center gap-1 text-left"
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  {header.column.getIsSorted() === "asc" && " ▲"}
+                  {header.column.getIsSorted() === "desc" && " ▼"}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const row = rows[virtualRow.index];
-            if (!row) return null;
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            className="min-w-[520px]"
+            style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              if (!row) return null;
 
-            const rowStyle = {
-              position: "absolute" as const,
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: virtualRow.size,
-              transform: `translateY(${virtualRow.start}px)`,
-            };
+              const rowStyle = {
+                position: "absolute" as const,
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: virtualRow.size,
+                transform: `translateY(${virtualRow.start}px)`,
+              };
 
-            if (row.getIsGrouped()) {
-              const status = statusById.get(row.groupingValue as string);
+              if (row.getIsGrouped()) {
+                const status = statusById.get(row.groupingValue as string);
+                return (
+                  <div
+                    key={row.id}
+                    style={{
+                      ...rowStyle,
+                      backgroundColor: `${status?.color ?? "#94a3b8"}12`,
+                      borderLeftColor: status?.color ?? "#94a3b8",
+                    }}
+                    className="flex items-center gap-2 border-l-4 px-2 text-xs font-semibold"
+                  >
+                    <button
+                      type="button"
+                      onClick={row.getToggleExpandedHandler()}
+                      className="w-3"
+                      aria-label={row.getIsExpanded() ? "Collapse group" : "Expand group"}
+                      title={row.getIsExpanded() ? "Collapse group" : "Expand group"}
+                    >
+                      {row.getIsExpanded() ? "▾" : "▸"}
+                    </button>
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: status?.color }}
+                      aria-hidden
+                    />
+                    {status?.name ?? "—"}{" "}
+                    <span
+                      className="rounded-full px-1.5 py-0.5 text-[10px]"
+                      style={{
+                        backgroundColor: `${status?.color ?? "#94a3b8"}26`,
+                        color: status?.color,
+                      }}
+                    >
+                      ({row.subRows.length})
+                    </span>
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={row.id}
-                  style={{
-                    ...rowStyle,
-                    backgroundColor: `${status?.color ?? "#94a3b8"}12`,
-                    borderLeftColor: status?.color ?? "#94a3b8",
-                  }}
-                  className="flex items-center gap-2 border-l-4 px-2 text-xs font-semibold"
+                  style={rowStyle}
+                  className={`border-border grid ${COLUMNS} items-center gap-2 border-b px-2 text-sm`}
                 >
-                  <button
-                    type="button"
-                    onClick={row.getToggleExpandedHandler()}
-                    className="w-3"
-                    aria-label={row.getIsExpanded() ? "Collapse group" : "Expand group"}
-                    title={row.getIsExpanded() ? "Collapse group" : "Expand group"}
-                  >
-                    {row.getIsExpanded() ? "▾" : "▸"}
-                  </button>
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: status?.color }}
-                    aria-hidden
-                  />
-                  {status?.name ?? "—"}{" "}
-                  <span
-                    className="rounded-full px-1.5 py-0.5 text-[10px]"
-                    style={{
-                      backgroundColor: `${status?.color ?? "#94a3b8"}26`,
-                      color: status?.color,
-                    }}
-                  >
-                    ({row.subRows.length})
-                  </span>
+                  {row.getVisibleCells().map((cell) =>
+                    isGroupedByStatus && cell.column.id === "statusId" ? (
+                      <span key={cell.id} />
+                    ) : (
+                      <div key={cell.id} className="truncate">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    ),
+                  )}
                 </div>
               );
-            }
-
-            return (
-              <div
-                key={row.id}
-                style={rowStyle}
-                className={`border-border grid ${COLUMNS} items-center gap-2 border-b px-2 text-sm`}
-              >
-                {row.getVisibleCells().map((cell) =>
-                  isGroupedByStatus && cell.column.id === "statusId" ? (
-                    <span key={cell.id} />
-                  ) : (
-                    <div key={cell.id} className="truncate">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </div>
-                  ),
-                )}
-              </div>
-            );
-          })}
+            })}
+          </div>
         </div>
       </div>
     </div>
