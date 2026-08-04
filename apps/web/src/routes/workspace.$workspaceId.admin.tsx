@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { createRoute, Navigate } from "@tanstack/react-router";
 import { Activity, DatabaseBackup, Gauge, HeartPulse } from "lucide-react";
-import { useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { workspaceShellRoute } from "./workspace.$workspaceId";
 
 export const adminRoute = createRoute({
@@ -173,11 +173,39 @@ function BackupSection({ workspaceId }: { workspaceId: string }) {
 }
 
 function AuditSection({ workspaceId }: { workspaceId: string }) {
-  const activity = trpc.activity.listWorkspace.useQuery({
+  const [actorId, setActorId] = useState("");
+  const [entityType, setEntityType] = useState("");
+  const [verb, setVerb] = useState("");
+  const [debouncedVerb, setDebouncedVerb] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedVerb(verb.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [verb]);
+
+  const members = trpc.workspace.members.useQuery({ workspaceId });
+  const entityTypes = trpc.activity.entityTypes.useQuery({ workspaceId });
+
+  const filters = {
     workspaceId,
-    limit: 100,
+    limit: 50,
+    actorId: actorId || undefined,
+    entityType: entityType || undefined,
+    verb: debouncedVerb || undefined,
+    // Date inputs are local-midnight `YYYY-MM-DD`; `to` is widened to the
+    // end of that day so a same-day range isn't empty.
+    from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
+    to: to ? new Date(`${to}T23:59:59.999`).toISOString() : undefined,
+  };
+  const hasFilters = Boolean(actorId || entityType || debouncedVerb || from || to);
+
+  const activity = trpc.activity.listWorkspace.useInfiniteQuery(filters, {
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
-  const rows = activity.data ?? [];
+  const rows = useMemo(() => activity.data?.pages.flatMap((p) => p.items) ?? [], [activity.data]);
+
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -186,16 +214,99 @@ function AuditSection({ workspaceId }: { workspaceId: string }) {
     overscan: 8,
   });
 
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = activity;
+  const lastIndex = virtualizer.getVirtualItems().at(-1)?.index;
+  useEffect(() => {
+    if (lastIndex === undefined) return;
+    if (lastIndex >= rows.length - 1 && hasNextPage && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [lastIndex, rows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   return (
     <section className="space-y-2" data-testid="admin-audit">
       <div className="flex items-center gap-2">
         <Activity className="text-muted-foreground h-4 w-4" aria-hidden />
         <h2 className="text-sm font-semibold">Audit log</h2>
       </div>
-      <p className="text-muted-foreground text-xs">Recent workspace activity (newest first).</p>
+      <p className="text-muted-foreground text-xs">Workspace activity, newest first.</p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Filter by member"
+          data-testid="admin-audit-actor-filter"
+          value={actorId}
+          onChange={(e) => setActorId(e.target.value)}
+          className="border-border bg-background h-7 rounded border text-xs"
+        >
+          <option value="">All members</option>
+          {(members.data ?? []).map((m) => (
+            <option key={m.userId} value={m.userId}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="Filter by entity type"
+          data-testid="admin-audit-entity-filter"
+          value={entityType}
+          onChange={(e) => setEntityType(e.target.value)}
+          className="border-border bg-background h-7 rounded border text-xs"
+        >
+          <option value="">All entity types</option>
+          {(entityTypes.data ?? []).map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          aria-label="Filter by action"
+          placeholder="Action contains…"
+          data-testid="admin-audit-verb-filter"
+          value={verb}
+          onChange={(e) => setVerb(e.target.value)}
+          className="border-border bg-background h-7 w-36 rounded border px-2 text-xs"
+        />
+        <input
+          type="date"
+          aria-label="From date"
+          data-testid="admin-audit-from-filter"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className="border-border bg-background h-7 rounded border px-1 text-xs"
+        />
+        <input
+          type="date"
+          aria-label="To date"
+          data-testid="admin-audit-to-filter"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="border-border bg-background h-7 rounded border px-1 text-xs"
+        />
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setActorId("");
+              setEntityType("");
+              setVerb("");
+              setFrom("");
+              setTo("");
+            }}
+            className="text-muted-foreground hover:text-foreground text-xs"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {activity.isLoading && <p className="text-muted-foreground text-xs">Loading…</p>}
       {rows.length === 0 && !activity.isLoading ? (
-        <p className="text-muted-foreground text-xs">No activity yet.</p>
+        <p className="text-muted-foreground text-xs">
+          {hasFilters ? "No activity matches these filters." : "No activity yet."}
+        </p>
       ) : (
         <div
           ref={parentRef}
