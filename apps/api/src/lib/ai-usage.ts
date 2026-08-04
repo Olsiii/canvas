@@ -1,16 +1,19 @@
-// Per-image cost, keyed by ImageEngine.provider. Gemini has no live calls
-// yet (no GEMINI_API_KEY configured) so its number stays the original rough
-// placeholder — CLAUDE.md: "Verify current model names/pricing at build
-// time — this space moves monthly." OpenAI's is a real, sourced estimate:
-// gpt-image-1 bills per output image token rather than a flat per-image
-// price, but at the "medium" quality OpenAI's own docs use as the default
-// example, a single 1024x1024/1024x1536/1536x1024 image is ~$0.04 — used
-// here as a flat per-image approximation since this adapter doesn't expose
-// a quality parameter to vary the estimate by. Returns a string since
-// Drizzle's `numeric` column type reads/writes strings, not floats (avoids
-// float rounding on a money column).
+// Per-image cost, keyed by ImageEngine.provider — both are real, sourced
+// estimates now that both adapters make live calls when their key is set
+// (CLAUDE.md: "verify current model names/pricing at build time — this
+// space moves monthly," so re-check both before relying on either in
+// production). gemini-2.5-flash-image bills at Google's published
+// $30/1M output tokens, and a generated image is a flat 1290 output tokens
+// regardless of size — 1290/1_000_000 * 30 = $0.0387/image. gpt-image-1
+// bills per output image token too, but at the "medium" quality OpenAI's
+// own docs use as the default example, a single
+// 1024x1024/1024x1536/1536x1024 image is ~$0.04 — used here as a flat
+// per-image approximation since this adapter doesn't expose a quality
+// parameter to vary the estimate by. Returns a string since Drizzle's
+// `numeric` column type reads/writes strings, not floats (avoids float
+// rounding on a money column).
 const ESTIMATED_COST_PER_IMAGE_USD: Record<string, number> = {
-  gemini: 0.02,
+  gemini: 0.0387,
   openai: 0.04,
 };
 const DEFAULT_ESTIMATED_COST_PER_IMAGE_USD = 0.02;

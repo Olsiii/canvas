@@ -3,8 +3,8 @@ import { estimateChatCostUsd, estimateImageCostUsd } from "./ai-usage";
 
 describe("estimateImageCostUsd", () => {
   it("scales linearly with image count, per provider", () => {
-    expect(estimateImageCostUsd("gemini", 1)).toBe("0.0200");
-    expect(estimateImageCostUsd("gemini", 3)).toBe("0.0600");
+    expect(estimateImageCostUsd("gemini", 1)).toBe("0.0387");
+    expect(estimateImageCostUsd("gemini", 3)).toBe("0.1161");
     expect(estimateImageCostUsd("openai", 1)).toBe("0.0400");
     expect(estimateImageCostUsd("openai", 3)).toBe("0.1200");
   });

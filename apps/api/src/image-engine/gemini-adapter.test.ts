@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { colorFromSeed, dimensionsForAspect, GeminiImageAdapter } from "./gemini-adapter";
 
 describe("dimensionsForAspect", () => {
@@ -28,7 +28,7 @@ describe("colorFromSeed", () => {
   });
 });
 
-describe("GeminiImageAdapter", () => {
+describe("GeminiImageAdapter (no key — mock fallback)", () => {
   const engine = new GeminiImageAdapter();
 
   it("generates n images at the requested aspect's dimensions", async () => {
@@ -83,5 +83,132 @@ describe("GeminiImageAdapter", () => {
       referenceImageUrls: ["https://example.com/ref.png"],
     });
     expect(withoutRefs!.buffer.equals(withRefs!.buffer)).toBe(false);
+  });
+});
+
+function fakeGenerateContentResponse(imageCount = 1): Response {
+  const parts = Array.from({ length: imageCount }, () => ({
+    inlineData: { mimeType: "image/png", data: Buffer.from("fake-png-bytes").toString("base64") },
+  }));
+  return new Response(JSON.stringify({ candidates: [{ content: { parts } }] }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+describe("GeminiImageAdapter (real API key — HTTP path)", () => {
+  it("generate() calls generateContent with the prompt and candidateCount, and decodes b64 images", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(fakeGenerateContentResponse(2));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const engine = new GeminiImageAdapter("test-key");
+    const images = await engine.generate({ prompt: "bottle", size: "landscape", n: 2 });
+
+    expect(images).toHaveLength(2);
+    expect(images[0]!.width).toBe(1536);
+    expect(images[0]!.height).toBe(1024);
+    expect(images[0]!.buffer.toString()).toBe("fake-png-bytes");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=test-key",
+    );
+    const body = JSON.parse(init.body as string);
+    expect(body.contents[0].parts[0]).toEqual({ text: "bottle" });
+    expect(body.generationConfig).toMatchObject({
+      candidateCount: 2,
+      imageConfig: { aspectRatio: "3:2" },
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("generate() with reference images attaches them as inline image parts", async () => {
+    const fetchMock = vi
+      .fn()
+      // one fetch per reference image (downloaded as bytes), then the generateContent call
+      .mockResolvedValueOnce(new Response(new Blob(["ref-bytes"]), { status: 200 }))
+      .mockResolvedValueOnce(fakeGenerateContentResponse(1));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const engine = new GeminiImageAdapter("test-key");
+    const images = await engine.generate({
+      prompt: "bottle in this style",
+      size: "square",
+      referenceImageUrls: ["https://example.com/ref.png"],
+    });
+
+    expect(images).toHaveLength(1);
+    const call = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(call[1].body as string);
+    expect(body.contents[0].parts).toHaveLength(2);
+    expect(body.contents[0].parts[1].inlineData.data).toBe(
+      Buffer.from("ref-bytes").toString("base64"),
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("edit() attaches the source image and an optional mask as inline image parts", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(new Blob(["source-bytes"]), { status: 200 }))
+      .mockResolvedValueOnce(new Response(new Blob(["mask-bytes"]), { status: 200 }))
+      .mockResolvedValueOnce(fakeGenerateContentResponse(1));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const engine = new GeminiImageAdapter("test-key");
+    const images = await engine.edit({
+      sourceImageUrl: "https://example.com/source.png",
+      maskUrl: "https://example.com/mask.png",
+      instruction: "make the sky pink",
+      size: "portrait",
+    });
+
+    expect(images).toHaveLength(1);
+    expect(images[0]!.width).toBe(1024);
+    expect(images[0]!.height).toBe(1536);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const call = fetchMock.mock.calls[2] as [string, RequestInit];
+    const body = JSON.parse(call[1].body as string);
+    expect(body.contents[0].parts).toHaveLength(3);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("throws a clear error on a non-OK response instead of returning fake data", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response("resource exhausted", { status: 429, statusText: "Too Many Requests" }),
+        ),
+    );
+
+    const engine = new GeminiImageAdapter("test-key");
+    await expect(engine.generate({ prompt: "bottle", size: "square" })).rejects.toThrow(/429/);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("throws a clear error when the response has no image data", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ candidates: [{ content: { parts: [] } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const engine = new GeminiImageAdapter("test-key");
+    await expect(engine.generate({ prompt: "bottle", size: "square" })).rejects.toThrow(
+      /no image data/,
+    );
+
+    vi.unstubAllGlobals();
   });
 });

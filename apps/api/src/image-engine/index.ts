@@ -10,13 +10,14 @@ const engines: Partial<Record<ImageProvider, ImageEngine>> = {};
 export function getImageEngine(provider: ImageProvider = DEFAULT_IMAGE_PROVIDER): ImageEngine {
   const existing = engines[provider];
   if (existing) return existing;
-  // OpenAIImageAdapter makes real gpt-image-1 calls once OPENAI_API_KEY is
-  // set, else falls back to its own deterministic mock (same
-  // graceful-degradation pattern as getChatClient's Anthropic/Mock split).
-  // GeminiImageAdapter has no equivalent real-call path yet — no
-  // GEMINI_API_KEY has been configured, so it stays fully mocked.
+  // Both adapters make real calls once their key is set, else fall back to
+  // their own deterministic mock (same graceful-degradation pattern as
+  // getChatClient's Anthropic/Mock split) — the key is always injected here
+  // from env, never read inside the adapter itself.
   const engine =
-    provider === "openai" ? new OpenAIImageAdapter(env.OPENAI_API_KEY) : new GeminiImageAdapter();
+    provider === "openai"
+      ? new OpenAIImageAdapter(env.OPENAI_API_KEY)
+      : new GeminiImageAdapter(env.GEMINI_API_KEY);
   engines[provider] = engine;
   return engine;
 }
