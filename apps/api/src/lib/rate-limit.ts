@@ -1,3 +1,4 @@
+import { env } from "../env";
 import { redisConnection } from "../queues/connection";
 
 // Fixed-window limiter. API keys use 60/min; auth (login/signup) uses a
@@ -5,8 +6,11 @@ import { redisConnection } from "../queues/connection";
 export const RATE_LIMIT_MAX_REQUESTS = 60;
 export const RATE_LIMIT_WINDOW_MS = 60_000;
 
-export const AUTH_RATE_LIMIT_MAX = 20;
-export const AUTH_EMAIL_RATE_LIMIT_MAX = 10;
+// Env-configurable (env.ts) rather than a fixed literal — see that file's
+// comment: the e2e suite overrides these much higher so a multi-worker
+// local run isn't rate-limited by its own credential-stuffing protection.
+export const AUTH_RATE_LIMIT_MAX = env.AUTH_RATE_LIMIT_MAX;
+export const AUTH_EMAIL_RATE_LIMIT_MAX = env.AUTH_EMAIL_RATE_LIMIT_MAX;
 
 // The two fully-public, session-less, state-mutating/storage-consuming
 // surfaces (form.getPublic/submitPublic, POST /public-forms/uploads) —

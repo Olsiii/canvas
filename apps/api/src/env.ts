@@ -38,6 +38,13 @@ const envSchema = z.object({
   OPENAI_API_KEY: optionalString,
   GEMINI_API_KEY: optionalString,
   SCHEDULER_TICK_MS: z.coerce.number().default(60_000),
+  // Per-IP / per-email signup+login budget (rate-limit.ts). Overridden much
+  // higher in the e2e webServer env — every parallel Playwright worker signs
+  // up from the same localhost IP, so the production-appropriate default
+  // (20/min) starves a multi-worker local run of the app's own real
+  // credential-stuffing protection, not a bug in the app itself.
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().default(20),
+  AUTH_EMAIL_RATE_LIMIT_MAX: z.coerce.number().default(10),
   SMTP_HOST: optionalString,
   SMTP_PORT: z.coerce.number().default(587),
   SMTP_SECURE: z.coerce.boolean().default(false),
@@ -48,6 +55,12 @@ const envSchema = z.object({
   GITHUB_API_BASE_URL: z.string().default("https://api.github.com"),
   // Optional — leave unset locally; paste the real project DSN in prod.
   SENTRY_DSN: optionalString,
+  // safe-outbound-url.ts's SSRF guard blocks every private/loopback
+  // address unconditionally — correct for real webhook/Slack URLs, but it
+  // also blocks the local mock HTTP servers the webhook/Slack e2e specs
+  // stand in for a real receiver with. Set only by the e2e webServer env
+  // (never a real deployment — see assertProdNotLocalhost below).
+  SAFE_OUTBOUND_ALLOW_PRIVATE: z.coerce.boolean().default(false),
 });
 
 function assertProdNotLocalhost(parsed: z.infer<typeof envSchema>) {
@@ -65,6 +78,9 @@ function assertProdNotLocalhost(parsed: z.infer<typeof envSchema>) {
   }
   if (parsed.S3_ACCESS_KEY_ID === "canvas" || parsed.S3_SECRET_ACCESS_KEY === "canvas12345") {
     offenders.push("S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY (dev MinIO defaults)");
+  }
+  if (parsed.SAFE_OUTBOUND_ALLOW_PRIVATE) {
+    offenders.push("SAFE_OUTBOUND_ALLOW_PRIVATE (disables SSRF protection — e2e-only)");
   }
   if (offenders.length > 0) {
     throw new Error(

@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { Agent, fetch as undiciFetch, type BodyInit, type HeadersInit } from "undici";
+import { env } from "../env";
 
 async function resolveAndValidate(rawUrl: string): Promise<{ url: URL; address: string }> {
   let url: URL;
@@ -15,6 +16,17 @@ async function resolveAndValidate(rawUrl: string): Promise<{ url: URL; address: 
   }
 
   const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+
+  // e2e-only escape hatch (env.ts, guarded against ever being true in
+  // production) — the webhook/Slack specs stand in a real receiver with a
+  // local HTTP server, which this guard would otherwise always block.
+  if (env.SAFE_OUTBOUND_ALLOW_PRIVATE) {
+    const addresses = isIP(hostname)
+      ? [hostname]
+      : (await lookup(hostname, { all: true })).map((r) => r.address);
+    return { url, address: addresses[0] ?? hostname };
+  }
+
   if (
     hostname === "localhost" ||
     hostname.endsWith(".localhost") ||
