@@ -13,6 +13,7 @@ import { validateCommentParent } from "../../lib/comment-thread";
 import { extractMentionedUserIds } from "../../lib/mentions";
 import { notifyUsers } from "../../lib/notify";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
 
@@ -129,6 +130,12 @@ export const commentRouter = router({
       "comment.created",
       { taskId: task.id, listId: task.listId },
     );
+    await publish(workspaceId, {
+      entity: "comment",
+      id: comment.id,
+      taskId: task.id,
+      kind: "created",
+    });
 
     const mentionedUserIds = extractMentionedUserIds(input.bodyJson).filter(
       (id) => id !== ctx.user.id,
@@ -166,6 +173,12 @@ export const commentRouter = router({
       .where(eq(schema.comments.id, comment.id));
 
     await logActivity(workspaceId, ctx.user.id, "comment", comment.id, "comment.deleted");
+    await publish(workspaceId, {
+      entity: "comment",
+      id: comment.id,
+      taskId: comment.taskId,
+      kind: "deleted",
+    });
     return { id: comment.id };
   }),
 
@@ -181,6 +194,12 @@ export const commentRouter = router({
         .onConflictDoNothing();
 
       await logActivity(workspaceId, ctx.user.id, "comment", comment.id, "comment.reacted");
+      await publish(workspaceId, {
+        entity: "comment",
+        id: comment.id,
+        taskId: comment.taskId,
+        kind: "updated",
+      });
       return { ok: true as const };
     }),
 
@@ -200,6 +219,12 @@ export const commentRouter = router({
         );
 
       await logActivity(workspaceId, ctx.user.id, "comment", comment.id, "comment.unreacted");
+      await publish(workspaceId, {
+        entity: "comment",
+        id: comment.id,
+        taskId: comment.taskId,
+        kind: "updated",
+      });
       return { ok: true as const };
     }),
   }),

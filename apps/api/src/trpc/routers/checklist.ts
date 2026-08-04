@@ -12,6 +12,7 @@ import { asc, desc, eq, inArray } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { requireTask, workspaceIdForTask } from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
 
@@ -89,6 +90,12 @@ export const checklistRouter = router({
     if (!checklist) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(workspaceId, ctx.user.id, "checklist", checklist.id, "checklist.created");
+    await publish(workspaceId, {
+      entity: "checklist",
+      id: checklist.id,
+      taskId: task.id,
+      kind: "created",
+    });
     return { ...checklist, items: [] as (typeof schema.checklistItems.$inferSelect)[] };
   }),
 
@@ -100,6 +107,12 @@ export const checklistRouter = router({
     await db.delete(schema.checklists).where(eq(schema.checklists.id, checklist.id));
 
     await logActivity(workspaceId, ctx.user.id, "checklist", checklist.id, "checklist.deleted");
+    await publish(workspaceId, {
+      entity: "checklist",
+      id: checklist.id,
+      taskId: checklist.taskId,
+      kind: "deleted",
+    });
     return { id: checklist.id };
   }),
 
@@ -127,6 +140,12 @@ export const checklistRouter = router({
         item.id,
         "checklist_item.created",
       );
+      await publish(workspaceId, {
+        entity: "checklist",
+        id: item.id,
+        taskId: checklist.taskId,
+        kind: "created",
+      });
       return item;
     }),
 
@@ -158,6 +177,12 @@ export const checklistRouter = router({
             : "checklist_item.unchecked"
           : "checklist_item.updated",
       );
+      await publish(workspaceId, {
+        entity: "checklist",
+        id: item.id,
+        taskId: checklist.taskId,
+        kind: "updated",
+      });
       return updated;
     }),
 
@@ -176,6 +201,12 @@ export const checklistRouter = router({
         item.id,
         "checklist_item.deleted",
       );
+      await publish(workspaceId, {
+        entity: "checklist",
+        id: item.id,
+        taskId: checklist.taskId,
+        kind: "deleted",
+      });
       return { id: item.id };
     }),
   }),

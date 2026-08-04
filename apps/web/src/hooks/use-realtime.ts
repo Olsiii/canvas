@@ -70,6 +70,12 @@ export function useRealtime(
           if (event.entity === "status") utils.status.list.invalidate({ listId: event.listId });
         } else if (event.entity === "message") {
           utils.chat.message.list.invalidate({ channelId: event.channelId });
+        } else if (event.entity === "comment") {
+          utils.comment.list.invalidate({ taskId: event.taskId });
+        } else if (event.entity === "checklist") {
+          utils.checklist.list.invalidate({ taskId: event.taskId });
+        } else if (event.entity === "hierarchy") {
+          utils.hierarchy.tree.invalidate({ workspaceId: event.workspaceId });
         }
 
         onEventRef.current?.(event);

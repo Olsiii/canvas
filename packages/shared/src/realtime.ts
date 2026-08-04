@@ -23,6 +23,30 @@ export const realtimeEventSchema = z.discriminatedUnion("entity", [
     channelId: z.string().uuid(),
     kind,
   }),
+  z.object({
+    entity: z.literal("comment"),
+    id: z.string().uuid(),
+    taskId: z.string().uuid(),
+    kind,
+  }),
+  // Covers both a checklist itself and its items — both map to the same
+  // client invalidation (`checklist.list`, which returns checklists nested
+  // with their items in one query).
+  z.object({
+    entity: z.literal("checklist"),
+    id: z.string().uuid(),
+    taskId: z.string().uuid(),
+    kind,
+  }),
+  // Sidebar tree changes (space/folder/list create/rename/delete) — one
+  // shared entity for all three since every client invalidation is the same
+  // blanket `hierarchy.tree` refetch regardless of which level changed.
+  z.object({
+    entity: z.literal("hierarchy"),
+    id: z.string().uuid(),
+    workspaceId: z.string().uuid(),
+    kind,
+  }),
 ]);
 
 export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;

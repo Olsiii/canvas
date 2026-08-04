@@ -18,6 +18,7 @@ import { logActivity } from "../../lib/activity";
 import { requireList, requireSpace } from "../../lib/hierarchy";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { protectedProcedure, router } from "../trpc";
 
 async function requireFolder(folderId: string) {
@@ -119,6 +120,12 @@ export const hierarchyRouter = router({
       if (!space) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await logActivity(input.workspaceId, ctx.user.id, "space", space.id, "space.created");
+      await publish(input.workspaceId, {
+        entity: "hierarchy",
+        id: space.id,
+        workspaceId: input.workspaceId,
+        kind: "created",
+      });
       return space;
     }),
 
@@ -139,6 +146,12 @@ export const hierarchyRouter = router({
       if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await logActivity(space.workspaceId, ctx.user.id, "space", space.id, "space.updated");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: space.id,
+        workspaceId: space.workspaceId,
+        kind: "updated",
+      });
       return updated;
     }),
 
@@ -163,6 +176,12 @@ export const hierarchyRouter = router({
       });
 
       await logActivity(space.workspaceId, ctx.user.id, "space", space.id, "space.deleted");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: space.id,
+        workspaceId: space.workspaceId,
+        kind: "deleted",
+      });
       return { id: space.id };
     }),
   }),
@@ -181,6 +200,12 @@ export const hierarchyRouter = router({
       if (!folder) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await logActivity(space.workspaceId, ctx.user.id, "folder", folder.id, "folder.created");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: folder.id,
+        workspaceId: space.workspaceId,
+        kind: "created",
+      });
       return folder;
     }),
 
@@ -197,6 +222,12 @@ export const hierarchyRouter = router({
       if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await logActivity(space.workspaceId, ctx.user.id, "folder", folder.id, "folder.updated");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: folder.id,
+        workspaceId: space.workspaceId,
+        kind: "updated",
+      });
       return updated;
     }),
 
@@ -218,6 +249,12 @@ export const hierarchyRouter = router({
       });
 
       await logActivity(space.workspaceId, ctx.user.id, "folder", folder.id, "folder.deleted");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: folder.id,
+        workspaceId: space.workspaceId,
+        kind: "deleted",
+      });
       return { id: folder.id };
     }),
   }),
@@ -263,6 +300,12 @@ export const hierarchyRouter = router({
       });
 
       await logActivity(space.workspaceId, ctx.user.id, "list", list.id, "list.created");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: list.id,
+        workspaceId: space.workspaceId,
+        kind: "created",
+      });
       return list;
     }),
 
@@ -293,6 +336,12 @@ export const hierarchyRouter = router({
       if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await logActivity(space.workspaceId, ctx.user.id, "list", list.id, "list.updated");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: list.id,
+        workspaceId: space.workspaceId,
+        kind: "updated",
+      });
       return updated;
     }),
 
@@ -307,6 +356,12 @@ export const hierarchyRouter = router({
         .where(eq(schema.lists.id, list.id));
 
       await logActivity(space.workspaceId, ctx.user.id, "list", list.id, "list.deleted");
+      await publish(space.workspaceId, {
+        entity: "hierarchy",
+        id: list.id,
+        workspaceId: space.workspaceId,
+        kind: "deleted",
+      });
       return { id: list.id };
     }),
   }),
