@@ -19,15 +19,20 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { inferRouterOutputs } from "@trpc/server";
 import { generateKeyBetween } from "fractional-indexing";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Status = RouterOutputs["status"]["list"][number];
 type Task = RouterOutputs["task"]["list"][number];
 
 const STATUS_PALETTE = ["#94a3b8", "#3b82f6", "#a855f7", "#f59e0b", "#22c55e", "#ef4444"];
+// Task cards vary in height (a wrapping title, an open delete-confirm row),
+// so the virtualizer measures real heights via `measureElement` — this is
+// only the seed used before a card's first real measurement lands.
+const CARD_HEIGHT_ESTIMATE = 68;
 
 export function TaskBoard({
   listId,
@@ -186,7 +191,21 @@ function StatusColumn({
   const [addingTask, setAddingTask] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
+  // Both the virtualizer and dnd-kit's droppable need a ref to the same
+  // scrollable element — dnd-kit's own autoscroll-during-drag also keys off
+  // this being the nearest scrollable ancestor of the dragged item.
+  const setScrollNode = (node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    setNodeRef(node);
+  };
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => CARD_HEIGHT_ESTIMATE,
+    overscan: 8,
+  });
 
   const createTask = trpc.task.create.useMutation({
     onSuccess: () => {
@@ -257,17 +276,36 @@ function StatusColumn({
       )}
 
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="min-h-8 space-y-1">
-          {tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              listId={listId}
-              statuses={statuses}
-              task={task}
-              onChanged={onTasksChanged}
-              onOpenTask={onOpenTask}
-            />
-          ))}
+        <div ref={setScrollNode} className="min-h-8 max-h-[calc(100vh-16rem)] overflow-y-auto">
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const task = tasks[virtualItem.index];
+              if (!task) return null;
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                  className="pb-1"
+                >
+                  <TaskRow
+                    listId={listId}
+                    statuses={statuses}
+                    task={task}
+                    onChanged={onTasksChanged}
+                    onOpenTask={onOpenTask}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </SortableContext>
 

@@ -7,9 +7,11 @@ import {
   taskDateSpan,
   type TaskDependencyKind,
 } from "@canvas/shared";
+import { UndatedTasksList } from "@/components/undated-tasks-list";
 import { trpc } from "@/lib/trpc";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { inferRouterOutputs } from "@trpc/server";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Task = RouterOutputs["task"]["list"][number];
@@ -96,6 +98,17 @@ export function TaskGanttView({
   );
   const days = useMemo(() => buildGanttDays(range), [range]);
   const rowIndexByTaskId = useMemo(() => new Map(rows.map((r, i) => [r.task.id, i])), [rows]);
+
+  // Row labels and bars share one vertical scroller (below) so both axes of
+  // the grid stay virtualized together — only dependency arrows (bounded by
+  // edge count, not task count) still render for every row unconditionally.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+  });
 
   const visibleDeps = useMemo(
     () =>
@@ -195,26 +208,47 @@ export function TaskGanttView({
           No dated tasks yet — set a start or due date to place a task on the timeline.
         </p>
       ) : (
-        <div className="border-border flex overflow-hidden rounded-md border">
+        <div
+          ref={scrollRef}
+          className="border-border flex max-h-[calc(100vh-22rem)] overflow-x-hidden overflow-y-auto rounded-md border"
+        >
           <div style={{ width: LABEL_WIDTH }} className="shrink-0">
-            <div style={{ height: 28 }} className="border-border bg-muted border-b" />
-            {rows.map(({ task }) => (
-              <button
-                key={task.id}
-                type="button"
-                data-testid={`gantt-row-label-${task.id}`}
-                onClick={() => onOpenTask(task.id)}
-                style={{ height: ROW_HEIGHT }}
-                className="border-border hover:bg-muted flex w-full items-center truncate border-b px-2 text-left text-xs"
-              >
-                {task.title}
-              </button>
-            ))}
+            <div
+              style={{ height: 28 }}
+              className="border-border bg-muted sticky top-0 z-10 border-b"
+            />
+            <div style={{ height: gridHeight, position: "relative" }}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                if (!row) return null;
+                return (
+                  <button
+                    key={row.task.id}
+                    type="button"
+                    data-testid={`gantt-row-label-${row.task.id}`}
+                    onClick={() => onOpenTask(row.task.id)}
+                    style={{
+                      position: "absolute",
+                      top: virtualRow.start,
+                      left: 0,
+                      width: "100%",
+                      height: ROW_HEIGHT,
+                    }}
+                    className="border-border hover:bg-muted flex items-center truncate border-b px-2 text-left text-xs"
+                  >
+                    {row.task.title}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <div style={{ width: gridWidth }}>
-              <div className="border-border bg-muted flex border-b" style={{ height: 28 }}>
+              <div
+                className="border-border bg-muted sticky top-0 z-10 flex border-b"
+                style={{ height: 28 }}
+              >
                 {days.map((d) => (
                   <div
                     key={d.date}
@@ -243,11 +277,14 @@ export function TaskGanttView({
                   />
                 )}
 
-                {rows.map(({ task, barSpan }, i) => {
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = rows[virtualRow.index];
+                  if (!row) return null;
+                  const { task, barSpan } = row;
                   const offset = ganttBarOffset(barSpan, range);
                   if (task.isMilestone) {
                     const center = offset.left * DAY_WIDTH + DAY_WIDTH / 2;
-                    const middle = i * ROW_HEIGHT + ROW_HEIGHT / 2;
+                    const middle = virtualRow.start + ROW_HEIGHT / 2;
                     return (
                       <button
                         key={task.id}
@@ -284,7 +321,7 @@ export function TaskGanttView({
                       style={{
                         position: "absolute",
                         left: offset.left * DAY_WIDTH + 2,
-                        top: i * ROW_HEIGHT + 6,
+                        top: virtualRow.start + 6,
                         height: ROW_HEIGHT - 12,
                       }}
                       className="hover:opacity-90 flex max-w-none items-center gap-1.5 text-left"
@@ -387,18 +424,7 @@ export function TaskGanttView({
       {undated.length > 0 && (
         <div data-testid="gantt-undated" className="space-y-2">
           <p className="text-xs font-medium">No date</p>
-          <div className="flex flex-wrap gap-2">
-            {undated.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => onOpenTask(task.id)}
-                className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
-              >
-                {task.title}
-              </button>
-            ))}
-          </div>
+          <UndatedTasksList tasks={undated} onOpenTask={onOpenTask} />
         </div>
       )}
     </div>

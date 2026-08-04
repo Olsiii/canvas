@@ -1,4 +1,5 @@
 import { WEEKDAY_LABELS, buildMonthGrid, monthLabel, taskDateKey } from "@canvas/shared";
+import { UndatedTasksList } from "@/components/undated-tasks-list";
 import { useOptimisticTaskUpdate } from "@/hooks/use-task-mutations";
 import { trpc } from "@/lib/trpc";
 import { useMemo, useState } from "react";
@@ -133,24 +134,12 @@ export function TaskCalendarView({
       {undated.length > 0 && (
         <div data-testid="calendar-undated" className="space-y-2">
           <p className="text-xs font-medium">No date</p>
-          <div className="flex flex-wrap gap-2">
-            {undated.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                draggable
-                data-testid={`calendar-task-${task.id}`}
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/task-id", task.id);
-                  e.dataTransfer.effectAllowed = "move";
-                }}
-                onClick={() => onOpenTask(task.id)}
-                className="border-border hover:bg-muted rounded border px-2 py-1 text-xs"
-              >
-                {task.title}
-              </button>
-            ))}
-          </div>
+          <UndatedTasksList
+            tasks={undated}
+            onOpenTask={onOpenTask}
+            draggable
+            itemTestId={(taskId) => `calendar-task-${taskId}`}
+          />
         </div>
       )}
     </div>
