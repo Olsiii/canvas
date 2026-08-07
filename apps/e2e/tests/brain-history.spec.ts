@@ -43,16 +43,31 @@ test("Brain history: new conversation, browse past ones, switch back, delete", a
   await expect(brain.getByText(secondPrompt, { exact: true })).toHaveCount(0);
 
   // Deleting the conversation currently open removes it from history and
-  // leaves the panel on a fresh, empty conversation rather than erroring.
+  // leaves the panel on a fresh, empty conversation rather than erroring —
+  // which means the history panel itself closes (brain-chat-panel.tsx's
+  // deleteConversation.onSuccess starts a new conversation and sets
+  // showHistory false), unmounting `historyList`. Asserting directly on
+  // `historyList` right after the click races that unmount and fails
+  // deterministically once the panel finishes closing — not what's being
+  // tested here. Reopening history and checking the stable `brain`
+  // container instead (below) verifies the same thing without the race.
   await brain.getByTestId("brain-history-toggle").click();
   await expect(historyList).toContainText(firstPrompt);
   const firstRow = historyList
     .locator("[data-testid^='brain-history-item-']")
     .filter({ hasText: firstPrompt });
   await firstRow.getByLabel("Delete conversation").click();
-  await expect(historyList).not.toContainText(firstPrompt);
 
+  // Deleting the active conversation kicks off an internal "start a fresh
+  // conversation" mutation that closes the history panel once *it*
+  // resolves — a separate round trip after the delete itself. Wait for
+  // that close instead of racing it with an immediate re-toggle (fast and
+  // reliable in isolation, but flaky under full-suite parallel load).
+  await expect(historyList).toHaveCount(0);
+
+  // Reopen and confirm the deleted conversation is gone while the
+  // untouched one is still there.
   await brain.getByTestId("brain-history-toggle").click();
-  await expect(brain.getByText(firstPrompt, { exact: true })).toHaveCount(0);
-  await expect(brain.getByText(secondPrompt, { exact: true })).toHaveCount(0);
+  await expect(historyList).toContainText(secondPrompt);
+  await expect(historyList).not.toContainText(firstPrompt);
 });
