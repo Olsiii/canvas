@@ -10,7 +10,6 @@ import {
 } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNull } from "drizzle-orm";
-import { can } from "../../auth/can";
 import { getMembershipRole } from "../../lib/membership";
 import { assertCan } from "../../lib/permissions";
 import { isRoleVisibleInWorkspace } from "../../lib/space-overrides";
@@ -93,10 +92,7 @@ export const workspaceRouter = router({
   }),
 
   invite: protectedProcedure.input(inviteMemberSchema).mutation(async ({ ctx, input }) => {
-    const role = await getMembershipRole(input.workspaceId, ctx.user.id);
-    if (!can(ctx.user, "workspace:invite", { type: "workspace", role })) {
-      throw new TRPCError({ code: "FORBIDDEN" });
-    }
+    await assertCan(ctx.user, input.workspaceId, "workspace:invite");
 
     if (input.customRoleId) {
       const customRole = await db.query.customRoles.findFirst({
@@ -205,10 +201,7 @@ export const workspaceRouter = router({
   updateMemberRole: protectedProcedure
     .input(updateMemberRoleSchema)
     .mutation(async ({ ctx, input }) => {
-      const role = await getMembershipRole(input.workspaceId, ctx.user.id);
-      if (!can(ctx.user, "workspace:manage", { type: "workspace", role })) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      await assertCan(ctx.user, input.workspaceId, "workspace:manage");
 
       const targetRole = await getMembershipRole(input.workspaceId, input.userId);
       if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });
@@ -246,10 +239,7 @@ export const workspaceRouter = router({
   setOperationsManager: protectedProcedure
     .input(setOperationsManagerSchema)
     .mutation(async ({ ctx, input }) => {
-      const role = await getMembershipRole(input.workspaceId, ctx.user.id);
-      if (!can(ctx.user, "workspace:manage", { type: "workspace", role })) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+      await assertCan(ctx.user, input.workspaceId, "workspace:manage");
 
       const targetRole = await getMembershipRole(input.workspaceId, input.userId);
       if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });
@@ -268,10 +258,7 @@ export const workspaceRouter = router({
     }),
 
   removeMember: protectedProcedure.input(removeMemberSchema).mutation(async ({ ctx, input }) => {
-    const role = await getMembershipRole(input.workspaceId, ctx.user.id);
-    if (!can(ctx.user, "workspace:manage", { type: "workspace", role })) {
-      throw new TRPCError({ code: "FORBIDDEN" });
-    }
+    await assertCan(ctx.user, input.workspaceId, "workspace:manage");
 
     const targetRole = await getMembershipRole(input.workspaceId, input.userId);
     if (!targetRole) throw new TRPCError({ code: "NOT_FOUND" });

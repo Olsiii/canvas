@@ -80,6 +80,27 @@ export const attachmentRouter = router({
       attachment.id,
       "attachment.deleted",
     );
+
+    // Same reuse-the-task/message-event trick confirmUpload below uses —
+    // without this, a deleted attachment stays visible to every other
+    // connected client until they reload.
+    if (attachment.taskId) {
+      const task = await requireTask(attachment.taskId);
+      await publish(attachment.workspaceId, {
+        entity: "task",
+        id: attachment.taskId,
+        listId: task.listId,
+        kind: "updated",
+      });
+    } else if (attachment.messageId) {
+      const message = await requireMessage(attachment.messageId);
+      await publish(attachment.workspaceId, {
+        entity: "message",
+        id: attachment.messageId,
+        channelId: message.channelId,
+        kind: "updated",
+      });
+    }
     return { id: attachment.id };
   }),
 
@@ -224,6 +245,12 @@ export const attachmentRouter = router({
           source: "google_drive",
         },
       );
+      await publish(workspaceId, {
+        entity: "task",
+        id: task.id,
+        listId: task.listId,
+        kind: "updated",
+      });
       return attachment;
     }),
 });

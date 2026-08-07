@@ -24,6 +24,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, exists, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
+import { isWithinAiQuota } from "../../lib/ai-quota";
 import { runAutomationsForTrigger } from "../../lib/automation-runner";
 import { embeddingQueue } from "../../queues/embedding-queue";
 import { validateTaskDependency, wouldCreateCycle } from "../../lib/dependency";
@@ -71,6 +72,11 @@ async function enqueueTaskEmbedding(
   userId: string,
   task: { id: string; title: string; descriptionText: string | null },
 ) {
+  // Best-effort: every task create/update calls this, far more often than
+  // any other AI action, so a quota hit here should just skip this one
+  // background embedding rather than fail the task mutation itself.
+  if (!(await isWithinAiQuota(userId, "embed"))) return;
+
   await embeddingQueue.add("embed", {
     workspaceId,
     userId,
@@ -607,6 +613,10 @@ export const taskRouter = router({
           updatedAt,
         })
         .where(eq(schema.tasks.id, row.id));
+      // Same per-task "task.updated" row a single task.update call writes —
+      // without this, a task edited via bulk update never shows the edit in
+      // its own activity feed (activity.list is scoped to entityType="task").
+      await logActivity(workspaceId, ctx.user.id, "task", row.id, "task.updated");
       if (statusChanged && newStatusKind !== undefined) {
         await runAutomationsForTrigger(
           workspaceId,

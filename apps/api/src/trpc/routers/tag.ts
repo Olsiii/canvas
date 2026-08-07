@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, eq } from "drizzle-orm";
 import { logActivity } from "../../lib/activity";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { protectedProcedure, router } from "../trpc";
 
 async function requireTag(tagId: string) {
@@ -40,6 +41,12 @@ export const tagRouter = router({
     if (!tag) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
     await logActivity(input.workspaceId, ctx.user.id, "tag", tag.id, "tag.created");
+    await publish(input.workspaceId, {
+      entity: "tag",
+      id: tag.id,
+      workspaceId: input.workspaceId,
+      kind: "created",
+    });
     return tag;
   }),
 
@@ -50,6 +57,12 @@ export const tagRouter = router({
     await db.delete(schema.tags).where(eq(schema.tags.id, tag.id));
 
     await logActivity(tag.workspaceId, ctx.user.id, "tag", tag.id, "tag.deleted");
+    await publish(tag.workspaceId, {
+      entity: "tag",
+      id: tag.id,
+      workspaceId: tag.workspaceId,
+      kind: "deleted",
+    });
     return { id: tag.id };
   }),
 });

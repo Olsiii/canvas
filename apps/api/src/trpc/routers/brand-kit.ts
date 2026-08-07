@@ -1,6 +1,7 @@
 import { db, schema } from "@canvas/db";
 import {
   createBrandKitSchema,
+  DEFAULT_IMAGE_PROVIDER,
   deleteBrandKitSchema,
   getBrandKitSchema,
   getEffectiveBrandKitSchema,
@@ -69,7 +70,7 @@ export const brandKitRouter = router({
         tone: input.tone ?? null,
         guidelines: input.guidelines ?? null,
         logoAssetId: input.logoAssetId ?? null,
-        imageProvider: input.imageProvider ?? "gemini",
+        imageProvider: input.imageProvider ?? DEFAULT_IMAGE_PROVIDER,
         fonts: input.fonts ?? null,
         ...(input.defaultCopyLanguage ? { defaultCopyLanguage: input.defaultCopyLanguage } : {}),
       })
@@ -124,6 +125,25 @@ export const brandKitRouter = router({
     // Any space pointing at this kit falls back to onDelete: set null (see
     // spaces.brand_kit_id) — no manual cleanup needed here.
     await db.delete(schema.brandSettings).where(eq(schema.brandSettings.id, input.brandKitId));
+
+    // Deleting the workspace's default kit must not leave it with zero
+    // defaults — resolveEffectiveBrandKit's workspace-fallback query only
+    // ever looks for isDefault=true, so without this the workspace would
+    // silently fall back to "no kit" until an admin happened to notice and
+    // re-pick one by hand.
+    if (existing.isDefault) {
+      const nextDefault = await db.query.brandSettings.findFirst({
+        where: eq(schema.brandSettings.workspaceId, existing.workspaceId),
+        orderBy: (kits, { asc }) => [asc(kits.createdAt)],
+      });
+      if (nextDefault) {
+        await db
+          .update(schema.brandSettings)
+          .set({ isDefault: true })
+          .where(eq(schema.brandSettings.id, nextDefault.id));
+      }
+    }
+
     await logActivity(
       existing.workspaceId,
       ctx.user.id,

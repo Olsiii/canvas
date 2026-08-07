@@ -2,6 +2,13 @@
 export const AI_BRAIN_MESSAGES_PER_DAY = 50;
 export const AI_IMAGE_GENERATIONS_PER_DAY = 20;
 /**
+ * Embeddings are cheap individually but fire far more often than Brain
+ * messages or image generations (every task create/edit, every semantic
+ * search query) — a generous daily ceiling still bounds runaway/scripted
+ * spend without throttling normal task editing.
+ */
+export const AI_EMBEDDINGS_PER_DAY = 500;
+/**
  * Estimated USD from ai_usage.cost_usd_est, calendar month UTC — a single
  * app-wide total shared by every user in every workspace, not per-user
  * (2026-07-29 decision, see PROGRESS.md: start with one simple shared

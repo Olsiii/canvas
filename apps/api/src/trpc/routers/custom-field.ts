@@ -13,6 +13,7 @@ import { logActivity } from "../../lib/activity";
 import { validateCustomFieldOptions, validateCustomFieldValue } from "../../lib/custom-field-value";
 import { nextOrderKey } from "../../lib/order";
 import { assertCan } from "../../lib/permissions";
+import { publish } from "../../lib/realtime";
 import { requireTask, workspaceIdForList } from "../../lib/task-queries";
 import { protectedProcedure, router } from "../trpc";
 
@@ -85,6 +86,12 @@ export const customFieldRouter = router({
           def.id,
           "custom_field_def.created",
         );
+        await publish(input.workspaceId, {
+          entity: "customFieldDef",
+          id: def.id,
+          workspaceId: input.workspaceId,
+          kind: "created",
+        });
         return def;
       }),
 
@@ -117,6 +124,12 @@ export const customFieldRouter = router({
           def.id,
           "custom_field_def.updated",
         );
+        await publish(def.workspaceId, {
+          entity: "customFieldDef",
+          id: def.id,
+          workspaceId: def.workspaceId,
+          kind: "updated",
+        });
         return updated;
       }),
 
@@ -135,6 +148,12 @@ export const customFieldRouter = router({
           def.id,
           "custom_field_def.deleted",
         );
+        await publish(def.workspaceId, {
+          entity: "customFieldDef",
+          id: def.id,
+          workspaceId: def.workspaceId,
+          kind: "deleted",
+        });
         return { id: def.id };
       }),
   }),
@@ -187,6 +206,12 @@ export const customFieldRouter = router({
           def.id,
           "custom_field_value.cleared",
         );
+        await publish(workspaceId, {
+          entity: "customFieldValue",
+          id: def.id,
+          taskId: task.id,
+          kind: "deleted",
+        });
         return { fieldDefId: def.id, taskId: task.id, value: null };
       }
 
@@ -208,6 +233,12 @@ export const customFieldRouter = router({
         def.id,
         "custom_field_value.set",
       );
+      await publish(workspaceId, {
+        entity: "customFieldValue",
+        id: def.id,
+        taskId: task.id,
+        kind: "updated",
+      });
       return { fieldDefId: def.id, taskId: task.id, value: input.valueJson };
     }),
   }),

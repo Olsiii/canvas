@@ -3,6 +3,7 @@ import { imagesLikeThisSchema, tasksByTextSchema } from "@canvas/shared";
 import { TRPCError } from "@trpc/server";
 import { and, cosineDistance, eq, isNull, ne } from "drizzle-orm";
 import { getEmbeddingEngine } from "../../embedding-engine";
+import { AiQuotaError, assertAiQuota } from "../../lib/ai-quota";
 import { estimateEmbedCostUsd } from "../../lib/ai-usage";
 import { assertCan } from "../../lib/permissions";
 import { protectedProcedure, router } from "../trpc";
@@ -18,6 +19,15 @@ export const searchRouter = router({
   // exactly like every other AI call (see task.ts's enqueueTaskEmbedding).
   tasksByText: protectedProcedure.input(tasksByTextSchema).query(async ({ ctx, input }) => {
     await assertCan(ctx.user, input.workspaceId, "task:view");
+
+    try {
+      await assertAiQuota(ctx.user.id, "embed");
+    } catch (err) {
+      if (err instanceof AiQuotaError) {
+        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: err.message });
+      }
+      throw err;
+    }
 
     const engine = getEmbeddingEngine();
     const queryVector = await engine.embed(input.query);

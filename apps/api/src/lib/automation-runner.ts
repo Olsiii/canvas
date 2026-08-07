@@ -7,6 +7,7 @@ import {
   type TaskPriority,
 } from "@canvas/shared";
 import { eq } from "drizzle-orm";
+import { can } from "../auth/can";
 import { imageQueue } from "../queues/image-queue";
 import { slackQueue } from "../queues/slack-queue";
 import { logActivity } from "./activity";
@@ -18,6 +19,7 @@ import {
   type AutomationTriggerEvent,
 } from "./automation-engine";
 import { publishImageAssetJob } from "./image-asset-realtime";
+import { getMembershipRole } from "./membership";
 import { buildTaskUpdateFields } from "./task-update";
 
 interface TriggeringTask {
@@ -87,6 +89,21 @@ async function executeAction(
     }
 
     case "generate_image": {
+      // Automations run unattended (no live session), and their creator's
+      // role can be downgraded/removed after the automation was set up —
+      // re-check imageAsset:create against their *current* role every run,
+      // same as Brain's tool loop (execute-tool.ts's assertWorkerCan) does
+      // for the identical action.
+      const role = await getMembershipRole(ctx.workspaceId, ctx.actorId);
+      if (
+        !can(
+          { id: ctx.actorId, email: "", name: "", avatarUrl: null, bio: null, title: null },
+          "imageAsset:create",
+          { type: "workspace", role },
+        )
+      ) {
+        throw new Error("Forbidden: imageAsset:create");
+      }
       await assertAiQuota(ctx.actorId, "generate");
 
       const [asset] = await db

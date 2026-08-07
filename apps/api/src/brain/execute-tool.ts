@@ -256,6 +256,12 @@ async function executeAttachToTask(ctx: ToolExecutionContext, input: AttachToTas
 
 async function executeCritiqueImage(ctx: ToolExecutionContext, input: CritiqueImageInput) {
   await assertWorkerCan(ctx.userId, ctx.workspaceId, "imageAsset:view");
+  // Same quota gate executeGenerateImage/executeEditImage apply — critique
+  // still writes a costed ai_usage row, so it must not be a free,
+  // unlimited-spend path through the Brain tool loop. Shares Brain's
+  // Claude-call quota tier, same reasoning copywriter.ts's
+  // assertAiQuotaOrThrow uses.
+  await assertAiQuota(ctx.userId, "brain");
 
   const version = await db.query.imageVersions.findFirst({
     where: eq(schema.imageVersions.id, input.image_version_id),

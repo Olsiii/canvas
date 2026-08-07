@@ -56,6 +56,12 @@ export function registerAuthRoutes(app: FastifyInstance) {
       try {
         const tokens = await google.validateAuthorizationCode(code, codeVerifier);
         const googleUser = await fetchGoogleUserInfo(tokens.accessToken());
+        if (!googleUser.email_verified) {
+          // Google itself hasn't confirmed this account controls the email —
+          // trusting it here would let an unverified address attach to (or
+          // create) an account it doesn't actually own.
+          return reply.redirect(`${env.WEB_URL}/login?error=google_email_unverified`);
+        }
         const user = await findOrCreateUserByEmail(
           googleUser.email,
           googleUser.name,

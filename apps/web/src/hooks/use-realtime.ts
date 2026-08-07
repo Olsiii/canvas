@@ -76,6 +76,15 @@ export function useRealtime(
           utils.checklist.list.invalidate({ taskId: event.taskId });
         } else if (event.entity === "hierarchy") {
           utils.hierarchy.tree.invalidate({ workspaceId: event.workspaceId });
+        } else if (event.entity === "tag") {
+          utils.tag.list.invalidate({ workspaceId: event.workspaceId });
+        } else if (event.entity === "customFieldDef") {
+          // Defs are workspace-scoped (a null listId def applies everywhere),
+          // so there's no single listId to filter by — invalidate every
+          // cached customField.defs.list query regardless of which list.
+          utils.customField.defs.list.invalidate();
+        } else if (event.entity === "customFieldValue") {
+          utils.customField.values.listForTask.invalidate({ taskId: event.taskId });
         }
 
         onEventRef.current?.(event);

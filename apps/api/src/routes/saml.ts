@@ -5,7 +5,11 @@ import { setSessionCookie } from "../auth/cookies";
 import { buildMetadataOnlySamlClient, buildSamlClient } from "../auth/saml";
 import { createSession } from "../auth/session";
 import { env } from "../env";
-import { ensureMembership, findOrCreateUserByEmail } from "../lib/user-provisioning";
+import {
+  ensureMembership,
+  findOrCreateSsoUser,
+  SsoIdentityConflictError,
+} from "../lib/user-provisioning";
 
 async function requireEnabledSsoConfig(workspaceId: string) {
   return db.query.ssoConfigs.findFirst({
@@ -67,7 +71,7 @@ export function registerSamlRoutes(app: FastifyInstance) {
           ? `${profile.firstName} ${profile.lastName}`
           : email.split("@")[0]!);
 
-      const user = await findOrCreateUserByEmail(email, displayName);
+      const user = await findOrCreateSsoUser(workspaceId, email, displayName);
       await ensureMembership(workspaceId, user.id, config.defaultRole);
 
       const session = await createSession(user.id);
@@ -75,6 +79,10 @@ export function registerSamlRoutes(app: FastifyInstance) {
 
       return reply.redirect(`${env.WEB_URL}/w/${workspaceId}`);
     } catch (err) {
+      if (err instanceof SsoIdentityConflictError) {
+        req.log.warn(err.message);
+        return reply.redirect(`${env.WEB_URL}/login?error=sso_identity_conflict`);
+      }
       req.log.error(err);
       return reply.redirect(`${env.WEB_URL}/login?error=sso_failed`);
     }

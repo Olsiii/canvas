@@ -2,13 +2,26 @@ import { db, schema } from "@canvas/db";
 import {
   AI_BRAIN_MESSAGES_PER_DAY,
   AI_COST_USD_PER_MONTH_TOTAL,
+  AI_EMBEDDINGS_PER_DAY,
   AI_IMAGE_GENERATIONS_PER_DAY,
 } from "@canvas/shared";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { redisConnection } from "../queues/connection";
 import { checkRateLimit, rateLimitBucketKey } from "./rate-limit";
 
-export type AiQuotaKind = "brain" | "generate";
+export type AiQuotaKind = "brain" | "generate" | "embed";
+
+const DAILY_LIMIT_BY_KIND: Record<AiQuotaKind, number> = {
+  brain: AI_BRAIN_MESSAGES_PER_DAY,
+  generate: AI_IMAGE_GENERATIONS_PER_DAY,
+  embed: AI_EMBEDDINGS_PER_DAY,
+};
+
+const LIMIT_MESSAGE_BY_KIND: Record<AiQuotaKind, string> = {
+  brain: `Daily Brain limit reached (${AI_BRAIN_MESSAGES_PER_DAY} messages). Try again tomorrow.`,
+  generate: `Daily image generation limit reached (${AI_IMAGE_GENERATIONS_PER_DAY}). Try again tomorrow.`,
+  embed: `Daily embedding limit reached (${AI_EMBEDDINGS_PER_DAY}). Try again tomorrow.`,
+};
 
 export class AiQuotaError extends Error {
   readonly code = "TOO_MANY_REQUESTS" as const;
@@ -53,35 +66,39 @@ async function getAppWideMonthlySpendUsd(): Promise<number> {
  * Daily counters live in Redis (request-time, via the shared checkRateLimit
  * fixed-window limiter). Monthly $ uses summed ai_usage.
  */
-export async function assertAiQuota(userId: string, kind: AiQuotaKind) {
-  if (kind === "brain") {
-    const { overLimit } = await checkRateLimit(`aiquota:brain:${userId}`, {
-      max: AI_BRAIN_MESSAGES_PER_DAY,
-      windowMs: DAY_MS,
-    });
-    if (overLimit) {
-      throw new AiQuotaError(
-        `Daily Brain limit reached (${AI_BRAIN_MESSAGES_PER_DAY} messages). Try again tomorrow.`,
-      );
-    }
-  } else {
-    const { overLimit } = await checkRateLimit(`aiquota:generate:${userId}`, {
-      max: AI_IMAGE_GENERATIONS_PER_DAY,
-      windowMs: DAY_MS,
-    });
-    if (overLimit) {
-      throw new AiQuotaError(
-        `Daily image generation limit reached (${AI_IMAGE_GENERATIONS_PER_DAY}). Try again tomorrow.`,
-      );
-    }
-  }
+async function checkAiQuota(
+  userId: string,
+  kind: AiQuotaKind,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { overLimit } = await checkRateLimit(`aiquota:${kind}:${userId}`, {
+    max: DAILY_LIMIT_BY_KIND[kind],
+    windowMs: DAY_MS,
+  });
+  if (overLimit) return { ok: false, message: LIMIT_MESSAGE_BY_KIND[kind] };
 
   const spent = await getAppWideMonthlySpendUsd();
   if (spent >= AI_COST_USD_PER_MONTH_TOTAL) {
-    throw new AiQuotaError(
-      `Canvas-wide monthly AI budget reached (≈$${AI_COST_USD_PER_MONTH_TOTAL}). Contact an admin if you need more.`,
-    );
+    return {
+      ok: false,
+      message: `Canvas-wide monthly AI budget reached (≈$${AI_COST_USD_PER_MONTH_TOTAL}). Contact an admin if you need more.`,
+    };
   }
+  return { ok: true };
+}
+
+export async function assertAiQuota(userId: string, kind: AiQuotaKind) {
+  const result = await checkAiQuota(userId, kind);
+  if (!result.ok) throw new AiQuotaError(result.message);
+}
+
+/**
+ * Non-throwing quota check for best-effort background AI work (e.g.
+ * embedding a task on every edit) where hitting the cap should silently
+ * skip that one background side-effect rather than fail the user-facing
+ * mutation that triggered it.
+ */
+export async function isWithinAiQuota(userId: string, kind: AiQuotaKind): Promise<boolean> {
+  return (await checkAiQuota(userId, kind)).ok;
 }
 
 export async function getAiQuotaSnapshot(userId: string) {

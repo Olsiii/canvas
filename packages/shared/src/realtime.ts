@@ -47,6 +47,34 @@ export const realtimeEventSchema = z.discriminatedUnion("entity", [
     workspaceId: z.string().uuid(),
     kind,
   }),
+  // Tag definitions are workspace-scoped (tag.list takes workspaceId, not a
+  // list/task id) — create/delete on one client left every other connected
+  // client's tag picker stale until a manual refetch.
+  z.object({
+    entity: z.literal("tag"),
+    id: z.string().uuid(),
+    workspaceId: z.string().uuid(),
+    kind,
+  }),
+  // Custom field defs are workspace-scoped, not list-scoped — a def with a
+  // null listId applies to every list in the workspace, so there's no single
+  // listId every def change can be tagged with. Clients invalidate every
+  // customField.defs.list query regardless of which list it was cached for.
+  z.object({
+    entity: z.literal("customFieldDef"),
+    id: z.string().uuid(),
+    workspaceId: z.string().uuid(),
+    kind,
+  }),
+  // Custom field values are per-task (customField.values.listForTask takes
+  // taskId) — a separate entity from customFieldDef since defs and values
+  // invalidate different queries.
+  z.object({
+    entity: z.literal("customFieldValue"),
+    id: z.string().uuid(),
+    taskId: z.string().uuid(),
+    kind,
+  }),
 ]);
 
 export type RealtimeEvent = z.infer<typeof realtimeEventSchema>;

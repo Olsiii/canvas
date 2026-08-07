@@ -1,6 +1,7 @@
 import { db, schema } from "@canvas/db";
 import { eq } from "drizzle-orm";
 import { embeddingQueue } from "../queues/embedding-queue";
+import { isWithinAiQuota } from "./ai-quota";
 import { estimateChatCostUsd } from "./ai-usage";
 import { logActivity } from "./activity";
 
@@ -77,13 +78,18 @@ export async function applyImageUnderstanding(opts: {
   // so text-derived similarity is the honest, buildable v1 — same
   // "degrade to what's actually available" call M5.6 made for the Google
   // Drive picker.
-  await embeddingQueue.add("embed", {
-    workspaceId: opts.workspaceId,
-    userId: opts.userId,
-    entityType: "image_asset",
-    entityId: opts.assetId,
-    text: [understanding.altText, ...understanding.tags].join(" "),
-  });
+  // Best-effort, same reasoning as task.ts's enqueueTaskEmbedding: a quota
+  // hit here should just skip visual-search indexing for this image, not
+  // fail the understanding step that already succeeded above.
+  if (await isWithinAiQuota(opts.userId, "embed")) {
+    await embeddingQueue.add("embed", {
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+      entityType: "image_asset",
+      entityId: opts.assetId,
+      text: [understanding.altText, ...understanding.tags].join(" "),
+    });
+  }
 
   return understanding;
 }

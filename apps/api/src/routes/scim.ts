@@ -10,7 +10,11 @@ import {
   type ScimUserSource,
 } from "../lib/scim";
 import { hashScimToken } from "../lib/scim-token";
-import { ensureMembership, findOrCreateUserByEmail } from "../lib/user-provisioning";
+import {
+  ensureMembership,
+  findOrCreateSsoUser,
+  SsoIdentityConflictError,
+} from "../lib/user-provisioning";
 
 /**
  * `Authorization: Bearer <token>` -> hash -> scim_tokens row scoped to this
@@ -191,7 +195,15 @@ export function registerScimRoutes(app: FastifyInstance) {
     if (!email) return reply.code(400).send(scimError(400, "userName is required"));
     const name = req.body?.name?.formatted || email.split("@")[0]!;
 
-    const user = await findOrCreateUserByEmail(email, name);
+    let user;
+    try {
+      user = await findOrCreateSsoUser(ctx.workspaceId, email, name);
+    } catch (err) {
+      if (err instanceof SsoIdentityConflictError) {
+        return reply.code(409).send(scimError(409, err.message));
+      }
+      throw err;
+    }
     const membership = await ensureMembership(ctx.workspaceId, user.id, "member");
     await logActivity(
       ctx.workspaceId,

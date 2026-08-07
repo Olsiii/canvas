@@ -179,6 +179,14 @@ export const copywriterRouter = router({
       .where(eq(schema.copyGenerations.id, input.generationId))
       .returning();
     if (!updated) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+    await logActivity(
+      generation.workspaceId,
+      ctx.user.id,
+      "copy_generation",
+      generation.id,
+      "copy_generation.approved",
+    );
     return updated;
   }),
 

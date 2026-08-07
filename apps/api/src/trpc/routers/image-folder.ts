@@ -50,6 +50,17 @@ export const imageFolderRouter = router({
     if (!folder) throw new TRPCError({ code: "NOT_FOUND" });
     await assertCan(ctx.user, folder.workspaceId, "imageFolder:delete");
 
+    // System-managed (Copywriter's auto-provisioned Copy > brand-kit
+    // hierarchy, see lib/copy-library.ts) — the web UI already hides the
+    // delete control for these, but that's not a server-side guarantee on
+    // its own; enforce it here too.
+    if (folder.kind !== "custom") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This folder is managed automatically and can't be deleted directly",
+      });
+    }
+
     // Only one level of nesting ever exists (the Copywriter's "Copy" root ->
     // one child per brand kit — see lib/copy-library.ts), so a plain
     // (non-recursive) child lookup covers every folder this delete can
