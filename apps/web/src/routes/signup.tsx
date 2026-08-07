@@ -1,4 +1,5 @@
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { CanvasLogo } from "@/components/canvas-logo";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";

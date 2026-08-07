@@ -1,7 +1,8 @@
 import { MEMBERSHIP_ROLES, type MembershipRole } from "@canvas/shared";
 import { CanvasLogo } from "@/components/canvas-logo";
 import { RequireAuth } from "@/components/require-auth";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/hooks/use-session";

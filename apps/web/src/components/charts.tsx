@@ -14,20 +14,6 @@ const PADDING = 24;
 // two single-series hues used by the trailing-history widgets.
 const CATEGORICAL = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"] as const;
 const CATEGORICAL_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500"] as const;
-const SERIES_BLUE = { light: "#2a78d6", dark: "#3987e5" };
-const SERIES_AQUA = { light: "#1baf7a", dark: "#199e70" };
-const SERIES_ORANGE = { light: "#eb6834", dark: "#d95926" };
-
-export const SERIES_COLOR = {
-  burndown: SERIES_BLUE,
-  timeTracked: SERIES_AQUA,
-  aiUsageCost: SERIES_ORANGE,
-};
-
-export function formatShortDate(iso: string): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
-}
 
 export function BarChart({
   data,

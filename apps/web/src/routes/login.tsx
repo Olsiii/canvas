@@ -1,6 +1,7 @@
 import { JUST_LOGGED_IN_KEY } from "@/components/login-summary-panel";
 import { CanvasLogo } from "@/components/canvas-logo";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

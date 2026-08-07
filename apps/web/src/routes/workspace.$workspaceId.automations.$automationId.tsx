@@ -1,8 +1,5 @@
-import {
-  AutomationActionsEditor,
-  toAutomationActions,
-  type ActionDraft,
-} from "@/components/automation-actions-editor";
+import { toAutomationActions, type ActionDraft } from "@/components/automation-action-draft";
+import { AutomationActionsEditor } from "@/components/automation-actions-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { describeAutomationRunLogEntry } from "@/lib/format";

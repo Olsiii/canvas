@@ -1,11 +1,6 @@
 import type { AppRouter } from "@canvas/api";
-import {
-  BarChart,
-  DonutChart,
-  formatShortDate,
-  LineChart,
-  SERIES_COLOR,
-} from "@/components/charts";
+import { formatShortDate, SERIES_COLOR } from "@/components/chart-colors";
+import { BarChart, DonutChart, LineChart } from "@/components/charts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";

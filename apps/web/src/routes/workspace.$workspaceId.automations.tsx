@@ -1,9 +1,9 @@
 import {
-  AutomationActionsEditor,
   newActionDraft,
   toAutomationActions,
   type ActionDraft,
-} from "@/components/automation-actions-editor";
+} from "@/components/automation-action-draft";
+import { AutomationActionsEditor } from "@/components/automation-actions-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

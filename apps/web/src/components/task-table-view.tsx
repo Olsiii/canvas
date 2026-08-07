@@ -19,7 +19,6 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { useMemo, useRef, useState } from "react";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
-type Status = RouterOutputs["status"]["list"][number];
 type Task = RouterOutputs["task"]["list"][number];
 
 const ROW_HEIGHT = 40;

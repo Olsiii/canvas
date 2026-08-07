@@ -1,4 +1,4 @@
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { createRoute, Link } from "@tanstack/react-router";

@@ -2211,3 +2211,18 @@ The `e2e` CI job has been red on every run since well before follow-up #29 (chec
 
 - `pnpm check` green, 0 errors.
 - 4 full local `CI=1` 80-spec runs: 2 fully clean, the other 2 only showed the already-ruled-out local-DB-pollution and known parallel-load flakes above — `brain-history.spec.ts` itself passed in all 4.
+- Confirmed live on GitHub's own infrastructure, not just locally: run #36 (`b434f05`) shows both `ci` and `e2e` green.
+
+## 2026-08-07 follow-up #31: cleared every remaining CI annotation (Node 20 deprecation + fixable lint warnings) — done
+
+CI had zero errors after follow-up #30, but GitHub's own Annotations panel on every run still flagged 12 warnings — asked to clear those too rather than leave a run that's merely "not red."
+
+- **Node.js 20 deprecation**: `actions/checkout@v4`, `actions/setup-node@v4`, and `pnpm/action-setup@v4` all still target the Node 20 actions runtime GitHub is retiring (being force-run on Node 24 for now, hence the warning, not a hard failure yet). Bumped to their current majors — `actions/checkout@v7`, `actions/setup-node@v7`, `pnpm/action-setup@v6`, and (same class, e2e job) `actions/upload-artifact@v7` — verified each new major's `action.yml` actually declares `using: node24` before pinning (fetched from GitHub directly, not assumed from version number).
+- **`react-refresh/only-export-components` in shared UI components** (`button.tsx`, `avatar.tsx`, `charts.tsx`, `automation-actions-editor.tsx`, `form-fields-editor.tsx`) and **two `no-unused-vars`** (`task-list-view.tsx`/`task-table-view.tsx`'s dead `Status` type alias): fixed for real, not suppressed. Each offending file exported a non-component value (a `cva` variants object, plain helper functions, a draft-factory function) alongside its component — split each into a sibling file (`button-variants.ts`, `avatar-utils.ts`, `chart-colors.ts`, `automation-action-draft.ts`, `form-field-draft.ts`) and updated every importer. `button-variants.ts` matches shadcn/ui's own upstream fix for this exact warning.
+- **Deliberately left alone — the remaining 71 warnings**: every one is either `main.tsx` (the app entry point, which structurally can't "only export components") or a `routes/*.tsx` file, which TanStack Router's routing convention requires to export both a `Route`/`createRoute(...)` object and the page component from the same file. "Fixing" these would mean restructuring routing across 40+ files to fight the router's own required pattern, for a dev-only Fast Refresh nicety with no functional or CI-blocking effect — out of proportion to the actual problem, so left as the accepted, inherent tradeoff of file-based routing.
+
+### Verified
+
+- `pnpm check` green, 0 errors (71 pre-existing, now-explained warnings remain, down from 81).
+- `pnpm build` succeeds (both `apps/api` and `apps/web`).
+- Full local `CI=1` 80-spec Playwright run: 80/80 passed.

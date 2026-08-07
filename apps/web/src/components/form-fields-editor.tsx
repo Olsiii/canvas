@@ -1,3 +1,4 @@
+import { newFormField } from "@/components/form-field-draft";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,15 +13,6 @@ const FIELD_TYPE_LABELS: Record<FormFieldType, string> = {
   long_text: "Long text",
   select: "Select",
 };
-
-export function newFormField(): FormField {
-  return {
-    id: `field-${crypto.randomUUID().slice(0, 8)}`,
-    label: "",
-    type: "short_text",
-    required: false,
-  };
-}
 
 /** Builder UI for a form's `schema_json.fields` (M4.5). The "title" field is
  * always present and always maps to the created task's title, so it's
